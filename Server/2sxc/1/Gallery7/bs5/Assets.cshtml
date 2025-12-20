@@ -1,0 +1,42 @@
+@inherits Custom.Hybrid.RazorTyped
+@using AppCode
+@* 1. Include Bootstrap5 if the framework isn't known *@
+@Kit.Page.Activate(condition: Kit.Css.IsUnknown, features: "Bootstrap5")
+
+@* 2. Include styles of the App *@
+@if (Kit.Css.Is("bs5")) {
+  <link rel="stylesheet" href="@MyView.Folder.Url/theme/theme.css" @Kit.Page.AssetAttributes()/>
+}
+<link rel="stylesheet" href="@MyView.Folder.Url/dist/styles.min.css" @Kit.Page.AssetAttributes()/>
+
+@* 3. Show warning for admin if koi.json is missing  *@
+@if (Kit.Css.IsUnknown && MyUser.IsSiteAdmin) {
+  <div class='dnnFormMessage dnnFormWarning'>
+    @Html.Raw(Connect.Koi.Messages.CssInformationMissing) <br>
+    @Html.Raw(Connect.Koi.Messages.OnlyAdminsSeeThis)
+  </div>
+}
+
+@* 4. Stop here unless we have a FancyboxMarker to activate a FancyBox *@
+@if (!MyModel.ContainsKey("FancyboxMarker")) { return; }
+
+@* 5. Prepare settings/options for fancybox integration *@
+@{
+  var data = new {
+    // this is the attribute on all tags which the fancybox should pick up
+    attribute = MyModel.String("FancyboxMarker"),
+    // The options to give fancybox; there are many more, see https://fancyapps.com/docs/ui/fancybox/options
+    options = new {
+      groupAll = true,
+      mainClass = "app-ga7-fancybox", 
+      Thumbs = new {
+        autoStart = false
+      }
+    }
+  };
+}
+
+@* 6. Add scripts & activate turnOn / Fancybox4 - see https://r.2sxc.org/turnon - fancybox4 is a standard WebResources in 2sxc *@
+@Kit.Page.Activate("fancybox4")
+@Kit.Page.TurnOn("window.appGalleryV7.init()", require: "window.Fancybox", data: data)
+<script type="text/javascript" src="@MyView.Folder.Url/dist/scripts.min.js" @Kit.Page.AssetAttributes(position: "bottom")></script>

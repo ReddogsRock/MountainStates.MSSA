@@ -1,0 +1,7 @@
+/*!
+ * This file was auto-generated using SASS
+ * You can manually modify it - but usually you will want to 
+ * Re-generate it using the SASS variables of your theme
+*/.app-counter2{z-index:1;position:relative;display:flex;flex-direction:column;justify-content:center;margin:1.5rem 0 !important}.app-counter2>.container{max-width:100%}.app-counter2.app-counter2-has-background{min-height:50vh}.app-counter2 img.bg-img{position:absolute;left:0;top:0;width:100%;height:100%;-o-object-fit:cover;object-fit:cover;z-index:-1}.app-counter2 .row{display:flex}.app-counter2 .row.justify-content-center{justify-content:center}.app-counter2 .row .h-100{height:100%}.app-counter2 .row .p-2{padding:1.5rem !important}.app-counter2 .row [class^=col-]{float:none}.app-counter2 .bg-primary{color:#000}.app-counter2 .text-white{color:#fff}
+
+/*# sourceMappingURL=styles.min.css.map*/

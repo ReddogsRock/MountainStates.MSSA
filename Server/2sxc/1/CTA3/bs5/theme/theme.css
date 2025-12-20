@@ -1,0 +1,14 @@
+:root {
+  --bs-btn-bg-fallback-app-cta: #0060AC;
+  --bs-btn-border-fallback-app-cta: #0060AC;
+  --bs-btn-color-fallback-app-cta: #FFFFFF;
+
+  --bs-gutter-x-fallback-app-cta: 30px;
+
+  --app-cta-text-bright: #fff;
+  --app-cta-text-dark: #000;
+  
+  --app-cta-btn-secondary-color: #001D38;
+  --app-cta-btn-secondary-border-color: #001D38;
+  --app-cta-btn-secondary-background-color: #001D38;
+}

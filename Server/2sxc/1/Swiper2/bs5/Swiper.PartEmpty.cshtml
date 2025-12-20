@@ -1,0 +1,17 @@
+@inherits AppCode.Razor.AppRazor
+@using AppCode.Data
+@{
+  var slider = As<Slider>(MyItem);
+}
+<div class="app-swiper2-empty-slides container" @Kit.Toolbar.Default(slider.Slides)>
+  <div class="arrow">
+  <div class="line"></div>
+  <div class="point"></div>
+  </div>
+  <div class="row h-100 align-items-center">
+  <div class="col-12 text-center">
+    <h2>@App.Resources.EmptySlideTitle</h2>
+    <p>@App.Resources.EmptySlideMessage</p>
+  </div>
+  </div>
+</div>

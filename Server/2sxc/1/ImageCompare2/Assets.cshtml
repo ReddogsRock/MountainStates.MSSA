@@ -1,0 +1,8 @@
+@inherits Custom.Hybrid.RazorTyped
+
+@Kit.Page.Activate(condition: Kit.Css.IsUnknown, features: "Bootstrap5")
+
+@Kit.Page.TurnOn("window.appImageCompare2.init()", data: new { domId = MyModel.String("DomId") })
+
+<link rel="stylesheet" href="@MyView.Folder.Url/dist/styles.min.css" @Kit.Page.AssetAttributes()/>
+<script type="text/javascript" src="@MyView.Folder.Url/dist/scripts.min.js" @Kit.Page.AssetAttributes(position:"bottom" )></script>

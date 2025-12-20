@@ -1,0 +1,46 @@
+@inherits AppCode.Razor.AppRazor
+@using ToSic.Razor.Blade
+@using AppCode.Data
+@* --- This is the Bootstrap5 Edition of the Details --- *@
+@* --- Is is also used by Bootstrap3 and Bootstrap4  --- *@
+@{
+  // Get the term from Data (the Query of this view)
+  var term = As<Term>(MyData);
+
+  // If term not found, show 404 and stop processing
+  if (term == null) {
+    <h1>@App.Resources.TermNotFoundTitle</h1>
+    <p>@App.Resources.TermNotFoundText</p>
+    <a href="@Link.To()" class="btn btn-primary btn-sm">@App.Resources.GoBackText</a>
+    Kit.Page.SetHttpStatus(404);
+    return;
+  }
+
+  // Appends " – " to abbreviation if exists
+  var title = TitleWithAbbreviation(term);
+
+  // Set the page title and description
+  Kit.Page.SetTitle(title + " | ");  // will prepend to the existing title
+  Kit.Page.AddMeta("description", term.Summary);
+
+  // Toolbar without the Layout button
+  var termToolbar = Kit.Toolbar.Default().Layout("-");
+}
+
+<div @termToolbar.For(term)>
+  @* Show the term title and summary *@
+  <h1>@title</h1>
+  <p>
+    <strong>@term.Summary</strong>
+  </p>
+
+  @* Show Details *@
+  @term.Html("Details")
+
+  @* Link back, going to the starting letter in the alphabet (add an "-" in case empty) *@
+  <a href='@Link.To(parameters: "#" + FirstCharOrDash(term.Title))' class="btn btn-primary btn-sm">
+    @App.Resources.GoBackText
+  </a>
+</div>
+
+@Html.Partial("Assets.cshtml")

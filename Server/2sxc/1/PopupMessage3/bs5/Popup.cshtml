@@ -1,0 +1,28 @@
+@inherits AppCode.Razor.AppRazor
+@using AppCode.Data
+
+@* --- This is the Bootstrap5 Edition of the Files --- *@
+
+@* Message for the admin, so he can test the popup; includes a don't-delete-this-module warning *@
+@if (MyUser.IsContentAdmin)
+{
+  <div class="alert alert-info d-flex justify-content-between">
+    <div class="d-flex align-items-center">
+      @App.Resources.DoNotDeleteWarning
+      @* Add Toolbar to edit popup *@
+      @Kit.Toolbar.Default(PopUp).Settings(autoAddMore:"start").AsTag()
+    </div>
+    <a data-micromodal-trigger="@DomId" class="btn btn-primary btn-sm text-white">
+      @App.Resources.TestPopup
+    </a>
+  </div>
+}
+
+@* Add the popup (may be hidden) if ShowPopup, or for the admin to test *@
+@if (MyUser.IsContentAdmin || PopUp.Presentation.PopupIsActiveAndWithinDateRange())
+{
+  <div class="app-popup3">
+    @Html.Partial("Popup.PartModal.cshtml")
+  </div>
+  @Html.Partial("Assets.cshtml")
+}

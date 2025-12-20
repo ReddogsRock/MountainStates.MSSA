@@ -1,0 +1,86 @@
+@inherits AppCode.Razor.DetailRazor
+@using ToSic.Razor.Blade
+@using AppCode.Data
+@using ToSic.Sxc.Data
+
+@{
+  // Get the article as a News-Item
+  var article = As<News>(MyData);
+
+  @* Show article not found notification and stop processing *@
+  if (article == null)
+  {
+    <h1>@App.Resources.LabelEventNotExists</h1>
+    <p>@App.Resources.LabelEventNotExistsText</p>
+
+    @* Show "Back to list" button *@
+    @BackToListButton()
+    Kit.Page.SetHttpStatus(404);
+    return;
+  }
+
+  var title = article.Title;
+  var displayCategories = App.Settings.ActivateCategories && (article.Categories).Any();
+  Kit.Page.AddMeta("description", Kit.Scrub.All(article.Teaser));
+  Kit.Page.SetTitle(article.Date.ToString("d") + " - " + title);
+
+  var articleToolbar = Kit.Toolbar.Default().Layout("-").Delete();
+}
+
+<div class="app-news5 app-news5-detail" @articleToolbar.For(article)>
+  @* Head of the article *@
+  <div class="app-news5-content mb-3 mb-lg-4">
+    @* "Will publish"/"expired" notes for admin *@
+    @AdminArticleInformation(article)
+    <h2>@title</h2>
+    @* Show Date and categories *@
+    <span class='app-news5-date @(displayCategories ? "pe-1 me-1 pr-1 mr-1 border-end border-right" : "")'>@article.Date.ToString("d")</span>
+    @if (displayCategories)
+    {
+      <span class="app-news5-categories">
+        @foreach (var cat in article.Categories) {
+          <a href='@Link.To(parameters: "category=" + cat.UrlKey)'>@cat.Name</a>
+        }
+      </span>
+    }
+  </div>
+
+  @* Body of the article *@
+  <div class="app-news5-content mb-3 mb-lg-4">
+    @* Show image or placeholder *@
+    @if (article.Lightbox && article.IsNotEmpty("Image"))
+    {
+      var lbPic = article.Picture("Image", settings: "Lightbox", imgAltFallback: title);
+            
+      @:<a class="fancybox" @GetFancyboxData(lbPic) data-app-news5-fancybox="@UniqueKey" title="@lbPic.Alt">
+    }
+      <div class="app-news5-detail-img mb-4">
+        <span class="overlay"></span>
+
+        @(article.IsNotEmpty("Image")
+                ? article.Picture("Image", imgAltFallback: title)
+                : App.Resources.Picture("PlaceholderMissingImage"))
+      </div>
+    @if (article.Lightbox) {
+      @:</a>
+    }
+
+    @* Teaser *@
+    @if (article.ShowTeaserInDetail)
+    {
+      <p class="app-news5-detail-teaser">
+          @article.Html("Teaser", container:"")
+       </p>
+    }
+
+    @* Body of the post - will also create inner info blocks / apps *@
+    <div class="app-news5-detail-body">
+      @Kit.Render.All(article, field: "InnerContent", merge: article.Content)
+    </div>
+  </div>
+</div>
+
+@* Show "Back to list" button *@
+@BackToListButton()
+
+@Html.Partial("./Assets.cshtml", new { scripts = true} )

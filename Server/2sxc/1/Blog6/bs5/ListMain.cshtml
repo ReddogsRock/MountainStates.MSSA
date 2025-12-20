@@ -1,0 +1,53 @@
+@inherits AppCode.Razor.ListRazor
+@using ToSic.Razor.Blade
+@using AppCode.Data
+@{
+  // Config as edited by the user
+  var viewConfig = As<ListSettings>(MyItem);
+
+  // Main Toolbar Config
+  var mainToolbar = Kit.Toolbar.Default()
+    .Edit(operation: "%", tweak: b => b.Note("Edit display settings"))
+    .New("BlogPost", tweak: b => b.Position(1).Color("#15585F").Note("Create a new post"));  
+
+  // This config is for the toolbar used on an item.
+  var postToolbar = Kit.Toolbar.Empty()
+    .Edit(tweak: b => b.Color("#15585F"))
+    .Delete(tweak: b => b.Color("gray"));
+
+}
+<section class="app-blog5" @mainToolbar.For(viewConfig)>
+  <div class="row">
+    <div class="col-12">
+      @* Title / Description of current filter (Author, Category, etc.) *@
+      @Html.Partial("ListMain.PartHeader.cshtml")
+    </div>
+    <div class="col-12">
+      @Html.Partial("./parts/Categories.cshtml")
+    </div>
+
+    @* List the posts *@
+    @foreach (var post in AsList<BlogPost>(MyData.GetStream("Posts"))) 
+    {
+      <article class="app-blog5-list-item effect-zoom mb-5 col-lg-4" @postToolbar.For(post)>
+        @* Header-block with Image / Author, Title, Categories *@
+        <div class="app-blog5-post-header">
+          @Html.Partial("./parts/MainImage.cshtml", new { post, Settings = "BlogCards" })
+          @Html.Partial("./parts/AuthorDateAndCategories.cshtml", new { post, HeadingType = "h2", CssClass = "h3"})
+        </div>
+
+        <div class="app-blog5-post-content">
+          <p>@Html.Raw(BuildTeaser(post))</p>
+          <a href="@LinkToDetailsPage(post)" class="btn btn-outline-primary stretched-link mt-2">@App.Resources.ReadMore</a>
+        </div>
+      </article>
+    }
+
+    @* Show pagination if configured *@
+    @if (viewConfig.ShowPagination) {
+      @Html.Partial("./parts/ListPaging.cshtml")
+    }
+  </div>
+</section>
+
+@Html.Partial("./parts/Assets.cshtml")

@@ -1,0 +1,23 @@
+@inherits AppCode.Razor.AppRazor
+@using ToSic.Razor.Blade;
+@using AppCode.Data
+
+@* Include bootstrap 5 if the framework isn't known - then this file is still called, and we add Bootstrap to the page *@
+@Kit.Page.Activate(condition: Kit.Css.IsUnknown, features: "Bootstrap5")
+
+
+@if (MyModel.Bool("ResultPage", required: false)) {
+  <script src="https://addsearch.com/js/?key=@App.Settings.SearchKey&type=resultpage"></script>
+  return;
+}
+
+@Kit.Page.TurnOn("window.appSearch3.init()", data: new { wrapperAttribute = MyModel.String("WrapperAttribute", required: false) })
+
+@* Include styles & scripts of the App *@
+@if (Kit.Css.Is("bs5")) {
+<link rel="stylesheet" href="@MyView.Folder.Url/theme/theme.css" @Kit.Page.AssetAttributes()/>
+}
+<link rel="stylesheet" href="@MyView.Folder.Url/dist/styles.min.css" @Kit.Page.AssetAttributes()/>
+<script type="text/javascript" src="@MyView.Folder.Url/dist/scripts.min.js" @Kit.Page.AssetAttributes(position: "bottom")></script>
+
+

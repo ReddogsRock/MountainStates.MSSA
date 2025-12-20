@@ -1,0 +1,15 @@
+@inherits AppCode.Razor.AppRazor
+@* --- This is the Bootstrap5 Edition of the Files --- *@
+
+@* Include bootstrap 5 if the framework isn't known - then this file is still called, and we add Bootstrap to the page *@
+@Kit.Page.Activate(condition: Kit.Css.IsUnknown, features: "Bootstrap5")
+
+@* When the page is ready, run appPopupMessage3 init JS *@
+@Kit.Page.TurnOn("window.appPopupMessage3.init()", data: new {
+  domId = DomId,
+  showAgainAfter = PopUp.Presentation.ShowAgainAfter
+})
+
+@* Load the JavaScripts/Styles from the App folder. Each edition (bs5, bs3, etc.) has different files *@
+<link rel="stylesheet" href="@MyView.Folder.Url/dist/styles.min.css" @Kit.Page.AssetAttributes()>
+<script type="text/javascript" src="@MyView.Folder.Url/dist/scripts.min.js" @Kit.Page.AssetAttributes(position: "bottom")></script>

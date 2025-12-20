@@ -1,0 +1,6 @@
+@inherits Custom.Hybrid.RazorTyped
+@{
+  var timelineJsAttribute = "app-timelinejs2-" + UniqueKey;
+}
+<div class="app-timelinejs2" @timelineJsAttribute></div>
+@Html.Partial("Timeline.PartAssets.cshtml", new { timelineJsAttribute })

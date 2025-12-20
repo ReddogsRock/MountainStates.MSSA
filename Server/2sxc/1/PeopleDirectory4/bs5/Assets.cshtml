@@ -1,0 +1,18 @@
+@inherits Custom.Hybrid.RazorTyped
+@* --- This is the Bootstrap5 Edition of the Files --- *@
+
+@* show warning for admin if koi.json is missing *@
+@if (Kit.Css.IsUnknown && MyUser.IsSiteAdmin) {
+  <div class='dnnFormMessage dnnFormWarning'>
+    @Html.Raw(Connect.Koi.Messages.CssInformationMissing) <br>
+    @Html.Raw(Connect.Koi.Messages.OnlyAdminsSeeThis)
+  </div>
+}
+
+@* Include bootstrap 5 if the framework isn't known - then this file is still called, and we add Bootstrap to the page *@
+@Kit.Page.Activate(condition: Kit.Css.IsUnknown, features: "Bootstrap5")
+
+@* Include styles & scripts of the App *@
+<link rel="stylesheet" href="@MyView.Folder.Url/dist/styles.min.css" @Kit.Page.AssetAttributes()>
+<script src="@MyView.Folder.Url/dist/scripts.min.js" @Kit.Page.AssetAttributes()></script>
+

@@ -1,0 +1,14 @@
+@inherits AppCode.Razor.AppRazor
+@using ToSic.Razor.Blade
+@using AppCode.Data
+@* --- This is the Bootstrap5 Edition of the Files --- *@
+@{
+  // Decrypt the Api key and find out where it's from. If it's from preset, then we must show the warning
+  var apiKey = Kit.SecureData.Parse(AllSettings.String("GoogleMaps.ApiKey")); 
+  var warn = apiKey.IsSecuredBy("preset");
+}
+@if (warn) {
+  <div class="alert alert-danger">
+    @Html.Raw(AllResources.String("GoogleMaps.WarningApiKeyForDemoOnly"))
+  </div>
+}

@@ -1,0 +1,41 @@
+@inherits AppCode.Razor.AppRazor
+@using System.Collections.Generic
+@using System.Linq
+@using ToSic.Razor.Blade
+@using ToSic.Sxc.Data
+@* --- This is the Bootstrap5 Edition of the Glossary --- *@
+@* --- Is is also used by Bootstrap4                  --- *@
+@{
+  // Toolbar with Manage-Data-Button for the Terms
+  var termToolbar = Kit.Toolbar.Default().Data("Term");
+
+  // DOM ID of the A-Z Menu
+  var menuId = "glossary-nav-" + UniqueKey;
+}
+
+<div class="app-glossary3" @termToolbar>
+  <nav class="navbar navbar-expand-md navbar-light px-0 py-1 py-md-0">
+
+    @* Menu-Label & Hamburger, only visible in mobile because of d-block d-md-none*@
+    <span class="navbar-brand d-block d-md-none fw-bold">@App.Resources.GlossaryMenu</span>
+    <button class="navbar-toggler border-0" type="button" data-toggle="collapse" data-bs-toggle="collapse" data-target="#@menuId" data-bs-target="#@menuId" aria-expanded="false">
+      <span class="navbar-toggler-icon"></span>
+    </button>
+
+    @* A-Z Menu *@
+    <div class="navbar-collapse collapse pe-5 pe-md-0 my-2 my-md-0" id="@menuId">
+      <ul class="navbar-nav flex-row flex-wrap">
+        @foreach (var grp in TermsGroupedByFirstCharacter()) {
+          <li class="nav-item">
+            <a class="nav-link" href='@Tags.SafeUrl("#" + grp.Key)'>@grp.Key</a>
+          </li>
+        }
+      </ul>
+    </div>
+  </nav>
+
+  @* Term list grouped by A-Z *@
+  @Html.Partial("Glossary.Part TermGroups.cshtml")
+</div>
+
+@Html.Partial("Assets.cshtml")

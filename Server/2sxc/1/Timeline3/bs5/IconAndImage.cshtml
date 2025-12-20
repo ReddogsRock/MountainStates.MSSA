@@ -1,0 +1,36 @@
+@inherits AppCode.Razor.AppRazor
+@using ToSic.Razor.Blade
+@using AppCode.Data
+
+@{
+  var milestone = As<Timeline>(Model);
+  var hasImage = milestone.IsNotEmpty("Image");
+  var hasIcon = milestone.IsNotEmpty("Icon");
+}
+
+<div class='app-timeline-img-wrapper @(hasImage || hasIcon ? "" : "app-timeline-circle")'>
+  
+  @* Show image if available *@
+  @if (hasImage)
+  {
+    <div class="app-timeline-img">
+      @milestone.Picture("Image", settings: "Timeline", imgClass:"img-fluid rounded-circle")
+    </div>
+  }
+
+  @* Show icon if available - this can be an overlay on top of the image *@
+  @if (hasIcon)
+  {
+    <div class='app-timeline-icon-bg @(hasImage ? "app-timeline-overlay" : "")'>
+      <div class="app-timeline-icon">
+        <i class="fas @milestone.Icon"></i>
+      </div>
+    </div>
+  }
+
+  @* If neither image nor icon is available, show a dot-placeholder *@
+  @if (!hasImage && !hasIcon)
+  {
+    <div class="app-timeline-empty"></div>
+  }
+</div>

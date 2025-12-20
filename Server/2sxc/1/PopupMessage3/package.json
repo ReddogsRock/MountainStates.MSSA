@@ -1,0 +1,31 @@
+{
+  "name": "app-popupmessage3",
+  "version": "03.00.00",
+  "description": "A popup app for 2sxc",
+  "main": "(none)",
+  "scripts": {
+    "build-bs4": "webpack --env style=bs4",
+    "build-bs5": "webpack --env style=bs5"
+  },
+  "author": "2sic internet solutions 2020",
+  "license": "ISC",
+  "devDependencies": {
+    "autoprefixer": "^10.4.7",
+    "css-loader": "^6.7.1",
+    "mini-css-extract-plugin": "^2.6.1",
+    "postcss-loader": "^7.0.0",
+    "sass": "^1.53.0",
+    "sass-loader": "^13.0.2",
+    "ts-loader": "^9.3.1",
+    "typescript": "^4.7.4",
+    "webpack": "^5.73.0",
+    "webpack-cli": "^4.10.0",
+    "webpack-fix-style-only-entries": "^0.6.1"
+  },
+  "dependencies": {
+    "js-cookie": "^3.0.1",
+    "micromodal": "^0.4.10",
+    "bootstrap": "^4.4.1",
+    "bs5": "npm:bootstrap@^5.1.3"
+  }
+}

@@ -1,0 +1,27 @@
+@inherits AppCode.Razor.AppRazor
+@using System.Collections.Generic
+@using System.Linq
+@using ToSic.Razor.Blade
+@using ToSic.Sxc.Data
+@using AppCode.Data
+@{
+  // Toolbar without Layout Button but with Delete Button
+  var termToolbar = Kit.Toolbar.Default().Layout("-").Delete();
+}
+
+@* Loop through each group (starting character) and then all terms inside *@
+@foreach (var grp in TermsGroupedByFirstCharacter()) {
+  <div class="mb-5">
+    @* Show the character *@
+    <h2 id="@grp.Key" class="mt-3">@grp.Key</h2>
+
+    @* Show each term and summary definition *@
+    @foreach (var term in grp) {
+      <div class="mb-2" @termToolbar.For(term)>
+        <strong>@TitleWithAbbreviation(term)</strong>
+        <p class="mb-0">@term.Summary</p>
+        <small><a href='@Link.To(parameters: "term=" + term.String("UrlKey"))'>@App.Resources.MoreText</a></small>
+      </div>
+    }
+  </div>
+}

@@ -1,0 +1,33 @@
+@inherits AppCode.Razor.AppRazor
+@using ToSic.Razor.Blade;
+@using AppCode
+
+@* Activate JS features of 2sxc *@
+@Kit.Page.Activate("2sxc.JsCore")
+
+@{
+  var data = new {
+    domAttribute = MyModel.String("DomAttribute"),
+    currentCategory = MyPage.Parameters["category"],
+    // options for the pristine validation plugin
+    validationOptions = new {
+      // class of the parent element where the error/success class is added
+      classTo = Constants.Jobs3Fields,
+      errorClass = "has-danger",
+      successClass = "has-success",
+      // class of the parent element where error text element is appended
+      errorTextParent = Constants.Jobs3Fields, 
+      // type of element to create for the error text
+      errorTextTag = "div",
+      // class of the error text element
+      errorTextClass = "text-help",
+    }
+  };
+}
+@* Include bootstrap 5 if the framework isn't known - then this file is still called, and we add Bootstrap to the page *@
+@Kit.Page.Activate(condition: Kit.Css.IsUnknown, features: "Bootstrap5")
+
+@Kit.Page.TurnOn("window.appJobs3.init()", data: data)
+
+<link rel="stylesheet" href='@App.Folder.Url/dist/@(Kit.Css.Is("bs3") ? "bs3" : Kit.Css.Is("bs4") ? "bs4" : "bs5").min.css' @Kit.Page.AssetAttributes()>
+<script src="@App.Folder.Url/dist/scripts.min.js" @Kit.Page.AssetAttributes()></script>

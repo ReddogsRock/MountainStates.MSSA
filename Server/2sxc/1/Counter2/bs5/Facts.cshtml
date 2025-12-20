@@ -1,0 +1,47 @@
+@inherits Custom.Hybrid.RazorTyped
+@using ToSic.Razor.Blade
+@using AppCode.Data
+@{
+  // Get one Header Info (Title, Background, Show Title, Text White ...) has a toolbar on the top right
+  var header = As<FactGroup>(MyHeader);
+  // Get all Facts (Title, Icon, Number, Unit) as a List
+  var facts = AsList<Facts>(MyItems);
+  
+  // CSS class to make text white if expected
+  var cssTextWhite = header.IsTextWhite ? "text-white" : "";
+
+  // Creates a unique attribute name for the JavaScript counter object based on the UniqueKey variable
+  var counterJsAttribute = "app-counter2-js-" + UniqueKey;
+}
+
+@* Wrapper with optional background *@
+<div class='app-counter2 @(header.IsNotEmpty("Background") ? "app-counter2-has-background py-4" : "")' @Kit.Toolbar.Default(header)>
+  @* Show Header Title if desired *@
+  @if (header.IsNotEmpty("Title") && !header.HideTitle) {
+    <h2 class="text-center mb-3 mb-lg-4 @cssTextWhite">@header.Title</h2>
+  }
+
+  @* Show all the counters Facts*@
+  <div class='app-counter2-wrapper @(header.IsNotEmpty("Background") ? "container" : " ")'>
+    <div class="row justify-content-center">
+      @foreach (var fact in facts) {
+        <div class="col-md-6 col-lg-3" @Kit.Toolbar.Default().Layout("-").For(fact)>
+          <div class="p-2 p-lg-3 bg-primary rounded @cssTextWhite text-center h-100">
+            <i class='co-icon fas @fact.Icon fa-3x @cssTextWhite mb-2' aria-hidden="true"></i>
+            <div class="h2 @cssTextWhite">
+              <span class='@counterJsAttribute h2 @cssTextWhite' data-count='@fact.Number'></span>@(fact.IsNotEmpty("Unit") ? " " + fact.Unit : "")
+            </div>
+            <span>@fact.Title</span>
+          </div>
+        </div>
+      }
+    </div>
+  </div>
+
+  @* Show background image if configured *@
+  @if (header.IsNotEmpty("Background")) {
+    <img loading="lazy" class="d-flex bg-img" src='@Link.Image(header.Background, settings: "Section")'>
+  }  
+</div>
+
+@Html.Partial("Assets.cshtml", new { counterJsAttribute })

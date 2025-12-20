@@ -1,0 +1,89 @@
+@inherits AppCode.Razor.DetailRazor
+@using ToSic.Razor.Blade
+@using AppCode.Data
+@using AppCode
+
+@{
+    // Get current job to show from the View-Query + some Helpers
+    var job = AsList<Job>(MyData).FirstOrDefault();
+
+    // Get the unique domAttribute key
+    var domAttribute = Constants.DomAttribute + UniqueKey;  
+
+    @* Preflight: check if job found, else show notification and stop processing *@
+    if (job == null)
+    {
+        <h1>@App.Resources.LabelNoResults</h1>
+        <a href="@App.Settings.MainPage" class="btn btn-outline-secondary">zurück</a>
+        Kit.Page.SetHttpStatus(404, "Error: Job not Found.");
+        return;
+    }
+
+    var employmentTypes = AsList<EmploymentType>(job.EmploymentType).ToArray();
+
+    Kit.Page.SetTitle(job.Name, "Details");
+
+    if (App.Settings.GoogleJobsApi) {
+        // Get JsonLd for a JobPosting
+        Kit.Page.AddJsonLd(GetJsonLdForDetailJob(job, employmentTypes));
+    }
+}
+<div class="app-jobs3-details"  @Kit.Toolbar.Default(job)>
+    <div class="row mb-3 mb-lg-5">
+        <div class="col-md-7 order-md-first">
+            <h1 class="display-2">
+                <span class="mb-1 d-block">@App.Resources.NamePrefix</span>
+                @job.Name
+            </h1>
+            <div>@App.Resources.DatePosted: @job.DateTime("Date").ToString("d")</div>
+        </div>
+        <div class="col-md-4 order-md-last offset-lg-1">
+            @if (job.IsNotEmpty("Image")) {
+                @job.Picture("Image", settings: "Content", factor: "1/2", imgClass: "rounded", imgAltFallback : job.Name)
+            }
+        </div>
+    </div>
+
+    <div class="row mb-3 mb-lg-4">
+        <div class="col-12">
+            <h2>@job.Description</h2>
+            <p>&nbsp;</p>
+            <p style="white-space: pre-line">@job.Intro</p>
+        </div>
+    </div>
+
+    <div class="row mb-3 mb-lg-4">
+        <div class="col-12">
+            <h2>@App.Resources.TasksHeading</h2>
+            @job.Html("Tasks")
+        </div>
+    </div>
+
+    <div class="row mb-3 mb-lg-4">
+        <div class="col-12">
+            <h2>@App.Resources.QualificationsHeading</h2>
+            @job.Html("Qualifications")
+        </div>
+    </div>
+
+    <div class="row mb-3 mb-lg-4">
+        <div class="col-12 mb-2">
+            <h2>@App.Resources.OurOfferHeading</h2>
+            @job.Html("OurOffer")
+        </div>
+    </div>
+
+    <div class="row mb-3 mb-lg-4">
+        <div class="col-12 mb-2">
+            @job.Html("Outro")
+        </div>
+    </div>
+
+    <a href="@App.Settings.MainPage" class="btn btn-outline-secondary">@App.Resources.BtnBack</a>
+    @if (App.Settings.EnableRegistration) {
+        <a href="@App.Settings.RegistrationPage/jobId/@job.Id" class="btn btn-primary">@App.Resources.BtnRegistration</a>
+    }
+</div>
+
+
+@Html.Partial("Assets.cshtml", new { domAttribute })

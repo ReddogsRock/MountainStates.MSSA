@@ -1,0 +1,40 @@
+@inherits Custom.Hybrid.RazorTyped
+@using System.Collections.Generic;
+@using System.Linq;
+@using ToSic.Razor.Blade;
+@using ToSic.Sxc.Data;
+@* --- This is the Bootstrap3 Edition of the Glossary --- *@
+@{
+  // helper with some shared logic
+  var logic = GetCode("../shared/Logic.cs");
+
+  var config = MyItem;
+
+  // Get all Terms and group them by first letter - result is typed here, to help compiler
+  var termGroups = logic.TermsGroupedByFirstCharacter() as List<IGrouping<string, ITypedItem>>;
+
+  // Toolbar with Manage-Data-Button for the Terms
+  var termToolbar = Kit.Toolbar.Default().Data("Term");
+}
+
+<div class="app-glossary3" @termToolbar>
+  <nav class="navbar navbar-default">
+    <div class="navbar-header" data-toggle="collapse" data-target="#glossary-nav-@config.Id" aria-expanded="false">
+      <span>@App.Resources.String("GlossaryMenu")</span>
+      <span class="collapsed app-glossary3-toggle" title='@App.Resources.Attribute("GlossaryMenu")'></span>
+    </div>
+    <div class="collapse navbar-collapse" id="glossary-nav-@config.Id">
+      <ul class="nav navbar-nav app-glossary3-letterlist">
+      @foreach (var grp in termGroups) {
+        <li><a href='@Tags.SafeUrl("#" + grp.Key)'>@grp.Key</a></li>
+      }
+      </ul>
+    </div>
+  </nav>
+  <div class="app-glossary3-terms">
+    @* The sub-view is the same as BS5 so we load it from there *@
+    @Html.Partial("../bs5/Glossary.Part TermGroups.cshtml")
+  </div>
+</div>
+@* The assets are the same as BS5, so load it from there *@
+@Html.Partial("../bs5/Assets.cshtml")

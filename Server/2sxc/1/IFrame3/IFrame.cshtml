@@ -1,0 +1,37 @@
+@inherits AppCode.Razor.AppRazor
+@using ToSic.Razor.Blade
+@using AppCode.Data
+
+@{
+  var iFrame = As<Iframe>(MyItem);
+  var enableScrollbar = iFrame.EnableScrollbar;
+}
+
+<div class='app-iframe-holder' style='width:100%; max-width:100%; position:relative;' @Kit.Toolbar.Default(iFrame)>
+
+  @* Show a nice hint if the IFrame is showing demo material *@
+  @if (iFrame.IsDemoItem)
+  {
+    <div
+      style="width: 100%; height: 100%; text-align: center; position: absolute;
+    background: linear-gradient(90deg, rgba(255,255,255,0) 0%, rgba(255,255,255,0.6) 25%, rgba(255,255,255,90) 50%, rgba(255,255,255,0.6) 75%, rgba(255,255,255,0) 100%)">
+      <br>
+      @Kit.Image.Picture(App.Folder.Url + "/app-icon.png", settings: "Square", width: 100)
+      <br>
+      @Html.Raw(Tags.Nl2Br(App.Resources.DemoMode))
+    </div>
+  }
+
+  @* The Iframe itself *@
+  <iframe src='@iFrame.EmbedURL' scrolling='@(enableScrollbar ? "yes" : "no")' style='max-width: 100%;
+        box-sizing: border-box;
+        border-top: 0px;
+        border-bottom: 0px;
+        margin: 0;
+        padding: 0;
+        height: @(iFrame.Height + "px");
+        width: @(iFrame.Width + "%");
+        display: block;
+        overflow: @(enableScrollbar ? "auto" : "hidden");'>
+  </iframe>
+</div>

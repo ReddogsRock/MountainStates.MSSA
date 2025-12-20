@@ -1,0 +1,30 @@
+@inherits AppCode.Razor.AppRazor
+@using ToSic.Razor.Blade
+@using AppCode.Data
+@{
+  // 2. Include Bootstrap4 if the framework isn't known
+  @Kit.Page.Activate(condition: Kit.Css.IsUnknown, features: "Bootstrap5")
+  
+  var slider = MyModel.Get<Slider>("Slider");
+  var settings = MyModel.Get<Slider>("SwiperSettings");
+
+  var data = new {
+    moduleId = slider.Id,
+    options = new {
+      autoplay = settings.Autoplay,
+      speed = settings.AnimationDuration,
+      // The following two values are JSON strings, so we must turn them into an object
+      effectDefaults = Kit.Json.ToTyped(settings.String("Effect.Configuration")),
+      fallback = Kit.Json.ToTyped(App.Settings.EffectFallback)
+    },
+  };
+}
+
+@if (Kit.Css.Is("bs5")) {
+<link rel="stylesheet" href="@MyView.Folder.Url/theme/theme.css" @Kit.Page.AssetAttributes()/>
+}
+<link rel="stylesheet" href="@MyView.Folder.Url/dist/styles.min.css" @Kit.Page.AssetAttributes()/>
+<script src="@MyView.Folder.Url/dist/scripts.min.js" @Kit.Page.AssetAttributes()></script>
+
+@* Activation uses turnOn https://r.2sxc.org/turnon *@
+@Kit.Page.TurnOn("window.appSwiper2.init()", data: data)

@@ -1,0 +1,22 @@
+@inherits Custom.Hybrid.RazorTyped
+@using ToSic.Razor.Blade;
+@{
+
+  // 2. Include the framework if it isn't known
+ @Kit.Page.Activate(condition: Kit.Css.IsUnknown, features: "Bootstrap5")
+
+  // 3. Show warning for admin if koi.json is missing
+  if (Kit.Css.IsUnknown && MyUser.IsSiteAdmin)
+  {
+    <div class='dnnFormMessage dnnFormWarning'>
+      @Html.Raw(Connect.Koi.Messages.CssInformationMissing) <br>
+      @Html.Raw(Connect.Koi.Messages.OnlyAdminsSeeThis)
+    </div>
+  }
+  Kit.Page.Activate("FontAwesome5"); 
+}
+
+@if (Kit.Css.Is("bs5")) {
+<link rel="stylesheet" href="@MyView.Folder.Url/theme/theme.css" @Kit.Page.AssetAttributes()/>
+}
+<link rel="stylesheet" href="@MyView.Folder.Url/dist/styles.min.css" @Kit.Page.AssetAttributes()/>

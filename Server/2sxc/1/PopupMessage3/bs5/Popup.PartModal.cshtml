@@ -1,0 +1,40 @@
+@inherits AppCode.Razor.AppRazor
+@using ToSic.Razor.Blade
+@using AppCode.Data
+
+@* --- This is the Bootstrap5 Edition of the Files --- *@
+
+@* Add the PopUp HTML; hidden. Will be shown by the JS if needed *@
+<div class="modal micromodal-slide" id="@DomId" aria-hidden="true">
+  <div class="modal__overlay" tabindex="-1" data-micromodal-close>
+    <div class="modal__container" role="dialog" aria-modal="true" aria-labelledby="modal-1-title">
+
+      @* If we have an image, show it on top with a close-button on it *@
+      @if (PopUp.IsNotEmpty("Image"))
+      {
+        <header class="modal__header">
+          @PopUp.Picture("Image", settings: "Content", factor: 0.5, imgClass: "img-fluid")
+          <button class="modal__close" type='button' aria-label="Close modal" data-micromodal-close></button>
+        </header>
+      }
+
+      @* The body of the popup *@
+      <div class="modal-content-content">
+        <div class="modal__content">
+          @* If we have no image, show the close button on top *@
+          @if (!PopUp.IsNotEmpty("Image")) {
+            <button class="modal__close" type='button' aria-label="Close modal" data-micromodal-close></button>
+          }
+          @PopUp.Html("Text", container:"")
+          @if (PopUp.IsNotEmpty("LinkText"))
+          {
+            <a href="@Tags.SafeUrl(PopUp.Link)" target='@(PopUp.LinkNewTab ? "blank" : "self")' class="btn btn-primary">
+              @PopUp.LinkText
+            </a>
+          }
+        </div>
+      </div>
+
+    </div>
+  </div>
+</div>

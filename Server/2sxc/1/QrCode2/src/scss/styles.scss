@@ -1,0 +1,5 @@
+@media screen { .app-qrcode2-print-only { display: none; } }
+@media print  { 
+    .app-qrcode2-noprint { display: none; } 
+    .app-qrcode2-print-only { display: block; }
+}

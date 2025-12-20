@@ -1,0 +1,33 @@
+.app-podcast2 {
+  .card {
+    & .pc-channel-title {
+      font-size: 1.5rem;
+    }
+
+    & .pc-owner-name {
+      font-weight: 500;
+    }
+
+    & .pc-channel-category-rss {
+      svg {
+        path {
+          fill: white;
+        }
+      }
+      & > p {
+        flex: 4;
+      }
+
+      & > a {
+        max-width: 30px;
+        color: #fff;
+      }
+    }
+  }
+
+  .list-group {
+    & .pc-episode-date {
+      font-size: 0.7rem;
+    }
+  }
+}

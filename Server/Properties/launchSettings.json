@@ -19,7 +19,8 @@
         "applicationUrl": "https://localhost:44329;http://localhost:18094",
         "environmentVariables": {
           "ASPNETCORE_ENVIRONMENT": "Development"
-        }
+        },
+        "hotReloadEnabled": false
       }
     }
   }

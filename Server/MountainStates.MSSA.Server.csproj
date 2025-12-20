@@ -11,8 +11,20 @@
     <BlazorDisableThrowNavigationException>true</BlazorDisableThrowNavigationException>
     <RequiresAspNetWebAssets>true</RequiresAspNetWebAssets>
   </PropertyGroup>
+	<ItemGroup>
+		<!-- Exclude these directories from compilation -->
+		<Compile Remove="2sxc\**" />
+		<!-- Exclude content files from the build output -->
+		<Content Remove="2sxc\**" />
+		<!-- Exclude files from being embedded as resources -->
+		<EmbeddedResource Remove="2sxc\**" />
+		<!-- Exclude miscellaneous files not included elsewhere -->
+		<None Remove="2sxc\**" />
+		<!-- Exclude files from the dotnet watch tool -->
+		<Watch Remove="2sxc\**" />
+	</ItemGroup>
 
-  <ItemGroup>
+	<ItemGroup>
     <Compile Remove="wwwroot\Modules\Templates\**" />
     <Compile Remove="wwwroot\Themes\Templates\**" />
     <Content Remove="wwwroot\Modules\Templates\**" />

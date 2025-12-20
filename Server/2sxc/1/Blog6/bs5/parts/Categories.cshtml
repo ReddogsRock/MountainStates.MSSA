@@ -1,0 +1,58 @@
+@inherits AppCode.Razor.AppRazor
+@using ToSic.Razor.Blade
+@using System.Linq
+@using AppCode.Data
+@{
+  // Optionally get selected category from Query 
+  // If there is nothing in the Category-filter, then it's a virtual entity with all properties being null
+  var filter = As<Category>(MyData.GetStream("Category"));
+
+  var filterCat = filter?.Key;
+
+  // 1.1. Get all Blog Posts from the App, to ignore filters (note that admins also get unpublished posts)
+  var allPosts = App.Data.GetAll<BlogPost>();
+  
+  // 1.2 Get all categories which have posts and keep the Count for showing
+  var catsWithPosts = App.Data.GetAll<Category>() 
+    .Select(Cat => new {
+      Cat,
+      // Count all the BlogPosts pointing to this category, but if anonymous-user, only the published ones
+      PostsCount = MyUser.IsContentAdmin
+        ? Cat.Parents(type: "BlogPost").Count()
+        : Cat.Parents(type: "BlogPost").Where(b => b.DateTime("PublicationMoment").Date <= DateTime.Now.Date).Count()
+    })
+    .Where(set => set.PostsCount > 0);            // ...and only keep categories which have posts
+
+  var isBs5 = Kit.Css.Is("bs5");
+  var pill = isBs5 ? "rounded-pill" : "badge-pill";
+  var pillBg = isBs5 ? "text-bg-light" : "badge-light";
+  var marginLeft = isBs5 ? "ms-1" : "ml-1";
+}
+
+<div class="app-blog5-sidebar mb-3">
+  <ul class="d-flex align-items-center justify-content-center flex-wrap">
+    <li>
+       @Html.Partial("./RssLink.cshtml", new { filterCat, pill})
+    </li>
+    @* 3.1. Link for the all-categories *@
+    <li>
+      <a class="d-flex btn btn-sm btn-outline-primary @pill align-items-center" href='@Link.To()'>
+        @App.Resources.ShowAll<span class="@marginLeft badge @pill @pillBg">@allPosts.Count()</span>
+      </a>
+    </li>
+
+    @* 3.2 Show each used Category + count *@
+    @foreach (var cat in catsWithPosts) 
+    {
+      var catKey = cat.Cat.Key;
+      <li>
+        <a class='d-flex btn btn-sm btn-outline-primary @pill align-items-center 
+          @(catKey == filterCat ? "active" : "")' 
+          href='@Link.To(parameters: "category=" + catKey)'>
+            @cat.Cat.Name
+            <span class="badge @pill @pillBg @marginLeft">@cat.PostsCount</span>
+        </a>
+      </li>
+    }
+  </ul>
+</div>

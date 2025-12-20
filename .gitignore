@@ -7,3 +7,13 @@ msbuild.binlog
 .vscode/
 *.binlog
 *.nupkg
+
+# Oqtane specific
+wwwroot/Modules/
+Content/Tenants/
+App_Data/
+Logs/
+*.db
+*.mdf
+*.ldf
+appsettings.Development.json

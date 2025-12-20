@@ -1,0 +1,93 @@
+@inherits AppCode.Razor.AppRazor
+@using ToSic.Razor.Blade
+@using ToSic.Sxc.Data
+@using AppCode.Data
+@using AppCode
+@using System
+
+@{
+
+  // Us for Content Toolbar
+  var jobListeContent = As<Job>(MyItem);
+
+  // Get a List of Categories and Jobs from Data 
+  var categories = AsList<Category>(MyData.GetStream("Categories"));
+  var jobs = AsList<Job>(MyData.GetStream("Jobs"));
+
+  // Use on the Top for Manage Content 
+  var contentToolbar = Kit.Toolbar.Default().New("Job", tweak: b => b.Ui("title=New Job"));
+
+  // Get the unique domAttribute key
+  var domAttribute = Constants.DomAttribute + UniqueKey; 
+
+  var isBs3 = Kit.Css.Is("bs3");
+}
+
+@* Show Warning if admin *@
+@if (MyUser.IsContentAdmin) {
+  <div class="alert alert-danger" @Kit.Toolbar.Empty().AppSettings()>
+    @Html.Raw(App.Resources.Html("LabelAdminDetailPageWarning"))
+  </div>
+}
+
+<div @domAttribute class="app-jobs3" @contentToolbar.For(jobListeContent)>
+
+  @* Get all Categories in a Button on Top of the List *@
+  @if (App.Settings.UseCategories) 
+  {
+    <div class="app-jobs3-categories-list mb-3">
+      @if (categories.Count() != 1)
+      {
+        <a app-jobs3-category-button class="btn btn-outline-primary" app-jobs3-filter="nofilter" href='@Link.To()'>
+          @App.Resources.LabelNofilter
+        </a>
+
+        foreach (var category in categories) 
+        {
+          <a app-jobs3-category-button class="btn btn-outline-primary" 
+            app-jobs3-filter="@category.Key" href='@Link.To(parameters: "category=" + category.Key)'>
+            @category.Name
+          </a>
+        }
+      }
+    </div>
+  }
+
+  @* Show a List of all Jobs *@
+  <div class='app-jobs3-list p-2 row'>
+    @foreach (var job in jobs) 
+    {
+      var jobCategories = ((IEnumerable<Category>)job.Categories).Select(x => x.Key);
+        
+      var detailsPageId = Text.Has(App.Settings.String("DetailsPage")) 
+    ? int.Parse((App.Settings.String("DetailsPage")).Split(':')[1])
+    : 0; 
+      
+      <div @Kit.Toolbar.Default(job) class='app-jobs3-job p-2 @(isBs3 ? "col col-xs-12" : "col-12")' app-jobs3-filterelem="@Kit.Json.ToJson(jobCategories)">
+          <div class="row position-relative">                          
+            <div class='@(isBs3 ? "col-xs-9" : "col-9")'>
+              <h3>@job.Name</h3>
+              <div class="app-jobs3-categories-list ">
+                <span>@job.Date.ToString("dd.MM.yyyy")</span>
+              </div>
+
+              @if (job.IsNotEmpty("Description")) {
+                <p>@job.Description</p>
+              }
+
+              <span class="app-jobs3-link text-primary"> @App.Resources.LabelShowMore &rsaquo;</span>
+            </div>
+            <div class='app-jobs3-categories-container @(isBs3 ? "col-xs-3" : "col-3")'>
+              @foreach (var category in job.Categories) {
+                <span class="text-primary">@category.Name</span>
+              }
+            </div>
+            <a class="stretched-link" title="@job.Name" href='@Link.To(pageId: detailsPageId, parameters: "id=" + job.Id)'></a>
+          </div>
+        
+      </div>
+    }
+  </div>
+</div>
+
+@Html.Partial("Assets.cshtml", new { domAttribute })

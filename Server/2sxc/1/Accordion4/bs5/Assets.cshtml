@@ -1,0 +1,43 @@
+@inherits AppCode.Razor.AppRazor
+@using ToSic.Razor.Blade
+@* --- This is the Bootstrap5 Edition of the Files, but also used by BS4/BS3 --- *@
+
+@{
+  var isBs5 = Kit.Css.Is("bs5");
+  var isBs4 = Kit.Css.Is("bs4");
+  var isBs3 = Kit.Css.Is("bs3");
+
+  var accordionData = new {
+    domId = "app-accordion4-" + UniqueKey,
+    options =  new {
+      tagStickyHeader = "header",           // This is the sticky header in the page, the height of which must be respected on scroll
+      classIsExpanded =  isBs3 ? "is-expanded" : "show" , // This marks open accordions
+      classInactive = "collapsed",          // This marks inactive accordions
+      attrChild = "data-accordion-child",   // This attribute contains a key which is used in the #-fragment for navigating to a section
+      attrParent = isBs5 ? "data-bs-target" // This attribute marks the title tag which will trigger expand/collapse, the value must be same as in the child
+        : isBs4 ? "data-target" 
+        : "data-accordion-parent",        
+    accordionOpener = isBs5 ? "accordion-button" : "app-accordion4-title",          
+    }
+  };
+}
+
+@* Include bootstrap 5 if the framework isn't known - then this file is still called, and we add Bootstrap to the page *@
+@Kit.Page.Activate(condition: Kit.Css.IsUnknown, features: "Bootstrap5")
+
+@Kit.Page.Activate("2sxc.JsCore")
+
+@* Activate font-Awesome 5 from the global resources and activate https://r.2sxc.org/turnon *@
+@Kit.Page.Activate("FontAwesome5")
+
+@* When the page is ready, run appAccordion4 init JS *@
+@if (isBs3 ) {
+  @Kit.Page.TurnOn("window.appAccordion4.initAccordion()", data: accordionData)
+} else {
+  @Kit.Page.TurnOn("window.appAccordion4.initBs5()", data: accordionData)
+}
+
+@* Load the JavaScripts/Styles from the App folder. Each edition (bs5, bs3, etc.) has different files *@
+
+<link rel="stylesheet" href="@MyView.Folder.Url/dist/styles.min.css" @Kit.Page.AssetAttributes()>
+<script type="text/javascript" src="@MyView.Folder.Url/dist/scripts.min.js" @Kit.Page.AssetAttributes()></script>

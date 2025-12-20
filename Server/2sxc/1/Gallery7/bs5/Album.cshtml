@@ -1,0 +1,99 @@
+@inherits AppCode.Razor.AlbumRazor
+@using ToSic.Razor.Blade
+@using ToSic.Sxc.Adam
+@using AppCode
+@using AppCode.Data
+
+@* 1. Pre-Flight: Determine which Album to show *@
+@{
+  // This will check if the url specifies a specific album, and if yes, use that
+  // If not, use the one configured in the module (for single-album scenarios)
+  // If nothing is found, it will stop after this code block (see `return` below)
+
+  // Get page Parameter for album=... (works on Dnn & Oqtane)
+  var albumInUrl = MyPage.Parameters.String("Album");
+
+  // If album QueryString is specified, take album with path matching Url, else take "current" album of the module
+  var album = Text.Has(albumInUrl)
+    ? AsList<Album>(MyItems).FirstOrDefault(a => a.Path == albumInUrl)
+    : As<Album>(MyItem);
+}
+  
+@* 2. If no album found, show error and stop processing this template using return *@
+@if (album == null)
+{
+  <h1>@App.Resources.AlbumNotFound</h1>
+  <a href="@Link.To()" class="btn btn-outline-primary btn-sm">@App.Resources.BackToOverview</a>
+  Kit.Page.SetHttpStatus(404);
+  return;
+}
+
+@* 3. The album is now known - let's prepare some stuff *@
+@{
+  // Set the title of the page - this will prepend to the existing title
+  Kit.Page.SetTitle(album.Title + " | ");
+
+  // Determine if we should show as Masonry based on Presentation-settings or the View Identifier
+  var useMasonry = "masonry" == Text.First(album.Presentation.TileStructure, MyView.Identifier);
+
+  // Prepare image resize settings - they vary by use case (Masonry or not)
+  var imageSettings = Kit.Image.Settings(
+    useMasonry ? "GalleryMasonry" : "Content",  // Masonry has different resize settings
+    factor: useMasonry ? "4:12" : "3:12"        // Determine the widths based on 12 Bootstrap Cols
+  );
+
+  // Define dom attribute-marker for fancybox links + effect + helpers
+  var fancyboxMarker = Constants.FancyboxPrefix + UniqueKey; 
+  var effect = "effect-zoom";                   // effect on mouse-over; alternative: "effect-darken"; 
+}
+
+@* 4. Show the Album *@
+<div class="app-ga7-main" @Kit.Toolbar.Default(album)>
+
+  @* 4.1 Display Album Title or information that title is hidden *@
+  @if (album.Presentation.HeadingType != "hidden") {
+    @Kit.HtmlTags.Custom(album.Presentation.HeadingType, album.Title)
+  } else if (MyUser.IsContentAdmin) {
+    <h2>@App.Resources.TitleNotDisplayed</h2>
+  }
+
+  @* 4.2 Show description if desired *@
+  @if (album.Presentation.ShowDescription) {
+    @album.Html("Introduction").Class("mb-4")
+  }
+
+  @* 4.3 Display the images *@
+  <div class='@(useMasonry ? "app-ga7-masonry" : "row mb-4")'>
+    @foreach (IFile pic in GetImagesSorted(album))
+    {
+      @* 4.3 Prepare caption, tooltip, toolbar etc. for showing the image afterwards *@
+
+      // Get image description from metadata - make sure it has no HTML inside
+      var picTitle = pic.Metadata.String("Description", scrubHtml: true);
+
+      // prepare the <picture> tag because we'll need it 2x (for toolbar and output)
+      var picTag = Kit.Image.Picture(pic, settings: imageSettings);
+
+      @* 4.4 If not Masonry, add some responsive classes to the div *@
+      <div class='@(useMasonry ? "" : "col-12 col-sm-6 col-md-4 col-lg-3 mb-4" )'>
+        @* 4.5 Now show each image *@
+        <a class="app-ga7" @fancyboxMarker @GetFancyboxData(pic, album, picTitle)>
+          <figure class="app-ga7-image @effect" @picTag.Toolbar()>
+            @* 4.6 Show the Overlay, an optional title (based on settings) and the image itself *@
+            @picTag
+            <figcaption class="overlay d-flex align-items-end">
+              @if (Text.Has(picTitle)) { <div class="caption">@picTitle</div> }
+            </figcaption>
+          </figure>
+        </a>
+      </div>
+    }
+  </div>
+</div>
+
+@* 5. Show back button if the view is used as detail view *@
+@if (Text.Has(albumInUrl)) {
+  <a href="@Link.To()" class="btn btn-outline-primary btn-sm">@App.Resources.BackToOverview</a>
+}
+
+@Html.Partial("Assets.cshtml", new { fancyboxMarker })

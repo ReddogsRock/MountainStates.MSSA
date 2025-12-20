@@ -1,0 +1,27 @@
+@inherits AppCode.Razor.AppRazor
+@using AppCode.Data
+
+@* Show warning if still in initial configuration *@
+@if (App.Settings.DomainKey == "2sxc-org.disqus.com")
+{
+  <div class="app-disqus2-warning" @Kit.Toolbar.Default()>
+    @Html.Raw(App.Resources.ConfigurationWarning)
+  </div>
+  <style>
+    .app-disqus2-warning {
+      color: #856404;
+      background-color: #fff3cd;
+      padding: .75rem 1.25rem;
+      margin-bottom: 1rem;
+      border-radius: .25rem;
+    }
+  </style>
+}
+@* Show disqus with the DomainKey *@
+else
+{
+  <div id="disqus_thread" @Kit.Toolbar.Default(MyItem)></div>
+  <script src='https://@App.Settings.DomainKey/embed.js' 
+    @Kit.Page.AssetAttributes(position: "bottom") data-timestamp="@DateTimeOffset.Now.ToUnixTimeSeconds()">
+  </script>
+}

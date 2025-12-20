@@ -1,0 +1,95 @@
+@inherits AppCode.Razor.AppRazor
+@using ToSic.Razor.Blade
+@using AppCode.Data
+@{
+  // The current swiper (can also be a demo item, if nothing has been added yet)
+  var slider = As<Slider>(MyItem);
+  
+  // Merge settings on swiper with predefined Settings, so we always have all setting, even if not specified at the item level
+  var swiperSettings = AsStack<Slider>(slider, App.Settings);
+
+  // Figure out width (eg. '100%', '1200px') and height ("100vh" or a ratio like "x:y")
+  var sliderWidth = swiperSettings.Width;
+  var sliderHeightOrRatio = swiperSettings.Height;
+
+  // Prepare style to set height or aspect ratio (determined by the ":" in the height)
+  var isRatio = sliderHeightOrRatio.IndexOf(":") > 0;
+  var aspectRatioStyle = isRatio ? "--aspect-ratio:calc(" + sliderHeightOrRatio.Replace(":", "/")  + ")": "";
+  var swiperContainerHeight = isRatio ? "" : "height: " + sliderHeightOrRatio + ";";
+
+  // Toolbar for the swiper itself
+  var swiperToolbar = Kit.Toolbar.Default()
+    .Settings(hover: "left", autoAddMore: "start");
+
+  // The toolbar (or a demo-info-toolbar if it's just a preview)
+  var slideToolbar = Kit.Toolbar.Default()
+    .Delete()
+    .DetectDemo(slider, message: App.Resources.ToolbarSlideIsDemo);
+}
+
+<div class="app-swiper2" @swiperToolbar.For(slider) style="@aspectRatioStyle">
+  @* Slider main container and wrapper *@
+  <div class="swiper swiper-@slider.Id" style="width: @sliderWidth; @swiperContainerHeight">
+    <div class="swiper-wrapper">
+
+      @* if we don't have slides, show a dummy slide and provide buttons to start adding *@
+      @if (!slider.Slides.Any()) {
+        @Html.Partial("Swiper.PartEmpty.cshtml")
+      } 
+
+      @* Slides - Add each one (if there are any) *@
+      @foreach (var slide in slider.Slides)
+      {
+        // Merge settings of the current slide, the swiper defaults and the App settings/defaults
+        var slideSettings = AsStack<Slide>(slide, slider, App.Settings);
+        var textPos = slideSettings.TextPosition; // Text position for generating CSS classes
+
+        <div class="swiper-slide" data-swiper-autoplay="@slideSettings.ShowDuration" @slideToolbar.For(slide)>
+          <div class="image-wrapper @SlideWrapperClasses(slideSettings)">
+            @* Add the <picture> tag with all the sources *@
+            @slide.Picture("Image", settings: "Content", factor: sliderHeightOrRatio, imgAltFallback: slide.Title)
+            @* Check if Text has real Values *@
+            @if (Text.Has(Text.First(slide.Title, slide.Text, slide.LinkText))) {
+              @* Show Overlay behind text *@
+              <div class="overlay overlay-@slideSettings.OverlayEffect"></div>
+
+              <div class='d-flex position-relative h-100 @OverlayAlignClasses(textPos)'>
+                <div class="w-100 py-3 py-md-4 px-3 px-md-5 @OverlayTextAlignClasses(textPos)">
+                  @* Show Title in overlay *@  
+                  @if (Text.Has(slide.Title)) {
+                    <p class="lead" data-swiper-parallax="-250">@slide.Title</p>
+                  }
+                  @* Show Description / additional Text in overlay *@  
+                  @if (Text.Has(slide.Text)) {
+                    <div data-swiper-parallax="-500">@Html.Raw(slide.Text)</div>
+                  }
+                  @* Show Link in overlay *@  
+                  @if (Text.Has(slide.LinkText)) {
+                    <div data-swiper-parallax="-750">
+                      <a class="btn btn-primary" href='@slide.Url("Link")' target='@(slide.LinkBlankTarget == true ? "_blank" : "")'>@slide.LinkText</a>
+                    </div>
+                  }
+                </div>
+              </div>
+            }
+          </div>
+        </div>
+      }
+
+    </div>
+
+    @* Pagination *@
+    @if (swiperSettings.ShowPaginationDots) {
+      <div class="swiper-pagination"></div>
+    }
+
+    @* Navigation buttons (right left arrows) *@
+    @if (swiperSettings.ShowPaginationArrows)
+    {
+      <div class="swiper-button-prev swiper-button-prev-@slider.Id"></div>
+      <div class="swiper-button-next swiper-button-next-@slider.Id"></div>
+    }
+  </div>
+</div>
+
+@Html.Partial("Swiper.PartAssets.cshtml", new { slider, swiperSettings })

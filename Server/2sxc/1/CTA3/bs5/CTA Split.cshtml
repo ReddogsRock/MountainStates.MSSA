@@ -1,0 +1,47 @@
+@inherits AppCode.Razor.CtaSplit
+@using ToSic.Razor.Blade
+@using AppCode.Data
+@* --- This is the Bootstrap5 Edition of the Files --- *@
+@{
+  var pres = Cta.Presentation;
+  // Toolbar for the Button, when is not a Demo Item you can Edit
+  var btnToolbar = Kit.Toolbar.Empty().DetectDemo(Cta).Edit();
+}
+
+<div class='app-cta3-wrapper mb-4' >
+  <div class="row">
+    <div @Kit.Toolbar.Default(Cta)
+      class='col-md-@TextCols order-md-@(ShowTextFirst ? "first" : "last") app-cta3 app-cta3-text-image text-dark @pres.TextAlignment @pres.TextVAlignment'>
+
+      @* Optionally show title *@
+      @if (pres.HeadingType != "hide") {
+        @Cta.Html("Title", container: pres.HeadingType)
+      }
+
+      @* Optionally show text inside a div *@
+      @if (Cta.IsNotEmpty("Text")) {
+        @Cta.Html("Text", container: Kit.HtmlTags.Div().Class("app-cta3-text"))
+      }
+
+      @* Show all buttons *@
+      <div class="app-cta3-buttons">
+        @foreach (var btn in Cta.Buttons) {
+          <a href='@btn.ButtonLink' class="btn app-cta3-btn" target='@btn.ButtonTarget' @btnToolbar.For(btn)>
+            @btn.ButtonText
+          </a>
+        }
+      </div>
+    </div>
+
+    @* The Image Column *@
+    <div class='col-md-@ImageCols order-md-@(!ShowTextFirst ? "first" : "last")'>
+      @if (pres.IsNotEmpty("BackgroundImage")) {
+        <figure>
+          @pres.Picture("BackgroundImage", settings: "Content", factor: ImageCols + "/12", imgAltFallback: Cta.Title)
+        </figure>
+      }
+    </div>
+  </div>
+</div>
+
+@Html.Partial("Assets.cshtml")

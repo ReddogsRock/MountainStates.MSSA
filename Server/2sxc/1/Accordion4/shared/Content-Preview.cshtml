@@ -1,0 +1,13 @@
+@inherits Custom.Hybrid.RazorTyped
+@*
+This is just a test view to show test-content in the Accordion
+It's only meant for verifying functionality, not for use in real sites.
+That is why the view must also be hidden when we distribute the app.
+*@
+@{
+  var preview = MyItem;
+}
+
+<div @Kit.Toolbar.Default().For(preview)>
+  @preview.Html("Message", container: "")
+</div>

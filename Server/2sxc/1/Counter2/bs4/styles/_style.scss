@@ -1,0 +1,22 @@
+.app-counter2 { 
+  z-index: 1;
+  position: relative;
+  display: flex;
+  flex-direction: column;
+  justify-content: center;
+  margin: 1.5rem 0 !important;
+
+  &.app-counter2-has-background {
+    min-height: 50vh;
+  }
+
+  img.bg-img {
+    position: absolute;
+    left:0;
+    top:0;
+    width:100%;
+    height:100%;
+    object-fit: cover;
+    z-index: -1;
+  }
+}

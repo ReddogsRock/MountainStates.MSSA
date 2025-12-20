@@ -1,0 +1,105 @@
+@inherits AppCode.Razor.FormBuilderRazor
+@using ToSic.Razor.Blade
+@using AppCode.Data
+@using AppCode
+
+@{
+// Get the unique domAttribute key 
+  var domAttribute = Constants.DomAttribute + UniqueKey; 
+  // Get the job from the data
+  var job = As<Job>(MyData.GetStream("Job"));
+}
+
+@if (!App.Settings.EnableRegistration) 
+{
+	<div class="alert alert-danger" role="alert">
+    <span class="sr-only">Error:</span>
+    @Html.Raw(Kit.Scrub.Only(App.Resources.MessageRegistrationDisabled, "p"))
+  </div>
+  <a href="@App.Settings.MainPage" class="btn btn-outline-primary">@Html.Raw(App.Resources.BtnBack)</a>
+	
+	Kit.Page.SetHttpStatus(404);
+  return;
+}
+
+@* Show warning if 404, event not found *@
+@if (job == null) 
+{
+  <div class="alert alert-danger" role="alert">
+    <span class="sr-only">Error:</span>
+    @App.Resources.LabelNoResults
+  </div>
+  <a href="@App.Settings.MainPage" class="btn btn-outline-primary">@Html.Raw(App.Resources.BtnBack)</a>
+
+  Kit.Page.SetHttpStatus(404);
+  return;
+}
+
+<div class="app-jobs3 app-jobs3-form" 
+  @Kit.Toolbar.Default(job)
+  @domAttribute
+  data-webservice="app/auto/api/Form/ProcessForm"
+>
+	<input type="hidden" id="Job" name="Job" value="@job.Guid">
+
+	@TextField("JobName", true, true, job.Name)
+
+	@* Salutation *@
+    @Radio("Salutation", true, 
+      	new string[] {
+        App.Resources.LabelMr,
+		App.Resources.LabelMrs
+      }
+    )
+
+	@TextField("FirstName", true)
+	@TextField("LastName", true)
+	@EMail("Mail", true)    
+	@TextField("Phone", false)
+	@TextField("MobilePhone", false)
+	@TextField("Street", true)
+	@TextField("ZIPCity", true)
+
+	@* Country Select *@
+	@DropDown("Country", true, App.Resources.CountrySelection.Split('\n'))    
+
+	@File("ApplicationFile", true, ".pdf", "ApplicationFile")
+
+	@* Terms *@
+  	@Checkbox("Gpdr", true,true)
+
+	@* Submit Button *@
+	<div class="mb-3 row">
+		<div class="col-md-9 offset-sm-3">
+			<a href="@App.Settings.DetailsPage/id/@job.Id" class='btn @(Kit.Css.Is("bs3") ? "btn-default" : "btn-outline-primary")'>@Html.Raw(App.Resources.BtnBack)</a>
+			<button type="button" app-jobs3-send class="btn btn-primary">@Html.Raw(App.Resources.BtnRegistration)</button>
+		</div>
+	</div>  
+
+	@AddHiddenMessage(App.Resources.MessageSending, "warning", "msgSending")
+	@AddHiddenMessage(App.Resources.ValidationRequired, "danger", "msgIncomplete")
+	@AddHiddenMessage(App.Resources.RegistrationError, "danger", "msgError")
+	<div id="msgOk" class="alert alert-success app-jobs3-message" role="alert">
+		<strong>@Html.Raw(App.Resources.SuccessThanks)</strong>
+		@Html.Raw(App.Resources.SuccessMessage)
+	</div>
+
+	@* if is required, because all app-job2-config-warning are shown after submit *@
+	@if (!App.Settings.IsNotEmpty("OwnerMail") || !App.Settings.IsNotEmpty("MailFrom")) {
+		<div class="alert alert-warning" id="" role="alert" app-job2-config-warning>
+    		@Html.Raw(Kit.Scrub.Only(App.Resources.MessageDefaultMailSettings, "p"))
+		</div>		
+	}      
+</div>
+
+@functions {
+  object AddHiddenMessage(string message, string type = "warning", string id = "", string attribute = "") {
+    var classes = "alert alert-" + type + " app-jobs3-message";
+		var rawMessage = Kit.Scrub.Only(message, "p");
+    var messageDiv = Tag.Div(rawMessage).Class(classes).Id(id).Attr("role", "alert");
+    if (attribute != "") { messageDiv.Attr(attribute, ""); }
+    return messageDiv;
+  }
+}
+
+@Html.Partial("Assets.cshtml", new { domAttribute })

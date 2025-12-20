@@ -1,0 +1,83 @@
+@inherits AppCode.Razor.AppRazor
+@using ToSic.Razor.Blade
+@using AppCode.Data
+
+<div class="app-accordion4-wrapper accordion mb-4 accordion-flush"
+  @("app-accordion4-" + UniqueKey) 
+  @Kit.Edit.Attribute("quick-edit-config", new { modules = new {  enable = true }})
+>
+  @foreach (var accord in AsList<Accordion>(MyItems))
+  {
+    var expanded = accord.InitiallyExpanded;
+
+    // SectionHeaderId is the ID of the header of the accordion item
+    var sectionHeaderId = "a-" + UniqueKey + accord.Id;
+    // SectionId is the ID of the content of the accordion item and also the target attribute of the section header
+    var sectionId = "a-" + accord.Id;
+
+    // Check if skin is BS5 ur BS4 and figure out the best CSS classes for each
+    var isBs5 = Kit.Css.Is("bs5");
+    var bsToggleAttr = isBs5 ? "data-bs-toggle" : "data-toggle";
+    var bsTargetAttr = isBs5 ? "data-bs-target" : "data-target";
+    var marginRight = isBs5 ? "me-3" : "mr-3";
+
+    <div class="accordion-item" @Kit.Toolbar.Default().For(accord)>
+      @* Header of a Drawer with Icon + Title and up/down at the right hand side *@
+      <h2 class="accordion-header" id="@sectionHeaderId">
+        <button type="button"
+          class='accordion-button @(expanded ? "" : "collapsed")'
+          @bsToggleAttr="collapse" 
+          @bsTargetAttr="#@sectionId" 
+          aria-expanded="true"
+          aria-controls="@sectionHeaderId"
+        >
+          @* Optional icon in front of the title *@
+          @if (accord.IsNotEmpty("Icon")) { 
+            <span><i class='@marginRight co-icon fas @accord.Icon' aria-hidden="true"></i></span> 
+          }
+          @accord.Title
+        </button>
+      </h2>
+
+      @* Content of the Drawer *@
+      <div id="@sectionId" class='accordion-collapse collapse @(expanded ? "show" : "")' aria-labelledby="@sectionId">
+        <div class="accordion-body">
+
+          @* When the current item is just a demo-preview, show a message to help the editor *@
+          @if (accord.IsDemoItem)
+          {
+            if (MyUser.IsContentAdmin)
+            {
+              <div class="alert alert-info" data-accordion-child="@sectionId">
+                @App.Resources.Html("DemoItemMessage", container: "")
+              </div>
+            }
+          }
+          else
+          {
+            var innerBlocks = accord.DesignedContent;
+            // Show message if no content and user is admin
+            if (!innerBlocks.Any() && MyUser.IsContentAdmin)
+            {
+              <div class="alert alert-info" data-accordion-child="@sectionId">
+                @App.Resources.Html("NoContentMessage", container: "")
+              </div>
+            }
+
+            @* Now show the inner section with all the blocks *@
+            <div class='sc-content-block-list @(expanded ? "show" : "")' 
+              @Kit.Edit.ContextAttributes(accord, field: "DesignedContent")
+              data-accordion-child="@sectionId"
+            >
+              @foreach (var designedContent in innerBlocks) {
+                @Kit.Render.One(designedContent);
+              }
+            </div>
+          }
+        </div>
+      </div>
+    </div>
+  }
+</div>
+
+@Html.Partial("Assets.cshtml")

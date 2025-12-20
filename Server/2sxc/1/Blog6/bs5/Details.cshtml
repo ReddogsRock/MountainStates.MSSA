@@ -1,0 +1,94 @@
+@inherits AppCode.Razor.DetailRazor
+@using ToSic.Razor.Blade
+@using AppCode.Data
+@{
+  // Get current post to show from the View-Query + some Helpers
+  var post = As<BlogPost>(MyData);
+
+  @* Preflight: check if post found, else show notification and stop processing *@
+  if (post == null) 
+  {
+    <h1>@App.Resources.LabelPostNotExists</h1>
+    <p>@App.Resources.LabelPostNotExistsText</p>
+    @BackToListButton()
+    // Set 404 status if the post was not found
+    Kit.Page.SetHttpStatus(404, "Error: Blog Post not Found.");
+    return;
+  }
+
+	// Add open-graph meta-tags to page header
+  AddMetaTags(post);
+}
+
+<section class="row justify-content-center app-blog5 app-blog5-post-detail">
+  <article class="col-lg-8 mb-4" @Kit.Toolbar.Empty().Edit(post)>
+
+    @* 1. Header containing the main image, title and date information *@
+    <div class="app-blog5-post-header">
+      @Html.Partial("./parts/AuthorDateAndCategories.cshtml", new { post, HeadingType = "h1"})
+      @Html.Partial("./parts/MainImage.cshtml", new { post })
+    </div>
+
+    @* 2. Body of the post - will also create inner content blocks / apps *@
+    <div class="app-blog5-post-content mb-4">
+      @post.Html("Content")
+    </div>
+
+    @* 3. Footer with Tags, Links to prev/next and sharing buttons *@
+    <div class="app-blog5-post-footer">
+      @* 3.1 Tags of post *@
+      @{
+        var tags = post.Tags;
+      }
+      @if (tags.Any()) 
+      {
+        var marginRight = Kit.Css.Is("bs5") ? "me-2" : "mr-2";
+        <div class="app-blog5-tags d-flex align-items-center">
+          <strong class="@marginRight">@App.Resources.String(tags.Count() > 1 ? "Tags" : "Tag"): </strong>
+          @foreach (var tag in tags) {
+            <a class="btn btn-sm btn-light @marginRight" href='@Link.To(parameters: "tag=" + tag.Tag)' title='@tag.Name'>@tag.Name</a>
+          }
+        </div>
+      }
+
+      <hr />
+
+      @* 3.3 Author *@
+      @{
+        var author = post.Author;
+        var authorName = author.FullName;
+      }
+      <div class="app-blog5-post-author-details d-flex">
+        <div>
+          @author.Html("ShortBio", container: "")
+          @App.Resources.ReadMoreAuthor
+          <a href='@Link.To(parameters: "author=" + authorName)'>@authorName</a>
+        </div>
+        @if (author.IsNotEmpty("Image"))
+        {
+          <div>
+            @author.Picture("Image", settings: "Author", imgClass: "rounded-circle author-picture", imgAltFallback: author.FullName)
+          </div>
+        }
+      </div>
+      <hr />
+
+      @* 3.4 Preview of previous and next post *@
+      @{
+        var previousPost = As<BlogPost>(MyData.GetStream("Previous"));
+        var nextPost = As<BlogPost>(MyData.GetStream("Next"));
+      }
+      <div class='app-blog5-article-links d-flex align-items-center @(previousPost == null ? "justify-content-end" : "justify-content-between")'>
+        @PostMicroPreview(previousPost, "previous")
+        @PostMicroPreview(nextPost, "next")
+      </div>
+
+      <hr />
+
+      @* 3.5 "Back to list" button *@
+      @BackToListButton()
+    </div>
+  </article>
+</section>
+
+@Html.Partial("./parts/Assets.cshtml")

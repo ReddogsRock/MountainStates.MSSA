@@ -1,0 +1,29 @@
+@inherits AppCode.Razor.AppRazor
+@using AppCode
+
+@* Include Bootstrap5 if CSS Framework isn't known *@
+@Kit.Page.Activate(condition: Kit.Css.IsUnknown, features: "Bootstrap5")
+
+@{
+  var data = new {
+    attribute = Constants.FancyboxPrefix + UniqueKey,
+    // Init options for fancybox binding - there could be more, see https://fancyapps.com/docs/ui/fancybox/options
+    options = new {
+      groupAll = true,
+      mainClass = Constants.FancyboxPrefix, 
+      Thumbs = new {
+        autoStart = false
+      }
+    }
+  };
+}
+
+@* Activate fancybox and turnOn when everything is loaded *@
+@Kit.Page.Activate("fancybox4")
+@Kit.Page.TurnOn("window.appHotspot3.initFancybox()", require: "window.Fancybox", data: data)
+
+@* Activate special JS which the admin needs to manage the hotspots *@
+@Kit.Page.TurnOn("window.appHotspot3.activateAdmin()", condition: MyUser.IsContentAdmin)
+
+<link rel="stylesheet" href="@App.Folder.Url/dist/styles.min.css" @Kit.Page.AssetAttributes()>
+<script type="text/javascript" src="@App.Folder.Url/dist/scripts.min.js" @Kit.Page.AssetAttributes(position:"bottom")></script>

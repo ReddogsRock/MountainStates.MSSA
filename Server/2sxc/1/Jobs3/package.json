@@ -1,0 +1,33 @@
+{
+  "name": "app-jobs",
+  "version": "02.00.00",
+  "description": "The standard App for 2sic to use for Job Lists.",
+  "main": "(none)",
+  "scripts": {
+    "build-bs3": "webpack --env style=bs3",
+    "build-bs4": "webpack --env style=bs4",
+    "build-bs5": "webpack --env style=bs5"
+  },
+  "author": "2sic internet solutions",
+  "license": "MIT",
+  "devDependencies": {
+    "@types/node": "^20.12.6",
+    "autoprefixer": "^10.4.19",
+    "css-loader": "^7.1.0",
+    "mini-css-extract-plugin": "^2.8.1",
+    "postcss-loader": "^8.1.1",
+    "sass": "^1.74.1",
+    "sass-loader": "^14.1.1",
+    "style-loader": "^4.0.0",
+    "ts-loader": "^9.5.1",
+    "typescript": "^5.4.4",
+    "webpack": "^5.91.0",
+    "webpack-cli": "^5.1.4",
+    "webpack-fix-style-only-entries": "^0.6.1"
+  },
+  "dependencies": {
+    "bootstrap": "^4.4.1",
+    "bs5": "npm:bootstrap@^5.3.3",
+    "pristinejs": "^1.1.0"
+  }
+}
