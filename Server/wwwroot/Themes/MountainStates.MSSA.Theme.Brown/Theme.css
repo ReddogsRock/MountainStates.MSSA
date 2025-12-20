@@ -1,0 +1,683 @@
+/* ============================================================================
+   MSSA Brown Theme
+   A warm, professional theme using brown and tan colors
+   ============================================================================ */
+
+/* ----------------------------------------------------------------------------
+   CSS Custom Properties - Color Palette
+   ---------------------------------------------------------------------------- */
+:root {
+    /* Primary Brown Palette */
+    --mssa-brown-darker: #5a4a38;
+    --mssa-brown-dark: #6d5838;
+    --mssa-brown: #8B6F47;
+    --mssa-brown-light: #a08760;
+    --mssa-brown-lighter: #b59f7a;
+    /* Secondary Tan Palette */
+    --mssa-tan-darker: #c9b896;
+    --mssa-tan-dark: #d4c4a8;
+    --mssa-tan: #E5D4B8;
+    --mssa-tan-light: #f0e6d4;
+    --mssa-tan-lighter: #f5f0e8;
+    /* Neutral Colors */
+    --mssa-cream: #FAF8F3;
+    --mssa-white: #FFFFFF;
+    --mssa-gray-light: #e9ecef;
+    --mssa-gray: #6c757d;
+    --mssa-gray-dark: #495057;
+    --mssa-black: #2c2318;
+    /* Semantic Colors */
+    --mssa-success: #5a8a4a;
+    --mssa-info: #5a7a8a;
+    --mssa-warning: #c9a034;
+    --mssa-danger: #a8463f;
+    /* Bootstrap Variable Overrides */
+    --bs-primary: var(--mssa-brown);
+    --bs-primary-rgb: 139, 111, 71;
+    --bs-secondary: var(--mssa-tan-dark);
+    --bs-secondary-rgb: 212, 196, 168;
+    --bs-success: var(--mssa-success);
+    --bs-info: var(--mssa-info);
+    --bs-warning: var(--mssa-warning);
+    --bs-danger: var(--mssa-danger);
+    --bs-light: var(--mssa-tan-lighter);
+    --bs-dark: var(--mssa-black);
+    /* Background Colors */
+    --bs-body-bg: var(--mssa-cream);
+    --bs-body-color: var(--mssa-black);
+    /* Link Colors */
+    --bs-link-color: var(--mssa-brown);
+    --bs-link-hover-color: var(--mssa-brown-dark);
+    /* Border and Focus Colors */
+    --bs-border-color: var(--mssa-tan-dark);
+    --bs-focus-ring-color: rgba(139, 111, 71, 0.25);
+}
+
+/* ----------------------------------------------------------------------------
+   Base Styles
+   ---------------------------------------------------------------------------- */
+
+body {
+    background-image: url('images/background.jpg');
+    background-size: cover;
+    background-position: center;
+    background-attachment: fixed;
+    background-repeat: no-repeat;
+    font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, "Helvetica Neue", Arial, sans-serif;
+}
+
+/* Links */
+a {
+    color: var(--mssa-brown) !important;
+    text-decoration: none;
+}
+
+    a:hover {
+        color: var(--mssa-brown-dark) !important;
+        text-decoration: underline;
+    }
+
+/* ----------------------------------------------------------------------------
+   Typography
+   ---------------------------------------------------------------------------- */
+h1, h2, h3, h4, h5, h6,
+.h1, .h2, .h3, .h4, .h5, .h6 {
+    color: var(--mssa-brown-darker);
+    font-weight: 600;
+    background-color: rgba(245, 230, 211, 0.95);
+    padding-bottom: 10px;
+    padding-top: 10px;
+}
+
+.text-primary {
+    color: var(--mssa-brown) !important;
+}
+
+.text-secondary {
+    color: var(--mssa-tan-dark) !important;
+}
+
+.text-muted {
+    color: var(--mssa-gray) !important;
+}
+
+.sc-content-block {
+    background-color: rgba(245, 230, 211, 0.95);
+}
+
+p {
+    background-color: rgba(245, 230, 211, 0.95);
+    margin-bottom: 0 !important;
+    padding: 15px;
+}
+
+    /* Add spacing only between paragraphs, not around them */
+    p + p {
+        padding-top: 10px;
+    }
+/* ----------------------------------------------------------------------------
+   Buttons
+   ---------------------------------------------------------------------------- */
+.btn-primary {
+    background-color: var(--mssa-brown) !important;
+    border-color: var(--mssa-brown) !important;
+    color: var(--mssa-white) !important;
+}
+
+    .btn-primary:hover,
+    .btn-primary:focus {
+        background-color: var(--mssa-brown-dark) !important;
+        border-color: var(--mssa-brown-dark) !important;
+        color: var(--mssa-white) !important;
+    }
+
+    .btn-primary:active,
+    .btn-primary.active {
+        background-color: var(--mssa-brown-darker) !important;
+        border-color: var(--mssa-brown-darker) !important;
+    }
+
+.btn-secondary {
+    background-color: var(--mssa-tan-dark) !important;
+    border-color: var(--mssa-tan-dark) !important;
+    color: var(--mssa-black) !important;
+}
+
+    .btn-secondary:hover,
+    .btn-secondary:focus {
+        background-color: var(--mssa-tan-darker) !important;
+        border-color: var(--mssa-tan-darker) !important;
+        color: var(--mssa-black) !important;
+    }
+
+.btn-outline-primary {
+    color: var(--mssa-brown) !important;
+    border-color: var(--mssa-brown) !important;
+}
+
+    .btn-outline-primary:hover {
+        background-color: var(--mssa-brown) !important;
+        border-color: var(--mssa-brown) !important;
+        color: var(--mssa-white) !important;
+    }
+
+.btn-success {
+    background-color: var(--mssa-success) !important;
+    border-color: var(--mssa-success) !important;
+}
+
+.btn-danger {
+    background-color: var(--mssa-danger) !important;
+    border-color: var(--mssa-danger) !important;
+}
+
+.btn-warning {
+    background-color: var(--mssa-warning) !important;
+    border-color: var(--mssa-warning) !important;
+    color: var(--mssa-black) !important;
+}
+
+.btn-info {
+    background-color: var(--mssa-info) !important;
+    border-color: var(--mssa-info) !important;
+}
+
+/* ----------------------------------------------------------------------------
+   Forms
+   ---------------------------------------------------------------------------- */
+.form-control,
+.form-select {
+    border-color: var(--mssa-tan-dark);
+    background-color: var(--mssa-white);
+}
+
+    .form-control:focus,
+    .form-select:focus {
+        border-color: var(--mssa-brown) !important;
+        box-shadow: 0 0 0 0.25rem rgba(139, 111, 71, 0.25) !important;
+    }
+
+.form-check-input:checked {
+    background-color: var(--mssa-brown) !important;
+    border-color: var(--mssa-brown) !important;
+}
+
+.form-check-input:focus {
+    border-color: var(--mssa-brown) !important;
+    box-shadow: 0 0 0 0.25rem rgba(139, 111, 71, 0.25) !important;
+}
+
+/* ----------------------------------------------------------------------------
+   Navigation & Navbar
+   ---------------------------------------------------------------------------- */
+/* Logo styling */
+.app-logo {
+    background-size: cover;
+    background-position: center;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+}
+
+.app-menu {
+    flex-grow: 1;
+}
+
+.app-logo {
+    flex-basis: 100%;
+    width: 100%;
+    margin-bottom: 10px;
+}
+
+    .app-logo img {
+        padding-left: 1%;
+        padding-right: 1%;
+        align-items: center;
+        //max-height: 250px;
+    }
+
+.controls {
+    flex-shrink: 0; /* Prevents Login from shrinking */
+    margin-left: auto; /* Keeps it on the right */
+}
+
+.navbar {
+    background-color: var(--mssa-brown) !important;
+    flex-wrap: wrap;
+    justify-content: center;
+}
+
+.app-menu .navbar-nav {
+    justify-content: center;
+}
+
+.navbar.fixed-top {
+    position: static !important;
+}
+
+.navbar-brand,
+.navbar-nav .nav-link {
+    color: var(--mssa-white) !important;
+}
+
+    .navbar-nav .nav-link:hover,
+    .navbar-nav .nav-link:focus {
+        color: var(--mssa-tan-lighter) !important;
+    }
+
+    .navbar-nav .nav-link.active {
+        color: var(--mssa-tan) !important;
+    }
+
+/* Dropdown Menus */
+.dropdown-menu {
+    background-color: var(--mssa-white);
+    border-color: var(--mssa-tan-dark);
+}
+
+.dropdown-item {
+    color: var(--mssa-black);
+}
+
+    .dropdown-item:hover,
+    .dropdown-item:focus {
+        background-color: var(--mssa-tan-lighter);
+        color: var(--mssa-black);
+    }
+
+    .dropdown-item.active,
+    .dropdown-item:active {
+        background-color: var(--mssa-brown) !important;
+        color: var(--mssa-white) !important;
+    }
+
+/* Footer Styling */
+/* Make the page layout fill the viewport */
+html, body {
+    height: 100%;
+    margin: 0;
+}
+
+.app-container {
+    display: flex;
+    flex-direction: column;
+    min-height: 100vh; /* Full viewport height */
+}
+
+main {
+    flex: 1; /* Main content takes up available space */
+}
+
+/* Footer Styling */
+footer {
+    background-color: #f5e6d3;
+    border-top: 10px solid #8b6f47;
+    padding: 5px 0;
+    min-height: 20px;
+    text-align: center;
+    width: 100%;
+}
+.copyright {
+    margin: 10px 0;
+    color: #8b6f47; /* Brown to match your theme */
+    font-size: 16px;
+}
+
+/* Add space at bottom of main content */
+main,
+.container-fluid,
+#app-content {
+    margin-bottom: 30px; /* Give space for footer */
+}
+/* ----------------------------------------------------------------------------
+   Cards
+   ---------------------------------------------------------------------------- */
+.card {
+    background-color: var(--mssa-white);
+    border-color: var(--mssa-tan-dark);
+}
+
+.card-header {
+    background-color: var(--mssa-tan-lighter);
+    border-bottom-color: var(--mssa-tan-dark);
+    color: var(--mssa-brown-darker);
+    font-weight: 600;
+}
+
+.card-footer {
+    background-color: var(--mssa-tan-lighter);
+    border-top-color: var(--mssa-tan-dark);
+}
+
+/* ----------------------------------------------------------------------------
+   Alerts
+   ---------------------------------------------------------------------------- */
+.alert-primary {
+    background-color: var(--mssa-tan-lighter) !important;
+    border-color: var(--mssa-brown-light) !important;
+    color: var(--mssa-brown-darker) !important;
+}
+
+.alert-success {
+    background-color: #e8f5e3 !important;
+    border-color: var(--mssa-success) !important;
+    color: #3a5a2e !important;
+}
+
+.alert-danger {
+    background-color: #f8e6e5 !important;
+    border-color: var(--mssa-danger) !important;
+    color: #6e2c28 !important;
+}
+
+.alert-warning {
+    background-color: #fff8e5 !important;
+    border-color: var(--mssa-warning) !important;
+    color: #7a6020 !important;
+}
+
+.alert-info {
+    background-color: #e5f2f7 !important;
+    border-color: var(--mssa-info) !important;
+    color: #3a4e5a !important;
+}
+
+/* ----------------------------------------------------------------------------
+   Badges
+   ---------------------------------------------------------------------------- */
+.badge-primary,
+.badge.bg-primary {
+    background-color: var(--mssa-brown) !important;
+    color: var(--mssa-white) !important;
+}
+
+.badge-secondary,
+.badge.bg-secondary {
+    background-color: var(--mssa-tan-dark) !important;
+    color: var(--mssa-black) !important;
+}
+
+/* ----------------------------------------------------------------------------
+   Tables
+   ---------------------------------------------------------------------------- */
+.table {
+    color: var(--mssa-black);
+}
+
+    .table thead th {
+        background-color: var(--mssa-tan-lighter);
+        color: var(--mssa-brown-darker);
+        border-bottom-color: var(--mssa-tan-dark);
+    }
+
+.table-striped tbody tr:nth-of-type(odd) {
+    background-color: var(--mssa-cream);
+}
+
+.table-hover tbody tr:hover {
+    background-color: var(--mssa-tan-lighter);
+}
+
+.table-primary {
+    background-color: var(--mssa-tan-lighter) !important;
+}
+
+/* ----------------------------------------------------------------------------
+   Pagination
+   ---------------------------------------------------------------------------- */
+.pagination .page-link {
+    color: var(--mssa-brown);
+    border-color: var(--mssa-tan-dark);
+}
+
+    .pagination .page-link:hover {
+        background-color: var(--mssa-tan-lighter);
+        border-color: var(--mssa-brown);
+        color: var(--mssa-brown-dark);
+    }
+
+.pagination .page-item.active .page-link {
+    background-color: var(--mssa-brown) !important;
+    border-color: var(--mssa-brown) !important;
+    color: var(--mssa-white) !important;
+}
+
+.pagination .page-item.disabled .page-link {
+    color: var(--mssa-gray);
+    border-color: var(--mssa-tan-dark);
+}
+
+/* ----------------------------------------------------------------------------
+   Progress Bars
+   ---------------------------------------------------------------------------- */
+.progress {
+    background-color: var(--mssa-tan-lighter);
+}
+
+.progress-bar {
+    background-color: var(--mssa-brown) !important;
+}
+
+/* ----------------------------------------------------------------------------
+   Modals
+   ---------------------------------------------------------------------------- */
+.modal-header {
+    background-color: var(--mssa-tan-lighter);
+    border-bottom-color: var(--mssa-tan-dark);
+}
+
+.modal-footer {
+    background-color: var(--mssa-tan-lighter);
+    border-top-color: var(--mssa-tan-dark);
+}
+
+.modal-content {
+    border-color: var(--mssa-tan-dark);
+}
+
+/* ----------------------------------------------------------------------------
+   Breadcrumbs
+   ---------------------------------------------------------------------------- */
+.breadcrumb {
+    background-color: var(--mssa-tan-lighter);
+}
+
+.breadcrumb-item.active {
+    color: var(--mssa-brown-darker);
+}
+
+.breadcrumb-item a {
+    color: var(--mssa-brown) !important;
+}
+
+/* ----------------------------------------------------------------------------
+   List Groups
+   ---------------------------------------------------------------------------- */
+.list-group-item {
+    background-color: var(--mssa-white);
+    border-color: var(--mssa-tan-dark);
+}
+
+    .list-group-item.active {
+        background-color: var(--mssa-brown) !important;
+        border-color: var(--mssa-brown) !important;
+    }
+
+    .list-group-item:hover {
+        background-color: var(--mssa-tan-lighter);
+    }
+
+/* ----------------------------------------------------------------------------
+   Tabs & Nav Pills
+   ---------------------------------------------------------------------------- */
+.nav-tabs {
+    border-bottom-color: var(--mssa-tan-dark);
+}
+
+    .nav-tabs .nav-link {
+        color: var(--mssa-brown);
+    }
+
+        .nav-tabs .nav-link:hover {
+            border-color: var(--mssa-tan-dark);
+        }
+
+        .nav-tabs .nav-link.active {
+            background-color: var(--mssa-white);
+            border-color: var(--mssa-tan-dark) var(--mssa-tan-dark) var(--mssa-white);
+            color: var(--mssa-brown-darker);
+        }
+
+.nav-pills .nav-link {
+    color: var(--mssa-brown);
+}
+
+    .nav-pills .nav-link.active {
+        background-color: var(--mssa-brown) !important;
+        color: var(--mssa-white) !important;
+    }
+
+/* ----------------------------------------------------------------------------
+   Borders & Backgrounds
+   ---------------------------------------------------------------------------- */
+.border-primary {
+    border-color: var(--mssa-brown) !important;
+}
+
+.bg-primary {
+    background-color: var(--mssa-brown) !important;
+    color: var(--mssa-white) !important;
+}
+
+.bg-secondary {
+    background-color: var(--mssa-tan-dark) !important;
+    color: var(--mssa-black) !important;
+}
+
+.bg-light {
+    background-color: var(--mssa-tan-lighter) !important;
+}
+
+.bg-dark {
+    background-color: var(--mssa-black) !important;
+    color: var(--mssa-white) !important;
+}
+
+/* ----------------------------------------------------------------------------
+   Tooltips & Popovers
+   ---------------------------------------------------------------------------- */
+.tooltip-inner {
+    background-color: var(--mssa-brown-darker);
+}
+
+.bs-tooltip-top .tooltip-arrow::before,
+.bs-tooltip-auto[data-popper-placement^="top"] .tooltip-arrow::before {
+    border-top-color: var(--mssa-brown-darker);
+}
+
+.bs-tooltip-end .tooltip-arrow::before,
+.bs-tooltip-auto[data-popper-placement^="right"] .tooltip-arrow::before {
+    border-right-color: var(--mssa-brown-darker);
+}
+
+.bs-tooltip-bottom .tooltip-arrow::before,
+.bs-tooltip-auto[data-popper-placement^="bottom"] .tooltip-arrow::before {
+    border-bottom-color: var(--mssa-brown-darker);
+}
+
+.bs-tooltip-start .tooltip-arrow::before,
+.bs-tooltip-auto[data-popper-placement^="left"] .tooltip-arrow::before {
+    border-left-color: var(--mssa-brown-darker);
+}
+
+/* ----------------------------------------------------------------------------
+   Spinners
+   ---------------------------------------------------------------------------- */
+.spinner-border-primary,
+.spinner-grow-primary {
+    color: var(--mssa-brown) !important;
+}
+
+/* ----------------------------------------------------------------------------
+   Oqtane-Specific Elements
+   ---------------------------------------------------------------------------- */
+/* Control Panel */
+.app-controlpanel {
+    background-color: var(--mssa-brown);
+    color: var(--mssa-white);
+}
+
+/* Admin Dashboard */
+.app-admin-dashboard .card {
+    border-color: var(--mssa-tan-dark);
+}
+
+/* Module Actions */
+.app-actions {
+    background-color: var(--mssa-tan-lighter);
+    border-color: var(--mssa-tan-dark);
+}
+/* Puts a light colored border around all modules, really important for admin dashboard*/
+.container-fluid {
+    background-color: var(--mssa-tan-lighter);
+}
+/* ----------------------------------------------------------------------------
+   Utility Classes
+   ---------------------------------------------------------------------------- */
+.shadow-brown {
+    box-shadow: 0 .5rem 1rem rgba(139, 111, 71, 0.15) !important;
+}
+
+.text-brown {
+    color: var(--mssa-brown) !important;
+}
+
+.text-brown-dark {
+    color: var(--mssa-brown-dark) !important;
+}
+
+.bg-tan {
+    background-color: var(--mssa-tan) !important;
+}
+
+.bg-tan-light {
+    background-color: var(--mssa-tan-light) !important;
+}
+
+.border-brown {
+    border-color: var(--mssa-brown) !important;
+}
+
+/* ----------------------------------------------------------------------------
+   Responsive Adjustments
+   ---------------------------------------------------------------------------- */
+@media (max-width: 768px) {
+    body {
+        font-size: 0.9rem;
+    }
+
+    h1, .h1 {
+        font-size: 1.75rem;
+    }
+
+    h2, .h2 {
+        font-size: 1.5rem;
+    }
+}
+
+/* ----------------------------------------------------------------------------
+   Print Styles
+   ---------------------------------------------------------------------------- */
+@media print {
+    body {
+        background-color: white;
+        color: black;
+    }
+
+    .navbar,
+    .app-controlpanel,
+    .app-actions,
+    .btn {
+        display: none;
+    }
+}
