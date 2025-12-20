@@ -1,0 +1,5 @@
+<Solution>
+  <Project Path="Server\MountainStates.MSSA.Server.csproj" DefaultStartup="true" />
+  <Project Path="Client\MountainStates.MSSA.Client.csproj" />
+  <Project Path="Shared\MountainStates.MSSA.Shared.csproj" />
+</Solution>

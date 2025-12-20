@@ -1,0 +1,79 @@
+@using MountainStates.MSSA.Module.HelloWorld.Services
+@using MountainStates.MSSA.Module.HelloWorld.Models
+
+@namespace MountainStates.MSSA.Module.HelloWorld
+@inherits ModuleBase
+@inject IHelloWorldService HelloWorldService
+@inject NavigationManager NavigationManager
+@inject IStringLocalizer<Index> Localizer
+
+@if (_HelloWorlds == null)
+{
+    <p><em>Loading...</em></p>
+}
+else
+{
+    <ActionLink Action="Add" Security="SecurityAccessLevel.Edit" Text="Add HelloWorld" ResourceKey="Add" />
+    <br />
+    <br />
+    @if (@_HelloWorlds.Count != 0)
+    {
+        <Pager Items="@_HelloWorlds">
+            <Header>
+                <th style="width: 1px;">&nbsp;</th>
+                <th style="width: 1px;">&nbsp;</th>
+                <th>@Localizer["Name"]</th>
+            </Header>
+            <Row>
+                <td><ActionLink Action="Edit" Parameters="@($"id=" + context.HelloWorldId.ToString())" ResourceKey="Edit"  /></td>
+                <td><ActionDialog Header="Delete HelloWorld" Message="Are You Sure You Wish To Delete This HelloWorld?" Action="Delete" Security="SecurityAccessLevel.Edit" Class="btn btn-danger" OnClick="@(async () => await Delete(context))" ResourceKey="Delete"  Id="@context.HelloWorldId.ToString()" /></td>
+                <td>@context.Name</td>
+            </Row>
+        </Pager>
+    }
+    else
+    {
+        <p>@Localizer["Message.DisplayNone"]</p>
+    }
+}
+
+@code {
+    public override string RenderMode => RenderModes.Static;
+
+    public override List<Resource> Resources => new List<Resource>()
+    {
+        new Stylesheet(ModulePath() + "Module.css"),
+        new Script(ModulePath() + "Module.js")
+    };
+
+    List<HelloWorld> _HelloWorlds;
+
+    protected override async Task OnInitializedAsync()
+    {
+        try
+        {
+            _HelloWorlds = await HelloWorldService.GetHelloWorldsAsync(ModuleState.ModuleId);
+        }
+        catch (Exception ex)
+        {
+            await logger.LogError(ex, "Error Loading HelloWorld {Error}", ex.Message);
+            AddModuleMessage(Localizer["Message.LoadError"], MessageType.Error);
+        }
+    }
+
+    private async Task Delete(HelloWorld HelloWorld)
+    {
+        try
+        {
+            await HelloWorldService.DeleteHelloWorldAsync(HelloWorld.HelloWorldId, ModuleState.ModuleId);
+            await logger.LogInformation("HelloWorld Deleted {HelloWorld}", HelloWorld);
+            _HelloWorlds = await HelloWorldService.GetHelloWorldsAsync(ModuleState.ModuleId);
+            StateHasChanged();
+        }
+        catch (Exception ex)
+        {
+            await logger.LogError(ex, "Error Deleting HelloWorld {HelloWorld} {Error}", HelloWorld, ex.Message);
+            AddModuleMessage(Localizer["Message.DeleteError"], MessageType.Error);
+        }
+    }
+}

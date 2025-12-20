@@ -1,0 +1,2 @@
+[2025-12-20 15:12:42+00:00] [Error] [Oqtane.Security.AutoValidateAntiforgeryTokenFilter] AutoValidateAntiforgeryTokenFilter Failure For https://localhost:44329/api/Log 
+[2025-12-20 15:12:42+00:00] [Error] [Oqtane.Security.AutoValidateAntiforgeryTokenFilter] AutoValidateAntiforgeryTokenFilter Failure For https://localhost:44329/api/Log 
