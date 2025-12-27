@@ -127,6 +127,5 @@
   "Imageflow.Net.dll": 1,
   "Imazen.Common.dll": 1,
   "Imazen.HybridCache.dll": 1,
-  "Microsoft.IO.RecyclableMemoryStream.dll": 1,
-  "imageflow.dll": 1
+  "Microsoft.IO.RecyclableMemoryStream.dll": 1
 }

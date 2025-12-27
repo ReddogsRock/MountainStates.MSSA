@@ -1,0 +1,96 @@
+@using Oqtane.Modules.Controls
+@namespace MountainStates.MSSA.Module.TopDogs
+@inherits ModuleBase
+@inject ISettingService SettingService
+@inject NavigationManager NavigationManager
+
+<TabStrip>
+    <TabPanel Name="TopDogsSettings" Heading="Top Dogs" ResourceKey="TopDogsSettings">
+        <div style="border: 3px solid green; padding: 20px;">
+            <h3>Top Dogs Settings</h3>
+            <table class="table table-borderless">
+                <tr>
+                    <td>Year:</td>
+                    <td><input class="form-control" @bind="@_year" /></td>
+                </tr>
+                <tr>
+                    <td>Level:</td>
+                    <td>
+                        <select class="form-select" @bind="@_level">
+                            <option value="">-- Select Level --</option>
+                            <option value="5">Open</option>
+                            <option value="6">Nursery</option>
+                            <option value="7">Intermediate</option>
+                            <option value="8">Novice</option>
+                        </select>
+                    </td>
+                </tr>
+                <tr>
+                    <td>Species:</td>
+                    <td>
+                        <select class="form-select" @bind="@_species">
+                            <option value="">-- Select Species --</option>
+                            <option value="Sheep">Sheep</option>
+                            <option value="Cattle">Cattle</option>
+                            <option value="Ducks">Ducks</option>
+                        </select>
+                    </td>
+                </tr>
+                <tr>
+                    <td>Quantity:</td>
+                    <td><input type="number" class="form-control" @bind="@_quantity" min="1" max="50" /></td>
+                </tr>
+            </table>
+            <button type="button" class="btn btn-success" @onclick="SaveSettings">Save</button>
+            <NavLink class="btn btn-secondary" href="@NavigateUrl()">Cancel</NavLink>
+        </div>
+    </TabPanel>
+</TabStrip>
+
+@code {
+    private string _year = DateTime.Now.Year.ToString();
+    private string _level = "";
+    private string _species = "";
+    private int _quantity = 10;
+
+    public override SecurityAccessLevel SecurityAccessLevel => SecurityAccessLevel.Edit;
+
+    protected override async Task OnInitializedAsync()
+    {
+        try
+        {
+            var settings = await SettingService.GetModuleSettingsAsync(ModuleState.ModuleId);
+            _year = SettingService.GetSetting(settings, "Year", DateTime.Now.Year.ToString());
+            _level = SettingService.GetSetting(settings, "Level", "");
+            _species = SettingService.GetSetting(settings, "Species", "");
+            _quantity = int.Parse(SettingService.GetSetting(settings, "Quantity", "10"));
+        }
+        catch (Exception ex)
+        {
+            await logger.LogError(ex, "Error loading settings");
+        }
+    }
+
+    private async Task SaveSettings()
+    {
+        try
+        {
+            Dictionary<string, string> settings = new Dictionary<string, string>
+            {
+                { "Year", _year },
+                { "Level", _level },
+                { "Species", _species },
+                { "Quantity", _quantity.ToString() }
+            };
+
+            await SettingService.UpdateModuleSettingsAsync(settings, ModuleState.ModuleId);
+
+            await logger.LogInformation("Settings saved successfully");
+            NavigationManager.NavigateTo(NavigateUrl());
+        }
+        catch (Exception ex)
+        {
+            await logger.LogError(ex, "Error saving settings");
+        }
+    }
+}
