@@ -1,0 +1,101 @@
+@using MountainStates.MSSA.Module.TopDogs.Services
+@using MountainStates.MSSA.Module.TopDogs.Models
+@namespace MountainStates.MSSA.Module.TopDogs
+@inherits ModuleBase
+@inject ITopDogsService TopDogsService
+@inject ISettingService SettingService
+
+@if (_topDogs == null)
+{
+    <p><em>Loading...</em></p>
+}
+else if (!_topDogs.Any())
+{
+    <div class="alert alert-info">
+        <p>No results found. Please configure the module settings.</p>
+    </div>
+}
+else
+{
+    <div class="top-dogs-list">
+        <h3>Top @_quantity Dogs - @_year @_level @_species</h3>
+        <table class="table table-striped">
+            <thead>
+                <tr>
+                    <th>Rank</th>
+                    <th>Name</th>
+                    <th>Breed</th>
+                    <th>DOB</th>
+                    <th>Owner</th>
+                    <th>Handler</th>
+                    <th>Points</th>
+                </tr>
+            </thead>
+            <tbody>
+                @{
+                    int rank = 1;
+                }
+                @foreach (var dog in _topDogs)
+                {
+                    <tr>
+                        <td>@rank</td>
+                        <td>@dog.Name</td>
+                        <td>@(dog.Breed ?? "Unknown")</td>
+                        <td>@dog.DateOfBirth</td>
+                        <td>@(dog.OwnerName ?? "Unknown")</td>
+                        <td>@(dog.Handler ?? "")</td>
+                        <td>@dog.Points</td>
+                    </tr>
+                    rank++;
+                }
+            </tbody>
+        </table>
+    </div>
+}
+
+@code {
+    private List<TopDog> _topDogs;
+    private int _year;
+    private int _level;
+    private string _species;
+    private int _quantity;
+
+    public override SecurityAccessLevel SecurityAccessLevel => SecurityAccessLevel.View;
+
+    protected override async Task OnParametersSetAsync()
+    {
+        try
+        {
+            var settings = await SettingService.GetModuleSettingsAsync(ModuleState.ModuleId);
+
+            // Get last 2 digits of current year as default
+            string defaultYear = (DateTime.Now.Year % 100).ToString();
+
+            _year = int.Parse(SettingService.GetSetting(settings, "Year", defaultYear));
+            _level = int.Parse(SettingService.GetSetting(settings, "Level", "5"));
+            _species = SettingService.GetSetting(settings, "Species", "");
+            _quantity = int.Parse(SettingService.GetSetting(settings, "Quantity", "10"));
+
+            if (!string.IsNullOrEmpty(_species))
+            {
+                _topDogs = await TopDogsService.GetTopDogsAsync(_year, _level, _species, _quantity);
+            }
+            else
+            {
+                _topDogs = new List<TopDog>();
+            }
+        }
+        catch (Exception ex)
+        {
+            await logger.LogError(ex, "Error loading top dogs");
+            _topDogs = new List<TopDog>();
+        }
+    }
+
+    private string CalculateAge(DateTime dateOfBirth)
+    {
+        var age = DateTime.Now.Year - dateOfBirth.Year;
+        if (DateTime.Now < dateOfBirth.AddYears(age)) age--;
+        return age.ToString();
+    }
+}
