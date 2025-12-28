@@ -5,6 +5,8 @@
 @inject ITopDogsService TopDogsService
 @inject ISettingService SettingService
 
+<div class="top-dogs-module">
+
 @if (_topDogs == null)
 {
     <p><em>Loading...</em></p>
@@ -15,18 +17,16 @@ else if (!_topDogs.Any())
         <p>No results found. Please configure the module settings.</p>
     </div>
 }
+
 else
 {
     <div class="top-dogs-list">
-        <h3>Top @_quantity Dogs - @_year @_level @_species</h3>
+        <h3>20@_year @GetLevelName(_level) @_species</h3>
         <table class="table table-striped">
             <thead>
                 <tr>
                     <th>Rank</th>
                     <th>Name</th>
-                    <th>Breed</th>
-                    <th>DOB</th>
-                    <th>Owner</th>
                     <th>Handler</th>
                     <th>Points</th>
                 </tr>
@@ -40,10 +40,7 @@ else
                     <tr>
                         <td>@rank</td>
                         <td>@dog.Name</td>
-                        <td>@(dog.Breed ?? "Unknown")</td>
-                        <td>@dog.DateOfBirth</td>
-                        <td>@(dog.OwnerName ?? "Unknown")</td>
-                        <td>@(dog.Handler ?? "")</td>
+                        <td>@(dog.OwnerName ?? dog.Handler)</td>
                         <td>@dog.Points</td>
                     </tr>
                     rank++;
@@ -51,7 +48,9 @@ else
             </tbody>
         </table>
     </div>
+   
 }
+ </div>
 
 @code {
     private List<TopDog> _topDogs;
@@ -68,15 +67,17 @@ else
         {
             var settings = await SettingService.GetModuleSettingsAsync(ModuleState.ModuleId);
 
-            // Get last 2 digits of current year as default
             string defaultYear = (DateTime.Now.Year % 100).ToString();
+            string yearSetting = SettingService.GetSetting(settings, "Year", defaultYear);
+            string levelSetting = SettingService.GetSetting(settings, "Level", "5");
+            string quantitySetting = SettingService.GetSetting(settings, "Quantity", "10");
 
-            _year = int.Parse(SettingService.GetSetting(settings, "Year", defaultYear));
-            _level = int.Parse(SettingService.GetSetting(settings, "Level", "5"));
+            _year = int.TryParse(yearSetting, out int year) ? year : int.Parse(defaultYear);
+            _level = int.TryParse(levelSetting, out int level) ? level : 5;
+            _quantity = int.TryParse(quantitySetting, out int quantity) ? quantity : 10;
             _species = SettingService.GetSetting(settings, "Species", "");
-            _quantity = int.Parse(SettingService.GetSetting(settings, "Quantity", "10"));
 
-            if (!string.IsNullOrEmpty(_species))
+            if (!string.IsNullOrEmpty(_species) && _level > 0)
             {
                 _topDogs = await TopDogsService.GetTopDogsAsync(_year, _level, _species, _quantity);
             }
@@ -90,6 +91,18 @@ else
             await logger.LogError(ex, "Error loading top dogs");
             _topDogs = new List<TopDog>();
         }
+    }
+
+    private string GetLevelName(int level)
+    {
+        return level switch
+        {
+            5 => "Open",
+            6 => "Nursery",
+            7 => "Intermediate",
+            8 => "Novice",
+            _ => ""
+        };
     }
 
     private string CalculateAge(DateTime dateOfBirth)
