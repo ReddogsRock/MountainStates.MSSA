@@ -1,0 +1,208 @@
+﻿@using MountainStates.MSSA.Module.MSSA_Handlers.Services
+@using MountainStates.MSSA.Module.MSSA_Handlers.Models
+@using MountainStates.MSSA.Module.MSSA_Handlers.Enums
+@using Oqtane.Modules.Controls
+
+@namespace MountainStates.MSSA.Module.MSSA_Handlers
+@inherits ModuleBase
+@inject IMSSA_HandlerService HandlerService
+@inject IMSSA_StateService StateService
+@inject NavigationManager NavigationManager
+
+<div class="container-fluid">
+    <div class="row mb-3">
+        <div class="col">
+            <h2>Handlers</h2>
+        </div>
+        @if (UserSecurity.IsAuthorized(PageState.User, RoleNames.Admin))
+        {
+            <div class="col-auto">
+                <ActionLink Action="Edit" Security="SecurityAccessLevel.Edit" Text="Add Handler"
+                            ResourceKey="AddHandler" Class="btn btn-primary" />
+            </div>
+        }
+    </div>
+
+    @* Search/Filter Section *@
+    <div class="row mb-3">
+        <div class="col-md-3">
+            <label for="searchTerm" class="form-label">Search Name</label>
+            <input id="searchTerm" class="form-control" @bind="searchTerm"
+                   @bind:event="oninput" placeholder="First or Last Name" />
+        </div>
+        <div class="col-md-2">
+            <label for="stateFilter" class="form-label">State</label>
+            <select id="stateFilter" class="form-select" @bind="selectedState">
+                <option value="">All States</option>
+                @if (states != null)
+                {
+                    <optgroup label="US States">
+                        @foreach (var state in states.Where(s => s.Country == "US"))
+                        {
+                            <option value="@state.StateCode">@state.StateName</option>
+                        }
+                    </optgroup>
+                    <optgroup label="Canadian Provinces">
+                        @foreach (var state in states.Where(s => s.Country == "CA"))
+                        {
+                            <option value="@state.StateCode">@state.StateName</option>
+                        }
+                    </optgroup>
+                }
+            </select>
+        </div>
+        <div class="col-md-2">
+            <label for="levelFilter" class="form-label">Handler Level</label>
+            <select id="levelFilter" class="form-select" @bind="selectedLevel">
+                <option value="">All Levels</option>
+                @foreach (var level in HandlerLevel.All)
+                {
+                    <option value="@level">@level</option>
+                }
+            </select>
+        </div>
+        <div class="col-md-2">
+            <label for="membershipFilter" class="form-label">Membership</label>
+            <select id="membershipFilter" class="form-select" @bind="selectedMembership">
+                <option value="">All</option>
+                <option value="true">Active</option>
+                <option value="false">Inactive</option>
+            </select>
+        </div>
+        <div class="col-md-3 d-flex align-items-end">
+            <button class="btn btn-primary me-2" @onclick="SearchHandlers">Search</button>
+            <button class="btn btn-secondary" @onclick="ClearFilters">Clear</button>
+        </div>
+    </div>
+
+    @* Results Section *@
+    @if (handlers == null)
+    {
+        <p><em>Loading...</em></p>
+    }
+    else if (!handlers.Any())
+    {
+        <p><em>No handlers found.</em></p>
+    }
+    else
+    {
+        <div class="table-responsive">
+            <table class="table table-striped table-hover">
+                <thead>
+                    <tr>
+                        <th>Name</th>
+                        <th>City</th>
+                        <th>State</th>
+                        <th>Level</th>
+                        <th>Membership</th>
+                        <th>Email</th>
+                        <th>Phone</th>
+                        <th>Actions</th>
+                    </tr>
+                </thead>
+                <tbody>
+                    @foreach (var handler in handlers)
+                    {
+                        <tr>
+                            <td>
+                                <a href="@NavigateUrl(PageState.Page.Path, "id=" + handler.HandlerId)">
+                                    @handler.FullName
+                                </a>
+                            </td>
+                            <td>@handler.City</td>
+                            <td>@handler.StateCode</td>
+                            <td>@handler.HandlerLevel</td>
+                            <td>
+                                @if (handler.HasActiveMembership)
+                                {
+                                    <span class="badge bg-success">Active</span>
+                                }
+                                else
+                                {
+                                    <span class="badge bg-secondary">Inactive</span>
+                                }
+                            </td>
+                            <td>@handler.Email</td>
+                            <td>@handler.Phone</td>
+                            <td>
+                                <ActionLink Action="Detail" Parameters="@($"id={handler.HandlerId}")"
+                                            Text="View" ResourceKey="ViewHandler" Class="btn btn-sm btn-info me-1" />
+                                @if (UserSecurity.IsAuthorized(PageState.User, RoleNames.Admin))
+                                {
+                                    <ActionLink Action="Edit" Parameters="@($"id={handler.HandlerId}")"
+                                                Security="SecurityAccessLevel.Edit" Text="Edit"
+                                                ResourceKey="EditHandler" Class="btn btn-sm btn-primary" />
+                                }
+                            </td>
+                        </tr>
+                    }
+                </tbody>
+            </table>
+        </div>
+
+        <p class="text-muted">Total: @handlers.Count handler(s)</p>
+    }
+</div>
+
+@code {
+    private List<MSSA_Handler> handlers;
+    private List<MSSA_State> states;
+
+    private string searchTerm = "";
+    private string selectedState = "";
+    private string selectedLevel = "";
+    private string selectedMembership = "";
+
+    protected override async Task OnInitializedAsync()
+    {
+        try
+        {
+            states = await StateService.GetStatesAsync(ModuleState.ModuleId);
+            await LoadHandlers();
+        }
+        catch (Exception ex)
+        {
+            await logger.LogError(ex, "Error loading handlers");
+            AddModuleMessage("Error loading handlers", MessageType.Error);
+        }
+    }
+
+    private async Task LoadHandlers()
+    {
+        handlers = await HandlerService.GetHandlersAsync(ModuleState.ModuleId);
+    }
+
+    private async Task SearchHandlers()
+    {
+        try
+        {
+            bool? membershipFilter = null;
+            if (!string.IsNullOrEmpty(selectedMembership))
+            {
+                membershipFilter = selectedMembership == "true";
+            }
+
+            handlers = await HandlerService.SearchHandlersAsync(
+                searchTerm,
+                selectedState,
+                selectedLevel,
+                membershipFilter,
+                ModuleState.ModuleId
+            );
+        }
+        catch (Exception ex)
+        {
+            await logger.LogError(ex, "Error searching handlers");
+            AddModuleMessage("Error searching handlers", MessageType.Error);
+        }
+    }
+
+    private async Task ClearFilters()
+    {
+        searchTerm = "";
+        selectedState = "";
+        selectedLevel = "";
+        selectedMembership = "";
+        await LoadHandlers();
+    }
+}

@@ -47,9 +47,5 @@
   <ItemGroup>
     <PackageReference Include="Oqtane.Server" Version="10.0.1" />
   </ItemGroup>
-
-  <ItemGroup>
-    <Folder Include="Data\" />
-  </ItemGroup>
 	
 </Project>

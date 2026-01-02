@@ -1,0 +1,472 @@
+﻿@using MountainStates.MSSA.Module.MSSA_Handlers.Services
+@using MountainStates.MSSA.Module.MSSA_Handlers.Models
+@using MountainStates.MSSA.Module.MSSA_Handlers.Enums
+@using Oqtane.Modules.Controls
+
+@namespace MountainStates.MSSA.Module.MSSA_Handlers
+@inherits ModuleBase
+@inject IMSSA_HandlerService HandlerService
+@inject IMSSA_StateService StateService
+@inject NavigationManager NavigationManager
+@inject IJSRuntime JSRuntime
+
+<form @onsubmit="SaveHandler">
+    <div class="container-fluid">
+        <div class="row mb-3">
+            <div class="col">
+                <h2>@(handlerId == -1 ? "Add Handler" : "Edit Handler")</h2>
+            </div>
+        </div>
+
+        @if (!string.IsNullOrEmpty(errorMessage))
+        {
+            <div class="alert alert-danger" role="alert">
+                @errorMessage
+            </div>
+        }
+
+        @* Personal Information *@
+        <div class="card mb-3">
+            <div class="card-header">
+                <h4>Personal Information</h4>
+            </div>
+            <div class="card-body">
+                <div class="row mb-3">
+                    <div class="col-md-6">
+                        <label for="firstName" class="form-label">First Name <span class="text-danger">*</span></label>
+                        <input id="firstName" class="form-control" @bind="handler.FirstName" required maxlength="100" />
+                    </div>
+                    <div class="col-md-6">
+                        <label for="lastName" class="form-label">Last Name <span class="text-danger">*</span></label>
+                        <input id="lastName" class="form-control" @bind="handler.LastName" required maxlength="100" />
+                    </div>
+                </div>
+            </div>
+        </div>
+
+        @* Contact Information *@
+        <div class="card mb-3">
+            <div class="card-header">
+                <h4>Contact Information</h4>
+            </div>
+            <div class="card-body">
+                <div class="row mb-3">
+                    <div class="col-md-6">
+                        <label for="email" class="form-label">Email</label>
+                        <input id="email" type="email" class="form-control" @bind="handler.Email" maxlength="255" />
+                    </div>
+                    <div class="col-md-3">
+                        <label for="phone" class="form-label">Phone</label>
+                        <input id="phone" type="tel" class="form-control" @bind="handler.Phone" maxlength="20" 
+                               placeholder="(555) 555-5555" />
+                    </div>
+                    <div class="col-md-3">
+                        <label for="altPhone" class="form-label">Alternate Phone</label>
+                        <input id="altPhone" type="tel" class="form-control" @bind="handler.AlternatePhone" maxlength="20" />
+                    </div>
+                </div>
+
+                <div class="row mb-3">
+                    <div class="col-md-12">
+                        <label for="address" class="form-label">Address</label>
+                        <input id="address" class="form-control" @bind="handler.Address" maxlength="255" />
+                    </div>
+                </div>
+
+                <div class="row mb-3">
+                    <div class="col-md-5">
+                        <label for="city" class="form-label">City</label>
+                        <input id="city" class="form-control" @bind="handler.City" maxlength="100" />
+                    </div>
+                    <div class="col-md-4">
+                        <label for="state" class="form-label">State/Province</label>
+                        <select id="state" class="form-select" @bind="handler.StateCode">
+                            <option value="">Select State/Province</option>
+                            @if (states != null)
+                            {
+                                <optgroup label="US States">
+                                    @foreach (var state in states.Where(s => s.Country == "US"))
+                                    {
+                                        <option value="@state.StateCode">@state.StateName</option>
+                                    }
+                                </optgroup>
+                                <optgroup label="Canadian Provinces">
+                                    @foreach (var state in states.Where(s => s.Country == "CA"))
+                                    {
+                                        <option value="@state.StateCode">@state.StateName</option>
+                                    }
+                                </optgroup>
+                            }
+                        </select>
+                    </div>
+                    <div class="col-md-3">
+                        <label for="zip" class="form-label">Zip/Postal Code</label>
+                        <input id="zip" class="form-control" @bind="handler.ZipCode" maxlength="10" />
+                    </div>
+                </div>
+            </div>
+        </div>
+
+        @* Competition Information *@
+        <div class="card mb-3">
+            <div class="card-header">
+                <h4>Competition Information</h4>
+            </div>
+            <div class="card-body">
+                <div class="row mb-3">
+                    <div class="col-md-6">
+                        <label for="level" class="form-label">Handler Level</label>
+                        <select id="level" class="form-select" @bind="handler.HandlerLevel">
+                            <option value="">Select Level</option>
+                            @foreach (var level in HandlerLevel.All)
+                            {
+                                <option value="@level">@level</option>
+                            }
+                        </select>
+                    </div>
+                    <div class="col-md-6">
+                        <label for="moveUpDate" class="form-label">Level Move-Up Date</label>
+                        <input id="moveUpDate" type="date" class="form-control" 
+                               value="@(handler.LevelMoveUpDate?.ToString("yyyy-MM-dd"))"
+                               @onchange="@(e => handler.LevelMoveUpDate = string.IsNullOrEmpty(e.Value?.ToString()) ? null : DateTime.Parse(e.Value.ToString()))" />
+                    </div>
+                </div>
+
+                <div class="row mb-3">
+                    <div class="col-md-6">
+                        <label for="familyMember" class="form-label">Family Member</label>
+                        <select id="familyMember" class="form-select" @bind="handler.FamilyMemberHandlerId">
+                            <option value="">None</option>
+                            @if (allHandlers != null)
+                            {
+                                @foreach (var h in allHandlers.Where(h => h.HandlerId != handlerId))
+                                {
+                                    <option value="@h.HandlerId">@h.FullName</option>
+                                }
+                            }
+                        </select>
+                        <small class="form-text text-muted">Optional: Link to family member for joint membership</small>
+                    </div>
+                    <div class="col-md-6 d-flex align-items-end">
+                        <div class="form-check">
+                            <input id="photoRelease" type="checkbox" class="form-check-input" @bind="handler.PhotoReleaseConsent" />
+                            <label for="photoRelease" class="form-check-label">Photo Release Consent</label>
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </div>
+
+        @* Membership Management (only for existing handlers) *@
+        @if (handlerId != -1)
+        {
+            <div class="card mb-3">
+                <div class="card-header d-flex justify-content-between align-items-center">
+                    <h4>Membership History</h4>
+                    <button type="button" class="btn btn-sm btn-primary" @onclick="ShowAddMembership">
+                        Add Membership
+                    </button>
+                </div>
+                <div class="card-body">
+                    @if (showMembershipForm)
+                    {
+                        <div class="border p-3 mb-3 bg-light">
+                            <h5>@(editingMembershipId == -1 ? "Add New Membership" : "Edit Membership")</h5>
+                            <div class="row mb-2">
+                                <div class="col-md-3">
+                                    <label class="form-label">Start Year <span class="text-danger">*</span></label>
+                                    <input type="number" class="form-control" @bind="currentMembership.StartYear" 
+                                           min="2000" max="2100" required />
+                                </div>
+                                <div class="col-md-3">
+                                    <label class="form-label">End Year <span class="text-danger">*</span></label>
+                                    <input type="number" class="form-control" @bind="currentMembership.EndYear" 
+                                           min="2000" max="2100" required />
+                                </div>
+                                <div class="col-md-3">
+                                    <label class="form-label">Amount</label>
+                                    <input type="number" step="0.01" class="form-control" @bind="currentMembership.Amount" />
+                                </div>
+                                <div class="col-md-3">
+                                    <label class="form-label">Paid By</label>
+                                    <select class="form-select" @bind="currentMembership.PaidBy">
+                                        <option value="">Select...</option>
+                                        <option value="Cash">Cash</option>
+                                        <option value="Check">Check</option>
+                                        <option value="PayPal">PayPal</option>
+                                        <option value="Credit Card">Credit Card</option>
+                                    </select>
+                                </div>
+                            </div>
+                            <div class="row mb-2">
+                                <div class="col-md-4">
+                                    <label class="form-label">Date Received</label>
+                                    <input type="date" class="form-control" 
+                                           value="@(currentMembership.DateReceived?.ToString("yyyy-MM-dd"))"
+                                           @onchange="@(e => currentMembership.DateReceived = string.IsNullOrEmpty(e.Value?.ToString()) ? null : DateTime.Parse(e.Value.ToString()))" />
+                                </div>
+                            </div>
+                            <div class="mt-2">
+                                <button type="button" class="btn btn-sm btn-success me-2" @onclick="SaveMembership">Save</button>
+                                <button type="button" class="btn btn-sm btn-secondary" @onclick="CancelMembership">Cancel</button>
+                            </div>
+                        </div>
+                    }
+
+                    @if (memberships == null)
+                    {
+                        <p><em>Loading...</em></p>
+                    }
+                    else if (!memberships.Any())
+                    {
+                        <p><em>No membership records.</em></p>
+                    }
+                    else
+                    {
+                        <table class="table table-sm">
+                            <thead>
+                                <tr>
+                                    <th>Year Range</th>
+                                    <th>Amount</th>
+                                    <th>Paid By</th>
+                                    <th>Date Received</th>
+                                    <th>Actions</th>
+                                </tr>
+                            </thead>
+                            <tbody>
+                                @foreach (var membership in memberships)
+                                {
+                                    <tr>
+                                        <td>@membership.StartYear - @membership.EndYear</td>
+                                        <td>@(membership.Amount?.ToString("C") ?? "N/A")</td>
+                                        <td>@membership.PaidBy</td>
+                                        <td>@(membership.DateReceived?.ToString("MMM dd, yyyy") ?? "N/A")</td>
+                                        <td>
+                                            <button type="button" class="btn btn-sm btn-primary me-1" 
+                                                    @onclick="() => EditMembership(membership)">Edit</button>
+                                            <button type="button" class="btn btn-sm btn-danger" 
+                                                    @onclick="() => DeleteMembership(membership.MembershipId)">Delete</button>
+                                        </td>
+                                    </tr>
+                                }
+                            </tbody>
+                        </table>
+                    }
+                </div>
+            </div>
+        }
+
+        @* Status *@
+        <div class="card mb-3">
+            <div class="card-header">
+                <h4>Status</h4>
+            </div>
+            <div class="card-body">
+                <div class="form-check">
+                    <input id="isActive" type="checkbox" class="form-check-input" @bind="handler.IsActive" />
+                    <label for="isActive" class="form-check-label">Active</label>
+                    <small class="form-text text-muted d-block">Inactive handlers will not appear in searches</small>
+                </div>
+            </div>
+        </div>
+
+        @* Action Buttons *@
+        <div class="row">
+            <div class="col">
+                <button type="submit" class="btn btn-success me-2">
+                    <span class="oi oi-check"></span> Save
+                </button>
+                <ActionLink Action="Index" Text="Cancel" ResourceKey="Cancel" Class="btn btn-secondary me-2" />
+                @if (handlerId != -1)
+                {
+                    <ActionLink Action="Detail" Parameters="@($"id={handlerId}")" Text="View Details" 
+                               ResourceKey="ViewDetails" Class="btn btn-info me-2" />
+                    <button type="button" class="btn btn-danger" @onclick="DeleteHandler">
+                        <span class="oi oi-trash"></span> Delete
+                    </button>
+                }
+            </div>
+        </div>
+    </div>
+</form>
+
+@code {
+    private int handlerId = -1;
+    private MSSA_Handler handler = new();
+    private List<MSSA_State> states;
+    private List<MSSA_Handler> allHandlers;
+    private List<MSSA_HandlerMembership> memberships;
+    private string errorMessage = "";
+
+    // Membership form state
+    private bool showMembershipForm = false;
+    private int editingMembershipId = -1;
+    private MSSA_HandlerMembership currentMembership = new();
+
+    protected override async Task OnInitializedAsync()
+    {
+        try
+        {
+            states = await StateService.GetStatesAsync(ModuleState.ModuleId);
+            allHandlers = await HandlerService.GetHandlersAsync(ModuleState.ModuleId);
+
+            if (PageState.QueryString.ContainsKey("id"))
+            {
+                handlerId = int.Parse(PageState.QueryString["id"]);
+                handler = await HandlerService.GetHandlerAsync(handlerId, ModuleState.ModuleId);
+                memberships = await HandlerService.GetHandlerMembershipsAsync(handlerId, ModuleState.ModuleId);
+            }
+            else
+            {
+                handler = new MSSA_Handler
+                {
+                    IsActive = true,
+                    PhotoReleaseConsent = false
+                };
+                memberships = new List<MSSA_HandlerMembership>();
+            }
+        }
+        catch (Exception ex)
+        {
+            await logger.LogError(ex, "Error loading handler for edit");
+            AddModuleMessage("Error loading handler", MessageType.Error);
+        }
+    }
+
+    private async Task SaveHandler()
+    {
+        try
+        {
+            errorMessage = "";
+
+            if (string.IsNullOrWhiteSpace(handler.FirstName) || string.IsNullOrWhiteSpace(handler.LastName))
+            {
+                errorMessage = "First Name and Last Name are required.";
+                return;
+            }
+
+            if (handlerId == -1)
+            {
+                handler = await HandlerService.AddHandlerAsync(handler, ModuleState.ModuleId);
+                await logger.LogInformation("Handler added successfully");
+                NavigationManager.NavigateTo(NavigateUrl(PageState.Page.Path, "id=" + handler.HandlerId));
+            }
+            else
+            {
+                await HandlerService.UpdateHandlerAsync(handler, ModuleState.ModuleId);
+                await logger.LogInformation("Handler updated successfully");
+                AddModuleMessage("Handler saved successfully", MessageType.Success);
+            }
+        }
+        catch (Exception ex)
+        {
+            await logger.LogError(ex, "Error saving handler");
+            errorMessage = "Error saving handler. Please try again.";
+        }
+    }
+
+    private async Task DeleteHandler()
+    {
+        try
+        {
+            if (await JSRuntime.InvokeAsync<bool>("confirm", "Are you sure you want to delete this handler?"))
+            {
+                await HandlerService.DeleteHandlerAsync(handlerId, ModuleState.ModuleId);
+                await logger.LogInformation("Handler deleted");
+                NavigationManager.NavigateTo(NavigateUrl());
+            }
+        }
+        catch (Exception ex)
+        {
+            await logger.LogError(ex, "Error deleting handler");
+            errorMessage = "Error deleting handler. Please try again.";
+        }
+    }
+
+    // Membership management
+    private void ShowAddMembership()
+    {
+        currentMembership = new MSSA_HandlerMembership
+        {
+            HandlerId = handlerId,
+            StartYear = DateTime.Now.Year,
+            EndYear = DateTime.Now.Year,
+            IsActive = true
+        };
+        editingMembershipId = -1;
+        showMembershipForm = true;
+    }
+
+    private void EditMembership(MSSA_HandlerMembership membership)
+    {
+        currentMembership = new MSSA_HandlerMembership
+        {
+            MembershipId = membership.MembershipId,
+            HandlerId = membership.HandlerId,
+            StartYear = membership.StartYear,
+            EndYear = membership.EndYear,
+            Amount = membership.Amount,
+            PaidBy = membership.PaidBy,
+            DateReceived = membership.DateReceived,
+            IsActive = membership.IsActive
+        };
+        editingMembershipId = membership.MembershipId;
+        showMembershipForm = true;
+    }
+
+    private async Task SaveMembership()
+    {
+        try
+        {
+            if (currentMembership.StartYear > currentMembership.EndYear)
+            {
+                errorMessage = "Start Year cannot be after End Year.";
+                return;
+            }
+
+            if (editingMembershipId == -1)
+            {
+                await HandlerService.AddMembershipAsync(currentMembership, ModuleState.ModuleId);
+            }
+            else
+            {
+                await HandlerService.UpdateMembershipAsync(currentMembership, ModuleState.ModuleId);
+            }
+
+            memberships = await HandlerService.GetHandlerMembershipsAsync(handlerId, ModuleState.ModuleId);
+            CancelMembership();
+            AddModuleMessage("Membership saved successfully", MessageType.Success);
+        }
+        catch (Exception ex)
+        {
+            await logger.LogError(ex, "Error saving membership");
+            errorMessage = "Error saving membership. Please try again.";
+        }
+    }
+
+    private async Task DeleteMembership(int membershipId)
+    {
+        try
+        {
+            if (await JSRuntime.InvokeAsync<bool>("confirm", "Are you sure you want to delete this membership?"))
+            {
+                await HandlerService.DeleteMembershipAsync(membershipId, ModuleState.ModuleId);
+                memberships = await HandlerService.GetHandlerMembershipsAsync(handlerId, ModuleState.ModuleId);
+                AddModuleMessage("Membership deleted successfully", MessageType.Success);
+            }
+        }
+        catch (Exception ex)
+        {
+            await logger.LogError(ex, "Error deleting membership");
+            errorMessage = "Error deleting membership. Please try again.";
+        }
+    }
+
+    private void CancelMembership()
+    {
+        showMembershipForm = false;
+        editingMembershipId = -1;
+        currentMembership = new();
+        errorMessage = "";
+    }
+}
