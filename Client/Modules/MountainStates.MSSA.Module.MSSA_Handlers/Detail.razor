@@ -1,0 +1,394 @@
+﻿@using MountainStates.MSSA.Module.MSSA_Handlers.Services
+@using MountainStates.MSSA.Module.MSSA_Handlers.Models
+@using Oqtane.Modules.Controls
+
+@namespace MountainStates.MSSA.Module.MSSA_Handlers
+@inherits ModuleBase
+@inject IMSSA_HandlerService HandlerService
+@inject NavigationManager NavigationManager
+
+@if (handler == null)
+{
+    <p><em>Loading...</em></p>
+}
+else
+{
+    <div class="container-fluid">
+        <div class="row mb-3">
+            <div class="col">
+                <h2>@handler.FullName</h2>
+            </div>
+            <div class="col-auto">
+                <ActionLink Action="Index" Text="Back to List" ResourceKey="BackToList" Class="btn btn-secondary me-2" />
+                @if (UserSecurity.IsAuthorized(PageState.User, RoleNames.Admin))
+                {
+                    <ActionLink Action="Edit" Parameters="@($"id={handler.HandlerId}")"
+                                Security="SecurityAccessLevel.Edit" Text="Edit"
+                                ResourceKey="EditHandler" Class="btn btn-primary" />
+                }
+            </div>
+        </div>
+
+        @* Handler Information *@
+        <div class="card mb-3">
+            <div class="card-header">
+                <h4>Contact Information</h4>
+            </div>
+            <div class="card-body">
+                <div class="row">
+                    <div class="col-md-6">
+                        <dl class="row">
+                            <dt class="col-sm-4">Email:</dt>
+                            <dd class="col-sm-8">
+                                @if (!string.IsNullOrEmpty(handler.Email))
+                                {
+                                    <a href="mailto:@handler.Email">@handler.Email</a>
+                                }
+                                else
+                                {
+                                    <em>Not provided</em>
+                                }
+                            </dd>
+
+                            <dt class="col-sm-4">Phone:</dt>
+                            <dd class="col-sm-8">@(handler.Phone ?? "Not provided")</dd>
+
+                            <dt class="col-sm-4">Alternate Phone:</dt>
+                            <dd class="col-sm-8">@(handler.AlternatePhone ?? "Not provided")</dd>
+                        </dl>
+                    </div>
+                    <div class="col-md-6">
+                        <dl class="row">
+                            <dt class="col-sm-4">Address:</dt>
+                            <dd class="col-sm-8">
+                                @if (!string.IsNullOrEmpty(handler.Address))
+                                {
+                                    <text>@handler.Address</text>
+                            
+                                    <br />
+                                    <text>@handler.City, @handler.StateCode @handler.ZipCode</text>
+                                }
+                                else
+                                {
+                                    <em>Not provided</em>
+                                }
+                            </dd>
+                        </dl>
+                    </div>
+                </div>
+            </div>
+        </div>
+
+        @* Competition Information *@
+        <div class="card mb-3">
+            <div class="card-header">
+                <h4>Competition Information</h4>
+            </div>
+            <div class="card-body">
+                <dl class="row">
+                    <dt class="col-sm-3">Handler Level:</dt>
+                    <dd class="col-sm-9">
+                        <span class="badge bg-primary">@(handler.HandlerLevel ?? "Not set")</span>
+                    </dd>
+
+                    <dt class="col-sm-3">Level Move-Up Date:</dt>
+                    <dd class="col-sm-9">@(handler.LevelMoveUpDate?.ToString("MMM dd, yyyy") ?? "N/A")</dd>
+
+                    <dt class="col-sm-3">Membership Status:</dt>
+                    <dd class="col-sm-9">
+                        @if (handler.HasActiveMembership)
+                        {
+                            <span class="badge bg-success">Active</span>
+                        }
+                        else
+                        {
+                            <span class="badge bg-secondary">Inactive</span>
+                        }
+                    </dd>
+
+                    <dt class="col-sm-3">Photo Release:</dt>
+                    <dd class="col-sm-9">
+                        @if (handler.PhotoReleaseConsent)
+                        {
+                            <span class="text-success">✓ Consent given</span>
+                        }
+                        else
+                        {
+                            <span class="text-muted">Not provided</span>
+                        }
+                    </dd>
+
+                    @if (!string.IsNullOrEmpty(handler.FamilyMemberName))
+                    {
+                        <dt class="col-sm-3">Family Member:</dt>
+                        <dd class="col-sm-9">@handler.FamilyMemberName</dd>
+                    }
+                </dl>
+            </div>
+        </div>
+
+        @* Memberships *@
+        <div class="card mb-3">
+            <div class="card-header">
+                <h4>Membership History</h4>
+            </div>
+            <div class="card-body">
+                @if (memberships == null)
+                {
+                    <p><em>Loading memberships...</em></p>
+                }
+                else if (!memberships.Any())
+                {
+                    <p><em>No membership records found.</em></p>
+                }
+                else
+                {
+                    <table class="table table-sm">
+                        <thead>
+                            <tr>
+                                <th>Year Range</th>
+                                <th>Amount</th>
+                                <th>Paid By</th>
+                                <th>Date Received</th>
+                            </tr>
+                        </thead>
+                        <tbody>
+                            @foreach (var membership in memberships)
+                            {
+                                <tr>
+                                    <td>@membership.StartYear - @membership.EndYear</td>
+                                    <td>@(membership.Amount?.ToString("C") ?? "N/A")</td>
+                                    <td>@membership.PaidBy</td>
+                                    <td>@(membership.DateReceived?.ToString("MMM dd, yyyy") ?? "N/A")</td>
+                                </tr>
+                            }
+                        </tbody>
+                    </table>
+                }
+            </div>
+        </div>
+
+        @* Competition Entries *@
+        <div class="card">
+            <div class="card-header">
+                <h4>Competition Entries</h4>
+            </div>
+            <div class="card-body">
+                @if (entries == null)
+                {
+                    <p><em>Loading entries...</em></p>
+                }
+                else if (!entries.Any())
+                {
+                    <p><em>No competition entries found.</em></p>
+                }
+                else
+                {
+                    @* Filter Controls *@
+                    <div class="row mb-3">
+                        <div class="col-md-2">
+                            <label class="form-label">Year</label>
+                            <select class="form-select form-select-sm" @bind="selectedYear" @bind:after="FilterEntries">
+                                <option value="">All Years</option>
+                                @foreach (var year in entries.Select(e => e.Year).Distinct().OrderByDescending(y => y))
+                                {
+                                    <option value="@year">@year</option>
+                                }
+                            </select>
+                        </div>
+                        <div class="col-md-3">
+                            <label class="form-label">Class</label>
+                            <select class="form-select form-select-sm" @bind="selectedClass" @bind:after="FilterEntries">
+                                <option value="">All Classes</option>
+                                @foreach (var className in entries.Select(e => e.ClassName).Distinct().OrderBy(c => c))
+                                {
+                                    <option value="@className">@className</option>
+                                }
+                            </select>
+                        </div>
+                        <div class="col-md-3">
+                            <label class="form-label">Dog</label>
+                            <select class="form-select form-select-sm" @bind="selectedDog" @bind:after="FilterEntries">
+                                <option value="">All Dogs</option>
+                                @foreach (var dogName in entries.Select(e => e.DogName).Distinct().OrderBy(d => d))
+                                {
+                                    <option value="@dogName">@dogName</option>
+                                }
+                            </select>
+                        </div>
+                        <div class="col-md-2">
+                            <label class="form-label">Placing</label>
+                            <select class="form-select form-select-sm" @bind="selectedPlacing" @bind:after="FilterEntries">
+                                <option value="">All</option>
+                                <option value="1">1st Place</option>
+                                <option value="2">2nd Place</option>
+                                <option value="3">3rd Place</option>
+                            </select>
+                        </div>
+                        <div class="col-md-2 d-flex align-items-end">
+                            <button class="btn btn-sm btn-secondary" @onclick="ClearEntryFilters">Clear Filters</button>
+                        </div>
+                    </div>
+
+                    <div class="table-responsive">
+                        <table class="table table-striped table-sm">
+                            <thead>
+                                <tr>
+                                    <th @onclick='() => SortEntries("Date")' style="cursor: pointer;">
+                                        Date @GetSortIcon("Date")
+                                    </th>
+                                    <th @onclick='() => SortEntries("Event")' style="cursor: pointer;">
+                                        Event @GetSortIcon("Event")
+                                    </th>
+                                    <th @onclick='() => SortEntries("Dog")' style="cursor: pointer;">
+                                        Dog @GetSortIcon("Dog")
+                                    </th>
+                                    <th @onclick='() => SortEntries("Class")' style="cursor: pointer;">
+                                        Class @GetSortIcon("Class")
+                                    </th>
+                                    <th>Stock</th>
+                                    <th @onclick='() => SortEntries("Placing")' style="cursor: pointer;">
+                                        Placing @GetSortIcon("Placing")
+                                    </th>
+                                    <th @onclick='() => SortEntries("Points")' style="cursor: pointer;">
+                                        Points @GetSortIcon("Points")
+                                    </th>
+                                </tr>
+                            </thead>
+                            <tbody>
+                                @foreach (var entry in filteredEntries)
+                                {
+                                    <tr>
+                                        <td>@entry.TrialDate.ToString("MMM dd, yyyy")</td>
+                                        <td>@entry.EventName</td>
+                                        <td>@entry.DogName</td>
+                                        <td>@entry.ClassName @entry.SubClassName</td>
+                                        <td>@entry.Stock</td>
+                                        <td>
+                                            @if (entry.Placing.HasValue)
+                                            {
+                                                if (entry.Placing.Value <= 3)
+                                                {
+                                                    <span class="badge bg-warning">@entry.Placing</span>
+                                                }
+                                                else
+                                                {
+                                                    @entry.Placing
+                                                }
+                                            }
+                                        </td>
+                                        <td>@entry.TrialPoints</td>
+                                    </tr>
+                                }
+                            </tbody>
+                        </table>
+                    </div>
+
+                    <p class="text-muted">Showing @filteredEntries.Count() of @entries.Count entries</p>
+                }
+            </div>
+        </div>
+    </div>
+}
+
+@code {
+    private MSSA_Handler handler;
+    private List<MSSA_HandlerMembership> memberships;
+    private List<MSSA_HandlerEntry> entries;
+    private IEnumerable<MSSA_HandlerEntry> filteredEntries = new List<MSSA_HandlerEntry>();
+
+    private string selectedYear = "";
+    private string selectedClass = "";
+    private string selectedDog = "";
+    private string selectedPlacing = "";
+    private string sortColumn = "Date";
+    private bool sortAscending = false;
+
+    protected override async Task OnInitializedAsync()
+    {
+        try
+        {
+            int handlerId = int.Parse(PageState.QueryString["id"]);
+            handler = await HandlerService.GetHandlerAsync(handlerId, ModuleState.ModuleId);
+            memberships = await HandlerService.GetHandlerMembershipsAsync(handlerId, ModuleState.ModuleId);
+            entries = await HandlerService.GetHandlerEntriesAsync(handlerId, ModuleState.ModuleId);
+
+            filteredEntries = entries;
+            SortEntries(sortColumn);
+        }
+        catch (Exception ex)
+        {
+            await logger.LogError(ex, "Error loading handler details");
+            AddModuleMessage("Error loading handler details", MessageType.Error);
+        }
+    }
+
+    private void FilterEntries()
+    {
+        filteredEntries = entries.AsEnumerable();
+
+        if (!string.IsNullOrEmpty(selectedYear))
+        {
+            var year = int.Parse(selectedYear);
+            filteredEntries = filteredEntries.Where(e => e.Year == year);
+        }
+
+        if (!string.IsNullOrEmpty(selectedClass))
+        {
+            filteredEntries = filteredEntries.Where(e => e.ClassName == selectedClass);
+        }
+
+        if (!string.IsNullOrEmpty(selectedDog))
+        {
+            filteredEntries = filteredEntries.Where(e => e.DogName == selectedDog);
+        }
+
+        if (!string.IsNullOrEmpty(selectedPlacing))
+        {
+            var placing = int.Parse(selectedPlacing);
+            filteredEntries = filteredEntries.Where(e => e.Placing == placing);
+        }
+
+        filteredEntries = filteredEntries.ToList();
+        SortEntries(sortColumn);
+    }
+
+    private void ClearEntryFilters()
+    {
+        selectedYear = "";
+        selectedClass = "";
+        selectedDog = "";
+        selectedPlacing = "";
+        FilterEntries();
+    }
+
+    private void SortEntries(string column)
+    {
+        if (sortColumn == column)
+        {
+            sortAscending = !sortAscending;
+        }
+        else
+        {
+            sortColumn = column;
+            sortAscending = true;
+        }
+
+        filteredEntries = column switch
+        {
+            "Date" => sortAscending ? filteredEntries.OrderBy(e => e.TrialDate).ToList() : filteredEntries.OrderByDescending(e => e.TrialDate).ToList(),
+            "Event" => sortAscending ? filteredEntries.OrderBy(e => e.EventName).ToList() : filteredEntries.OrderByDescending(e => e.EventName).ToList(),
+            "Dog" => sortAscending ? filteredEntries.OrderBy(e => e.DogName).ToList() : filteredEntries.OrderByDescending(e => e.DogName).ToList(),
+            "Class" => sortAscending ? filteredEntries.OrderBy(e => e.ClassName).ToList() : filteredEntries.OrderByDescending(e => e.ClassName).ToList(),
+            "Placing" => sortAscending ? filteredEntries.OrderBy(e => e.Placing ?? int.MaxValue).ToList() : filteredEntries.OrderByDescending(e => e.Placing ?? int.MaxValue).ToList(),
+            "Points" => sortAscending ? filteredEntries.OrderBy(e => e.TrialPoints ?? 0).ToList() : filteredEntries.OrderByDescending(e => e.TrialPoints ?? 0).ToList(),
+            _ => filteredEntries
+        };
+    }
+
+    private string GetSortIcon(string column)
+    {
+        if (sortColumn != column) return "";
+        return sortAscending ? "▲" : "▼";
+    }
+}
