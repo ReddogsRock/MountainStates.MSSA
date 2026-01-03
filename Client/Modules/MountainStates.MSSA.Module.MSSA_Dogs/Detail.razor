@@ -1,0 +1,377 @@
+﻿@using MountainStates.MSSA.Module.MSSA_Dogs.Services
+@using MountainStates.MSSA.Module.MSSA_Dogs.Models
+@using Oqtane.Modules.Controls
+
+@namespace MountainStates.MSSA.Module.MSSA_Dogs
+@inherits ModuleBase
+@inject IMSSA_DogService DogService
+@inject NavigationManager NavigationManager
+
+@if (dog == null)
+{
+    <p><em>Loading...</em></p>
+}
+else
+{
+    <div class="container-fluid">
+        <div class="row mb-3">
+            <div class="col">
+                <h2>@dog.Name</h2>
+            </div>
+            <div class="col-auto">
+                <ActionLink Action="Index" Text="Back to List" ResourceKey="BackToList" Class="btn btn-secondary me-2" />
+                @if (UserSecurity.IsAuthorized(PageState.User, RoleNames.Admin))
+                {
+                    <ActionLink Action="Edit" Parameters="@($"id={dog.DogId}")"
+                                Security="SecurityAccessLevel.Edit" Text="Edit"
+                                ResourceKey="EditDog" Class="btn btn-primary" />
+                }
+            </div>
+        </div>
+
+        @* Dog Information *@
+        <div class="card mb-3">
+            <div class="card-header">
+                <h4>Dog Information</h4>
+            </div>
+            <div class="card-body">
+                <div class="row">
+                    <div class="col-md-6">
+                        <dl class="row">
+                            <dt class="col-sm-4">Breed:</dt>
+                            <dd class="col-sm-8">@(dog.Breed ?? "Not specified")</dd>
+
+                            <dt class="col-sm-4">Date of Birth:</dt>
+                            <dd class="col-sm-8">
+                                @if (dog.DateOfBirth.HasValue)
+                                {
+                                    @dog.DateOfBirth.Value.ToString("MMM dd, yyyy")
+                                    @if (dog.Age.HasValue)
+                                    {
+                                        <span class="text-muted">(@dog.Age years old)</span>
+                                    }
+                                }
+                                else
+                                {
+                                    <em>Not provided</em>
+                                }
+                            </dd>
+
+                            <dt class="col-sm-4">Registration:</dt>
+                            <dd class="col-sm-8">@(dog.RegistrationNumber ?? "Not provided")</dd>
+                        </dl>
+                    </div>
+                    <div class="col-md-6">
+                        <dl class="row">
+                            <dt class="col-sm-4">First Competition:</dt>
+                            <dd class="col-sm-8">@(dog.FirstCompetitionYear?.ToString() ?? "N/A")</dd>
+
+                            <dt class="col-sm-4">Status:</dt>
+                            <dd class="col-sm-8">
+                                @if (dog.IsDeceased)
+                                {
+                                    <span class="badge bg-dark">Deceased</span>
+                                }
+                                else if (dog.IsSold)
+                                {
+                                    <span class="badge bg-warning">Sold</span>
+                                }
+                                else if (!dog.IsActive)
+                                {
+                                    <span class="badge bg-secondary">Inactive</span>
+                                }
+                                else
+                                {
+                                    <span class="badge bg-success">Active</span>
+                                }
+                            </dd>
+                        </dl>
+                    </div>
+                </div>
+            </div>
+        </div>
+
+        @* Ownership Information *@
+        <div class="card mb-3">
+            <div class="card-header">
+                <h4>Ownership Information</h4>
+            </div>
+            <div class="card-body">
+                <dl class="row">
+                    <dt class="col-sm-3">Owner:</dt>
+                    <dd class="col-sm-9">@(dog.OwnerName ?? "Not specified")</dd>
+
+                    <dt class="col-sm-3">Owner is MSSA Member:</dt>
+                    <dd class="col-sm-9">
+                        @if (dog.OwnerIsMSSAMember)
+                        {
+                            <span class="badge bg-success">Yes</span>
+                        }
+                        else
+                        {
+                            <span class="badge bg-secondary">No</span>
+                        }
+                    </dd>
+                </dl>
+            </div>
+        </div>
+
+        @* Futurity Participation *@
+        <div class="card mb-3">
+            <div class="card-header">
+                <h4>Futurity Participation</h4>
+            </div>
+            <div class="card-body">
+                @if (futurityParticipation == null)
+                {
+                    <p><em>Loading futurity participation...</em></p>
+                }
+                else if (!futurityParticipation.Any())
+                {
+                    <p><em>No futurity participation records found.</em></p>
+                }
+                else
+                {
+                    <table class="table table-sm">
+                        <thead>
+                            <tr>
+                                <th>Year</th>
+                            </tr>
+                        </thead>
+                        <tbody>
+                            @foreach (var participation in futurityParticipation)
+                            {
+                                <tr>
+                                    <td>@participation.Year</td>
+                                </tr>
+                            }
+                        </tbody>
+                    </table>
+                }
+            </div>
+        </div>
+
+        @* Competition Entries *@
+        <div class="card">
+            <div class="card-header">
+                <h4>Competition Entries</h4>
+            </div>
+            <div class="card-body">
+                @if (entries == null)
+                {
+                    <p><em>Loading entries...</em></p>
+                }
+                else if (!entries.Any())
+                {
+                    <p><em>No competition entries found.</em></p>
+                }
+                else
+                {
+                    @* Filter Controls *@
+                    <div class="row mb-3">
+                        <div class="col-md-2">
+                            <label class="form-label">Year</label>
+                            <select class="form-select form-select-sm" @bind="selectedYear" @bind:after="FilterEntries">
+                                <option value="">All Years</option>
+                                @foreach (var year in entries.Select(e => e.Year).Distinct().OrderByDescending(y => y))
+                                {
+                                    <option value="@year">@year</option>
+                                }
+                            </select>
+                        </div>
+                        <div class="col-md-3">
+                            <label class="form-label">Class</label>
+                            <select class="form-select form-select-sm" @bind="selectedClass" @bind:after="FilterEntries">
+                                <option value="">All Classes</option>
+                                @foreach (var className in entries.Select(e => e.ClassName).Distinct().OrderBy(c => c))
+                                {
+                                    <option value="@className">@className</option>
+                                }
+                            </select>
+                        </div>
+                        <div class="col-md-3">
+                            <label class="form-label">Handler</label>
+                            <select class="form-select form-select-sm" @bind="selectedHandler" @bind:after="FilterEntries">
+                                <option value="">All Handlers</option>
+                                @foreach (var handlerName in entries.Select(e => e.HandlerName).Distinct().OrderBy(h => h))
+                                {
+                                    <option value="@handlerName">@handlerName</option>
+                                }
+                            </select>
+                        </div>
+                        <div class="col-md-2">
+                            <label class="form-label">Placing</label>
+                            <select class="form-select form-select-sm" @bind="selectedPlacing" @bind:after="FilterEntries">
+                                <option value="">All</option>
+                                <option value="1">1st Place</option>
+                                <option value="2">2nd Place</option>
+                                <option value="3">3rd Place</option>
+                            </select>
+                        </div>
+                        <div class="col-md-2 d-flex align-items-end">
+                            <button class="btn btn-sm btn-secondary" @onclick="ClearEntryFilters">Clear Filters</button>
+                        </div>
+                    </div>
+
+                    <div class="table-responsive">
+                        <table class="table table-striped table-sm">
+                            <thead>
+                                <tr>
+                                    <th @onclick='() => SortEntries("Date")' style="cursor: pointer;">
+                                        Date @GetSortIcon("Date")
+                                    </th>
+                                    <th @onclick='() => SortEntries("Event")' style="cursor: pointer;">
+                                        Event @GetSortIcon("Event")
+                                    </th>
+                                    <th @onclick='() => SortEntries("Handler")' style="cursor: pointer;">
+                                        Handler @GetSortIcon("Handler")
+                                    </th>
+                                    <th @onclick='() => SortEntries("Class")' style="cursor: pointer;">
+                                        Class @GetSortIcon("Class")
+                                    </th>
+                                    <th>Stock</th>
+                                    <th @onclick='() => SortEntries("Placing")' style="cursor: pointer;">
+                                        Placing @GetSortIcon("Placing")
+                                    </th>
+                                    <th @onclick='() => SortEntries("Points")' style="cursor: pointer;">
+                                        Points @GetSortIcon("Points")
+                                    </th>
+                                </tr>
+                            </thead>
+                            <tbody>
+                                @foreach (var entry in filteredEntries)
+                                {
+                                    <tr>
+                                        <td>@entry.TrialDate.ToString("MMM dd, yyyy")</td>
+                                        <td>@entry.EventName</td>
+                                        <td>@entry.HandlerName</td>
+                                        <td>@entry.ClassName @entry.SubClassName</td>
+                                        <td>@entry.Stock</td>
+                                        <td>
+                                            @if (entry.Placing.HasValue)
+                                            {
+                                                if (entry.Placing.Value <= 3)
+                                                {
+                                                    <span class="badge bg-warning">@entry.Placing</span>
+                                                }
+                                                else
+                                                {
+                                                    @entry.Placing
+                                                }
+                                            }
+                                        </td>
+                                        <td>@entry.TrialPoints</td>
+                                    </tr>
+                                }
+                            </tbody>
+                        </table>
+                    </div>
+
+                    <p class="text-muted">Showing @filteredEntries.Count() of @entries.Count entries</p>
+                }
+            </div>
+        </div>
+    </div>
+}
+
+@code {
+    private MSSA_Dog dog;
+    private List<MSSA_DogFuturityParticipation> futurityParticipation;
+    private List<MSSA_DogEntry> entries;
+    private IEnumerable<MSSA_DogEntry> filteredEntries = new List<MSSA_DogEntry>();
+
+    private string selectedYear = "";
+    private string selectedClass = "";
+    private string selectedHandler = "";
+    private string selectedPlacing = "";
+    private string sortColumn = "Date";
+    private bool sortAscending = false;
+
+    protected override async Task OnInitializedAsync()
+    {
+        try
+        {
+            int dogId = int.Parse(PageState.QueryString["id"]);
+            dog = await DogService.GetDogAsync(dogId, ModuleState.ModuleId);
+            futurityParticipation = await DogService.GetDogFuturityParticipationAsync(dogId, ModuleState.ModuleId);
+            entries = await DogService.GetDogEntriesAsync(dogId, ModuleState.ModuleId);
+
+            filteredEntries = entries;
+            SortEntries(sortColumn);
+        }
+        catch (Exception ex)
+        {
+            await logger.LogError(ex, "Error loading dog details");
+            AddModuleMessage("Error loading dog details", MessageType.Error);
+        }
+    }
+
+    private void FilterEntries()
+    {
+        filteredEntries = entries.AsEnumerable();
+
+        if (!string.IsNullOrEmpty(selectedYear))
+        {
+            var year = int.Parse(selectedYear);
+            filteredEntries = filteredEntries.Where(e => e.Year == year);
+        }
+
+        if (!string.IsNullOrEmpty(selectedClass))
+        {
+            filteredEntries = filteredEntries.Where(e => e.ClassName == selectedClass);
+        }
+
+        if (!string.IsNullOrEmpty(selectedHandler))
+        {
+            filteredEntries = filteredEntries.Where(e => e.HandlerName == selectedHandler);
+        }
+
+        if (!string.IsNullOrEmpty(selectedPlacing))
+        {
+            var placing = int.Parse(selectedPlacing);
+            filteredEntries = filteredEntries.Where(e => e.Placing == placing);
+        }
+
+        filteredEntries = filteredEntries.ToList();
+        SortEntries(sortColumn);
+    }
+
+    private void ClearEntryFilters()
+    {
+        selectedYear = "";
+        selectedClass = "";
+        selectedHandler = "";
+        selectedPlacing = "";
+        FilterEntries();
+    }
+
+    private void SortEntries(string column)
+    {
+        if (sortColumn == column)
+        {
+            sortAscending = !sortAscending;
+        }
+        else
+        {
+            sortColumn = column;
+            sortAscending = true;
+        }
+
+        filteredEntries = column switch
+        {
+            "Date" => sortAscending ? filteredEntries.OrderBy(e => e.TrialDate).ToList() : filteredEntries.OrderByDescending(e => e.TrialDate).ToList(),
+            "Event" => sortAscending ? filteredEntries.OrderBy(e => e.EventName).ToList() : filteredEntries.OrderByDescending(e => e.EventName).ToList(),
+            "Handler" => sortAscending ? filteredEntries.OrderBy(e => e.HandlerName).ToList() : filteredEntries.OrderByDescending(e => e.HandlerName).ToList(),
+            "Class" => sortAscending ? filteredEntries.OrderBy(e => e.ClassName).ToList() : filteredEntries.OrderByDescending(e => e.ClassName).ToList(),
+            "Placing" => sortAscending ? filteredEntries.OrderBy(e => e.Placing ?? int.MaxValue).ToList() : filteredEntries.OrderByDescending(e => e.Placing ?? int.MaxValue).ToList(),
+            "Points" => sortAscending ? filteredEntries.OrderBy(e => e.TrialPoints ?? 0).ToList() : filteredEntries.OrderByDescending(e => e.TrialPoints ?? 0).ToList(),
+            _ => filteredEntries
+        };
+    }
+
+    private string GetSortIcon(string column)
+    {
+        if (sortColumn != column) return "";
+        return sortAscending ? "▲" : "▼";
+    }
+}

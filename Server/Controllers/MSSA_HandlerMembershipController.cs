@@ -121,7 +121,7 @@ namespace MountainStates.MSSA.Module.MSSA_Handlers.Controllers
 
         private bool IsAuthorizedForRole(string role)
         {
-            return User.IsInRole(role) || User.IsInRole(Constants.AdminRole);
+            return User.IsInRole(role) || User.IsInRole(RoleNames.Admin);
         }
     }
 }

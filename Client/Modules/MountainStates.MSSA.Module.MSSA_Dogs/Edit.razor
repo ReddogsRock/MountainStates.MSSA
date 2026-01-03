@@ -1,0 +1,362 @@
+﻿@using MountainStates.MSSA.Module.MSSA_Dogs.Services
+@using MountainStates.MSSA.Module.MSSA_Dogs.Models
+@using Oqtane.Modules.Controls
+
+@namespace MountainStates.MSSA.Module.MSSA_Dogs
+@inherits ModuleBase
+@inject IMSSA_DogService DogService
+@inject NavigationManager NavigationManager
+
+
+<form @onsubmit="SaveDog">
+    <div class="container-fluid">
+        <div class="row mb-3">
+            <div class="col">
+                <h2>@(dogId == -1 ? "Add Dog" : "Edit Dog")</h2>
+            </div>
+        </div>
+
+        @if (!string.IsNullOrEmpty(errorMessage))
+        {
+            <div class="alert alert-danger" role="alert">
+                @errorMessage
+            </div>
+        }
+
+        @* Dog Information *@
+        <div class="card mb-3">
+            <div class="card-header">
+                <h4>Dog Information</h4>
+            </div>
+            <div class="card-body">
+                <div class="row mb-3">
+                    <div class="col-md-6">
+                        <label for="name" class="form-label">Dog Name <span class="text-danger">*</span></label>
+                        <input id="name" class="form-control" @bind="dog.Name" required maxlength="100" />
+                    </div>
+                    <div class="col-md-6">
+                        <label for="breed" class="form-label">Breed</label>
+                        <input id="breed" class="form-control" @bind="dog.Breed" maxlength="100"
+                               placeholder="e.g., Border Collie, Australian Shepherd" />
+                    </div>
+                </div>
+
+                <div class="row mb-3">
+                    <div class="col-md-4">
+                        <label for="dob" class="form-label">Date of Birth</label>
+                        <input id="dob" type="date" class="form-control"
+                               value="@(dog.DateOfBirth?.ToString("yyyy-MM-dd"))"
+                               @onchange="@(e => dog.DateOfBirth = string.IsNullOrEmpty(e.Value?.ToString()) ? null : DateTime.Parse(e.Value.ToString()))" />
+                        @if (dog.Age.HasValue)
+                        {
+                            <small class="form-text text-muted">Age: @dog.Age years</small>
+                        }
+                    </div>
+                    <div class="col-md-4">
+                        <label for="registration" class="form-label">Registration Number</label>
+                        <input id="registration" class="form-control" @bind="dog.RegistrationNumber" maxlength="100" />
+                    </div>
+                    <div class="col-md-4">
+                        <label for="firstCompYear" class="form-label">First Competition Year</label>
+                        <input id="firstCompYear" type="number" class="form-control" @bind="dog.FirstCompetitionYear"
+                               min="1900" max="2100" />
+                    </div>
+                </div>
+            </div>
+        </div>
+
+        @* Ownership Information *@
+        <div class="card mb-3">
+            <div class="card-header">
+                <h4>Ownership Information</h4>
+            </div>
+            <div class="card-body">
+                <div class="row mb-3">
+                    <div class="col-md-8">
+                        <label for="owner" class="form-label">Owner Name</label>
+                        <input id="owner" class="form-control" @bind="dog.OwnerName" maxlength="255" />
+                    </div>
+                    <div class="col-md-4 d-flex align-items-end">
+                        <div class="form-check">
+                            <input id="ownerMember" type="checkbox" class="form-check-input" @bind="dog.OwnerIsMSSAMember" />
+                            <label for="ownerMember" class="form-check-label">Owner is MSSA Member</label>
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </div>
+
+        @* Futurity Participation (only for existing dogs) *@
+        @if (dogId != -1)
+        {
+            <div class="card mb-3">
+                <div class="card-header d-flex justify-content-between align-items-center">
+                    <h4>Futurity Participation</h4>
+                    <button type="button" class="btn btn-sm btn-primary" @onclick="ShowAddFuturity">
+                        Add Year
+                    </button>
+                </div>
+                <div class="card-body">
+                    @if (showFuturityForm)
+                    {
+                        <div class="border p-3 mb-3 bg-light">
+                            <h5>Add Futurity Year</h5>
+                            <div class="row mb-2">
+                                <div class="col-md-4">
+                                    <label class="form-label">Year <span class="text-danger">*</span></label>
+                                    <input type="number" class="form-control" @bind="currentFuturityYear"
+                                           min="2000" max="2100" required />
+                                </div>
+                            </div>
+                            <div class="mt-2">
+                                <button type="button" class="btn btn-sm btn-success me-2" @onclick="SaveFuturity">Save</button>
+                                <button type="button" class="btn btn-sm btn-secondary" @onclick="CancelFuturity">Cancel</button>
+                            </div>
+                        </div>
+                    }
+
+                    @if (futurityParticipation == null)
+                    {
+                        <p><em>Loading...</em></p>
+                    }
+                    else if (!futurityParticipation.Any())
+                    {
+                        <p><em>No futurity participation records.</em></p>
+                    }
+                    else
+                    {
+                        <table class="table table-sm">
+                            <thead>
+                                <tr>
+                                    <th>Year</th>
+                                    <th>Actions</th>
+                                </tr>
+                            </thead>
+                            <tbody>
+                                @foreach (var participation in futurityParticipation)
+                                {
+                                    <tr>
+                                        <td>@participation.Year</td>
+                                        <td>
+                                            <button type="button" class="btn btn-sm btn-danger"
+                                                    @onclick="() => DeleteFuturity(participation.ParticipationId)">
+                                                Delete
+                                            </button>
+                                        </td>
+                                    </tr>
+                                }
+                            </tbody>
+                        </table>
+                    }
+                </div>
+            </div>
+        }
+
+        @* Status *@
+        <div class="card mb-3">
+            <div class="card-header">
+                <h4>Status</h4>
+            </div>
+            <div class="card-body">
+                <div class="row">
+                    <div class="col-md-4">
+                        <div class="form-check mb-2">
+                            <input id="isActive" type="checkbox" class="form-check-input" @bind="dog.IsActive" />
+                            <label for="isActive" class="form-check-label">Active</label>
+                        </div>
+                    </div>
+                    <div class="col-md-4">
+                        <div class="form-check mb-2">
+                            <input id="isDeceased" type="checkbox" class="form-check-input" @bind="dog.IsDeceased" />
+                            <label for="isDeceased" class="form-check-label">Deceased</label>
+                        </div>
+                    </div>
+                    <div class="col-md-4">
+                        <div class="form-check mb-2">
+                            <input id="isSold" type="checkbox" class="form-check-input" @bind="dog.IsSold" />
+                            <label for="isSold" class="form-check-label">Sold</label>
+                        </div>
+                    </div>
+                </div>
+                <small class="form-text text-muted">
+                    Inactive, deceased, or sold dogs will be marked accordingly in search results
+                </small>
+            </div>
+        </div>
+
+        @* Action Buttons *@
+        <div class="row">
+            <div class="col">
+                <button type="submit" class="btn btn-success me-2">
+                    <span class="oi oi-check"></span> Save
+                </button>
+                <ActionLink Action="Index" Text="Cancel" ResourceKey="Cancel" Class="btn btn-secondary me-2" />
+                @if (dogId != -1)
+                {
+                    <ActionLink Action="Detail" Parameters="@($"id={dogId}")" Text="View Details"
+                                ResourceKey="ViewDetails" Class="btn btn-info me-2" />
+                    <button type="button" class="btn btn-danger" @onclick="DeleteDog">
+                        <span class="oi oi-trash"></span> Delete
+                    </button>
+                }
+            </div>
+        </div>
+    </div>
+</form>
+
+@code {
+    private int dogId = -1;
+    private MSSA_Dog dog = new();
+    private List<MSSA_DogFuturityParticipation> futurityParticipation;
+    private string errorMessage = "";
+
+    // Futurity form state
+    private bool showFuturityForm = false;
+    private int currentFuturityYear = DateTime.Now.Year;
+
+    protected override async Task OnInitializedAsync()
+    {
+        try
+        {
+            if (PageState.QueryString.ContainsKey("id"))
+            {
+                dogId = int.Parse(PageState.QueryString["id"]);
+                dog = await DogService.GetDogAsync(dogId, ModuleState.ModuleId);
+                futurityParticipation = await DogService.GetDogFuturityParticipationAsync(dogId, ModuleState.ModuleId);
+            }
+            else
+            {
+                dog = new MSSA_Dog
+                {
+                    IsActive = true,
+                    OwnerIsMSSAMember = false,
+                    IsDeceased = false,
+                    IsSold = false
+                };
+                futurityParticipation = new List<MSSA_DogFuturityParticipation>();
+            }
+        }
+        catch (Exception ex)
+        {
+            await logger.LogError(ex, "Error loading dog for edit");
+            AddModuleMessage("Error loading dog", MessageType.Error);
+        }
+    }
+
+    private async Task SaveDog()
+    {
+        try
+        {
+            errorMessage = "";
+
+            if (string.IsNullOrWhiteSpace(dog.Name))
+            {
+                errorMessage = "Dog Name is required.";
+                return;
+            }
+
+            if (dogId == -1)
+            {
+                dog = await DogService.AddDogAsync(dog, ModuleState.ModuleId);
+                await logger.LogInformation("Dog added successfully");
+                NavigationManager.NavigateTo(NavigateUrl(PageState.Page.Path, "id=" + dog.DogId));
+            }
+            else
+            {
+                await DogService.UpdateDogAsync(dog, ModuleState.ModuleId);
+                await logger.LogInformation("Dog updated successfully");
+                AddModuleMessage("Dog saved successfully", MessageType.Success);
+            }
+        }
+        catch (Exception ex)
+        {
+            await logger.LogError(ex, "Error saving dog");
+            errorMessage = "Error saving dog. Please try again.";
+        }
+    }
+
+    private async Task DeleteDog()
+    {
+        try
+        {
+            if (await JSRuntime.InvokeAsync<bool>("confirm", "Are you sure you want to delete this dog?"))
+            {
+                await DogService.DeleteDogAsync(dogId, ModuleState.ModuleId);
+                await logger.LogInformation("Dog deleted");
+                NavigationManager.NavigateTo(NavigateUrl());
+            }
+        }
+        catch (Exception ex)
+        {
+            await logger.LogError(ex, "Error deleting dog");
+            errorMessage = "Error deleting dog. Please try again.";
+        }
+    }
+
+    // Futurity management
+    private void ShowAddFuturity()
+    {
+        currentFuturityYear = DateTime.Now.Year;
+        showFuturityForm = true;
+    }
+
+    private async Task SaveFuturity()
+    {
+        try
+        {
+            if (currentFuturityYear < 2000 || currentFuturityYear > 2100)
+            {
+                errorMessage = "Please enter a valid year.";
+                return;
+            }
+
+            // Check for duplicate
+            if (futurityParticipation.Any(f => f.Year == currentFuturityYear))
+            {
+                errorMessage = "This dog is already enrolled in the futurity for that year.";
+                return;
+            }
+
+            var participation = new MSSA_DogFuturityParticipation
+            {
+                DogId = dogId,
+                Year = currentFuturityYear
+            };
+
+            await DogService.AddFuturityParticipationAsync(participation, ModuleState.ModuleId);
+            futurityParticipation = await DogService.GetDogFuturityParticipationAsync(dogId, ModuleState.ModuleId);
+            CancelFuturity();
+            AddModuleMessage("Futurity participation added successfully", MessageType.Success);
+        }
+        catch (Exception ex)
+        {
+            await logger.LogError(ex, "Error saving futurity participation");
+            errorMessage = "Error saving futurity participation. Please try again.";
+        }
+    }
+
+    private async Task DeleteFuturity(int participationId)
+    {
+        try
+        {
+            if (await JSRuntime.InvokeAsync<bool>("confirm", "Are you sure you want to delete this futurity participation?"))
+            {
+                await DogService.DeleteFuturityParticipationAsync(participationId, ModuleState.ModuleId);
+                futurityParticipation = await DogService.GetDogFuturityParticipationAsync(dogId, ModuleState.ModuleId);
+                AddModuleMessage("Futurity participation deleted successfully", MessageType.Success);
+            }
+        }
+        catch (Exception ex)
+        {
+            await logger.LogError(ex, "Error deleting futurity participation");
+            errorMessage = "Error deleting futurity participation. Please try again.";
+        }
+    }
+
+    private void CancelFuturity()
+    {
+        showFuturityForm = false;
+        currentFuturityYear = DateTime.Now.Year;
+        errorMessage = "";
+    }
+}
