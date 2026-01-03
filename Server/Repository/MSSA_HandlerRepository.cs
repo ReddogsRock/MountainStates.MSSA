@@ -235,7 +235,7 @@ namespace MountainStates.MSSA.Module.MSSA_Handlers.Repository
         public async Task<IEnumerable<MSSA_HandlerEntry>> GetHandlerEntriesAsync(int handlerId)
         {
             using var db = await _dbContextFactory.CreateDbContextAsync();
-/*
+
             var entries = await (from e in db.MSSA_Entries
                                  join t in db.MSSA_Trials on e.TrialId equals t.TrialId
                                  join ev in db.MSSA_Events on t.EventId equals ev.EventId
@@ -258,10 +258,10 @@ namespace MountainStates.MSSA.Module.MSSA_Handlers.Repository
                                 .OrderByDescending(e => e.TrialDate)
                                 .ToListAsync();
 
-            return entries; */
+            return entries; 
 
             // Temporary: Return empty list until other tables are created
-            return await Task.FromResult(new List<MSSA_HandlerEntry>());
+            //return await Task.FromResult(new List<MSSA_HandlerEntry>());
         }
 
         // Helper method

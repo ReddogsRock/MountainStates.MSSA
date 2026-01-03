@@ -1,0 +1,198 @@
+﻿@using MountainStates.MSSA.Module.MSSA_Entries.Services
+@using MountainStates.MSSA.Module.MSSA_Entries.Models
+@using MountainStates.MSSA.Module.MSSA_Handlers.Enums
+@using Oqtane.Modules.Controls
+
+@namespace MountainStates.MSSA.Module.MSSA_Entries
+@inherits ModuleBase
+@inject IMSSA_EntryService EntryService
+@inject NavigationManager NavigationManager
+
+@if (entry == null)
+{
+    <p><em>Loading...</em></p>
+}
+else
+{
+    <div class="container-fluid">
+        <div class="row mb-3">
+            <div class="col">
+                <h2>Entry Details</h2>
+            </div>
+            <div class="col-auto">
+                <ActionLink Action="Index" Text="Back to List" ResourceKey="BackToList" Class="btn btn-secondary me-2" />
+                @if (UserSecurity.IsAuthorized(PageState.User, RoleNames.Admin) ||
+                            UserSecurity.IsAuthorized(PageState.User, MSSARoles.Scorekeeper))
+                {
+                    <ActionLink Action="Edit" Parameters="@($"id={entry.EntryId}")"
+                                Security="SecurityAccessLevel.Edit" Text="Edit"
+                                ResourceKey="EditEntry" Class="btn btn-primary" />
+                }
+            </div>
+        </div>
+
+        @* Entry Information *@
+        <div class="card mb-3">
+            <div class="card-header">
+                <h4>Entry Information</h4>
+            </div>
+            <div class="card-body">
+                <div class="row">
+                    <div class="col-md-6">
+                        <dl class="row">
+                            <dt class="col-sm-4">Event:</dt>
+                            <dd class="col-sm-8">@entry.EventName</dd>
+
+                            <dt class="col-sm-4">Trial Date:</dt>
+                            <dd class="col-sm-8">@entry.TrialDate.ToString("MMM dd, yyyy")</dd>
+
+                            <dt class="col-sm-4">Stock:</dt>
+                            <dd class="col-sm-8">@entry.Stock</dd>
+                        </dl>
+                    </div>
+                    <div class="col-md-6">
+                        <dl class="row">
+                            <dt class="col-sm-4">Handler:</dt>
+                            <dd class="col-sm-8">@entry.HandlerName</dd>
+
+                            <dt class="col-sm-4">Dog:</dt>
+                            <dd class="col-sm-8">@entry.DogName</dd>
+
+                            <dt class="col-sm-4">Class:</dt>
+                            <dd class="col-sm-8">@entry.ClassName @entry.SubClassName</dd>
+                        </dl>
+                    </div>
+                </div>
+            </div>
+        </div>
+
+        @* Run Information *@
+        <div class="card mb-3">
+            <div class="card-header">
+                <h4>Run Information</h4>
+            </div>
+            <div class="card-body">
+                <dl class="row">
+                    <dt class="col-sm-3">Run Order:</dt>
+                    <dd class="col-sm-9">@(entry.RunOrder?.ToString() ?? "Not assigned")</dd>
+
+                    <dt class="col-sm-3">Run Time:</dt>
+                    <dd class="col-sm-9">@(entry.RunTime?.ToString(@"mm\:ss") ?? "N/A")</dd>
+
+                    <dt class="col-sm-3">Tie Breaker Time:</dt>
+                    <dd class="col-sm-9">@(entry.TieBreakerTime?.ToString(@"mm\:ss") ?? "N/A")</dd>
+
+                    <dt class="col-sm-3">Handler Member:</dt>
+                    <dd class="col-sm-9">
+                        @if (entry.HandlerIsMSSAMember)
+                        {
+                            <span class="badge bg-success">Yes</span>
+                        }
+                        else
+                        {
+                            <span class="badge bg-secondary">No</span>
+                        }
+                    </dd>
+                </dl>
+            </div>
+        </div>
+
+        @* Scoring *@
+        <div class="card mb-3">
+            <div class="card-header">
+                <h4>Scoring</h4>
+            </div>
+            <div class="card-body">
+                <div class="table-responsive">
+                    <table class="table table-sm">
+                        <thead>
+                            <tr>
+                                <th>Obstacle 1</th>
+                                <th>Obstacle 2</th>
+                                <th>Obstacle 3</th>
+                                <th>Obstacle 4</th>
+                                <th>Obstacle 5</th>
+                                <th>Obstacle 6</th>
+                                <th>Obstacle 7</th>
+                                <th>Obstacle 8</th>
+                                <th>Obstacle 9</th>
+                                <th>Penalty</th>
+                            </tr>
+                        </thead>
+                        <tbody>
+                            <tr>
+                                <td>@(entry.ObstacleScore1?.ToString("F2") ?? "-")</td>
+                                <td>@(entry.ObstacleScore2?.ToString("F2") ?? "-")</td>
+                                <td>@(entry.ObstacleScore3?.ToString("F2") ?? "-")</td>
+                                <td>@(entry.ObstacleScore4?.ToString("F2") ?? "-")</td>
+                                <td>@(entry.ObstacleScore5?.ToString("F2") ?? "-")</td>
+                                <td>@(entry.ObstacleScore6?.ToString("F2") ?? "-")</td>
+                                <td>@(entry.ObstacleScore7?.ToString("F2") ?? "-")</td>
+                                <td>@(entry.ObstacleScore8?.ToString("F2") ?? "-")</td>
+                                <td>@(entry.ObstacleScore9?.ToString("F2") ?? "-")</td>
+                                <td class="text-danger">@(entry.Penalty?.ToString("F2") ?? "-")</td>
+                            </tr>
+                        </tbody>
+                    </table>
+                </div>
+
+                <div class="row mt-3">
+                    <div class="col-md-4">
+                        <strong>Total Score:</strong>
+                        <span class="fs-4 text-primary">@(entry.TotalScore?.ToString("F2") ?? "N/A")</span>
+                    </div>
+                    <div class="col-md-4">
+                        <strong>Placing:</strong>
+                        @if (entry.Placing.HasValue)
+                        {
+                            if (entry.Placing.Value <= 3)
+                            {
+                                <span class="badge bg-warning fs-5">@entry.Placing</span>
+                            }
+                            else
+                            {
+                                <span class="fs-5">@entry.Placing</span>
+                            }
+                        }
+                        else
+                        {
+                            <span class="text-muted">N/A</span>
+                        }
+                    </div>
+                    <div class="col-md-4">
+                        <strong>Trial Points:</strong>
+                        <span class="fs-4 text-success">@(entry.TrialPoints?.ToString() ?? "N/A")</span>
+                    </div>
+                </div>
+
+                @if (!string.IsNullOrEmpty(entry.Comments))
+                {
+                    <div class="row mt-3">
+                        <div class="col-12">
+                            <strong>Comments:</strong>
+                            <p>@entry.Comments</p>
+                        </div>
+                    </div>
+                }
+            </div>
+        </div>
+    </div>
+}
+
+@code {
+    private MSSA_Entry entry;
+
+    protected override async Task OnInitializedAsync()
+    {
+        try
+        {
+            int entryId = int.Parse(PageState.QueryString["id"]);
+            entry = await EntryService.GetEntryAsync(entryId, ModuleState.ModuleId);
+        }
+        catch (Exception ex)
+        {
+            await logger.LogError(ex, "Error loading entry details");
+            AddModuleMessage("Error loading entry details", MessageType.Error);
+        }
+    }
+}

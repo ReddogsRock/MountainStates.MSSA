@@ -1,0 +1,486 @@
+﻿@using MountainStates.MSSA.Module.MSSA_Entries.Services
+@using MountainStates.MSSA.Module.MSSA_Entries.Models
+@using MountainStates.MSSA.Module.MSSA_Events.Services
+@using MountainStates.MSSA.Module.MSSA_Events.Models
+@using MountainStates.MSSA.Module.MSSA_Handlers.Services
+@using MountainStates.MSSA.Module.MSSA_Handlers.Models
+@using MountainStates.MSSA.Module.MSSA_Dogs.Services
+@using MountainStates.MSSA.Module.MSSA_Dogs.Models
+@using MountainStates.MSSA.Module.MSSA_Handlers.Enums
+@using Oqtane.Modules.Controls
+
+@namespace MountainStates.MSSA.Module.MSSA_Entries
+@inherits ModuleBase
+@inject IMSSA_EntryService EntryService
+@inject IMSSA_EventService EventService
+@inject IMSSA_HandlerService HandlerService
+@inject IMSSA_DogService DogService
+@inject NavigationManager NavigationManager
+
+<form @onsubmit="SaveEntry">
+    <div class="container-fluid">
+        <div class="row mb-3">
+            <div class="col">
+                <h2>@(entryId == -1 ? "Add Entry" : "Edit Entry")</h2>
+            </div>
+        </div>
+
+        @if (!string.IsNullOrEmpty(errorMessage))
+        {
+            <div class="alert alert-danger" role="alert">
+                @errorMessage
+            </div>
+        }
+
+        @* Trial Selection *@
+        <div class="card mb-3">
+            <div class="card-header">
+                <h4>Trial Selection</h4>
+            </div>
+            <div class="card-body">
+                <div class="row mb-3">
+                    <div class="col-md-6">
+                        <label for="eventSelect" class="form-label">Event <span class="text-danger">*</span></label>
+                        <select id="eventSelect" class="form-select" @bind="selectedEventId" @bind:after="OnEventChanged"
+                                disabled="@(entryId != -1)">
+                            <option value="">-- Select Event --</option>
+                            @if (events != null)
+                            {
+                                @foreach (var evt in events)
+                                {
+                                    <option value="@evt.EventId">@evt.EventName - @evt.DateRange</option>
+                                }
+                            }
+                        </select>
+                    </div>
+                    <div class="col-md-6">
+                        <label for="trialSelect" class="form-label">Trial <span class="text-danger">*</span></label>
+                        <select id="trialSelect" class="form-select" @bind="entry.TrialId"
+                                disabled="@(trials == null || !trials.Any() || entryId != -1)">
+                            <option value="0">-- Select Trial --</option>
+                            @if (trials != null)
+                            {
+                                @foreach (var trial in trials)
+                                {
+                                    <option value="@trial.TrialId">@trial.TrialDate.ToString("MMM dd, yyyy") - @trial.TrialName (@trial.Stock)</option>
+                                }
+                            }
+                        </select>
+                        @if (entryId != -1)
+                        {
+                            <small class="form-text text-muted">Trial cannot be changed after entry is created</small>
+                        }
+                    </div>
+                </div>
+            </div>
+        </div>
+
+        @* Competitor Information *@
+        <div class="card mb-3">
+            <div class="card-header">
+                <h4>Competitor Information</h4>
+            </div>
+            <div class="card-body">
+                <div class="row mb-3">
+                    <div class="col-md-4">
+                        <label for="handlerSelect" class="form-label">Handler <span class="text-danger">*</span></label>
+                        <select id="handlerSelect" class="form-select" @bind="entry.HandlerId">
+                            <option value="0">-- Select Handler --</option>
+                            @if (handlers != null)
+                            {
+                                @foreach (var handler in handlers.OrderBy(h => h.LastName).ThenBy(h => h.FirstName))
+                                {
+                                    <option value="@handler.HandlerId">@handler.FullName</option>
+                                }
+                            }
+                        </select>
+                    </div>
+                    <div class="col-md-4">
+                        <label for="dogSelect" class="form-label">Dog <span class="text-danger">*</span></label>
+                        <select id="dogSelect" class="form-select" @bind="entry.DogId">
+                            <option value="0">-- Select Dog --</option>
+                            @if (dogs != null)
+                            {
+                                @foreach (var dog in dogs.OrderBy(d => d.Name))
+                                {
+                                    <option value="@dog.DogId">@dog.Name (@dog.Breed)</option>
+                                }
+                            }
+                        </select>
+                    </div>
+                    <div class="col-md-4">
+                        <label for="classSelect" class="form-label">Class <span class="text-danger">*</span></label>
+                        <select id="classSelect" class="form-select" @bind="entry.ClassId">
+                            <option value="0">-- Select Class --</option>
+                            @if (classes != null)
+                            {
+                                @foreach (var cls in classes.OrderBy(c => c.PrintOrder))
+                                {
+                                    <option value="@cls.ClassId">@cls.ClassName @cls.SubClassName</option>
+                                }
+                            }
+                        </select>
+                    </div>
+                </div>
+
+                <div class="row mb-3">
+                    <div class="col-md-3">
+                        <label for="runOrder" class="form-label">Run Order</label>
+                        <input id="runOrder" type="number" class="form-control" @bind="entry.RunOrder" min="1" />
+                    </div>
+                    <div class="col-md-3">
+                        <div class="form-check" style="margin-top: 32px;">
+                            <input type="checkbox" class="form-check-input" id="handlerMember" @bind="entry.HandlerIsMSSAMember" />
+                            <label class="form-check-label" for="handlerMember">Handler is MSSA Member</label>
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </div>
+
+        @* Scoring *@
+        <div class="card mb-3">
+            <div class="card-header">
+                <h4>Scoring</h4>
+            </div>
+            <div class="card-body">
+                <div class="row mb-3">
+                    <div class="col-md-12">
+                        <label class="form-label"><strong>Obstacle Scores</strong></label>
+                        <div class="row">
+                            <div class="col-md-2">
+                                <label class="form-label">Obstacle 1</label>
+                                <input type="number" step="0.01" class="form-control" @bind="entry.ObstacleScore1" />
+                            </div>
+                            <div class="col-md-2">
+                                <label class="form-label">Obstacle 2</label>
+                                <input type="number" step="0.01" class="form-control" @bind="entry.ObstacleScore2" />
+                            </div>
+                            <div class="col-md-2">
+                                <label class="form-label">Obstacle 3</label>
+                                <input type="number" step="0.01" class="form-control" @bind="entry.ObstacleScore3" />
+                            </div>
+                            <div class="col-md-2">
+                                <label class="form-label">Obstacle 4</label>
+                                <input type="number" step="0.01" class="form-control" @bind="entry.ObstacleScore4" />
+                            </div>
+                            <div class="col-md-2">
+                                <label class="form-label">Obstacle 5</label>
+                                <input type="number" step="0.01" class="form-control" @bind="entry.ObstacleScore5" />
+                            </div>
+                            <div class="col-md-2">
+                                <label class="form-label">Penalty</label>
+                                <input type="number" step="0.01" class="form-control text-danger" @bind="entry.Penalty" />
+                            </div>
+                        </div>
+                    </div>
+                </div>
+
+                <div class="row mb-3">
+                    <div class="col-md-12">
+                        <div class="row">
+                            <div class="col-md-2">
+                                <label class="form-label">Obstacle 6</label>
+                                <input type="number" step="0.01" class="form-control" @bind="entry.ObstacleScore6" />
+                            </div>
+                            <div class="col-md-2">
+                                <label class="form-label">Obstacle 7</label>
+                                <input type="number" step="0.01" class="form-control" @bind="entry.ObstacleScore7" />
+                            </div>
+                            <div class="col-md-2">
+                                <label class="form-label">Obstacle 8</label>
+                                <input type="number" step="0.01" class="form-control" @bind="entry.ObstacleScore8" />
+                            </div>
+                            <div class="col-md-2">
+                                <label class="form-label">Obstacle 9</label>
+                                <input type="number" step="0.01" class="form-control" @bind="entry.ObstacleScore9" />
+                            </div>
+                            <div class="col-md-4">
+                                <label class="form-label"><strong>Total Score</strong></label>
+                                <div class="form-control bg-light">
+                                    <strong>@(entry.TotalScore?.ToString("F2") ?? "0.00")</strong>
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </div>
+
+        @* Results *@
+        <div class="card mb-3">
+            <div class="card-header">
+                <h4>Results</h4>
+            </div>
+            <div class="card-body">
+                <div class="row mb-3">
+                    <div class="col-md-3">
+                        <label for="placing" class="form-label">Placing</label>
+                        <input id="placing" type="number" class="form-control" @bind="entry.Placing" min="1" />
+                    </div>
+                    <div class="col-md-3">
+                        <label for="trialPoints" class="form-label">Trial Points</label>
+                        <input id="trialPoints" type="number" class="form-control" @bind="entry.TrialPoints" min="0" />
+                    </div>
+                    <div class="col-md-3">
+                        <label for="runTime" class="form-label">Run Time (mm:ss)</label>
+                        <input id="runTime" type="text" class="form-control" @bind="runTimeString"
+                               placeholder="mm:ss" pattern="[0-9]{1,2}:[0-9]{2}" />
+                    </div>
+                    <div class="col-md-3">
+                        <label for="tieBreakerTime" class="form-label">Tie Breaker Time (mm:ss)</label>
+                        <input id="tieBreakerTime" type="text" class="form-control" @bind="tieBreakerTimeString"
+                               placeholder="mm:ss" pattern="[0-9]{1,2}:[0-9]{2}" />
+                    </div>
+                </div>
+
+                <div class="row mb-3">
+                    <div class="col-md-12">
+                        <label for="comments" class="form-label">Comments</label>
+                        <textarea id="comments" class="form-control" @bind="entry.Comments" rows="3"></textarea>
+                    </div>
+                </div>
+            </div>
+        </div>
+
+        @* Action Buttons *@
+        <div class="row">
+            <div class="col">
+                <button type="submit" class="btn btn-success me-2">
+                    <span class="oi oi-check"></span> Save
+                </button>
+                <ActionLink Action="Index" Text="Cancel" ResourceKey="Cancel" Class="btn btn-secondary me-2" />
+                @if (entryId != -1)
+                {
+                    <ActionLink Action="Detail" Parameters="@($"id={entryId}")" Text="View Details"
+                                ResourceKey="ViewDetails" Class="btn btn-info me-2" />
+                    <button type="button" class="btn btn-danger" @onclick="DeleteEntry">
+                        <span class="oi oi-trash"></span> Delete
+                    </button>
+                }
+            </div>
+        </div>
+    </div>
+</form>
+
+@code {
+    private int entryId = -1;
+    private MSSA_Entry entry = new();
+    private List<MSSA_Event> events;
+    private List<MSSA_Trial> trials;
+    private List<MSSA_Handler> handlers;
+    private List<MSSA_Dog> dogs;
+    private List<MSSA_Class> classes;
+
+    private int selectedEventId = 0;
+    private string errorMessage = "";
+    private string runTimeString = "";
+    private string tieBreakerTimeString = "";
+
+    protected override async Task OnInitializedAsync()
+    {
+        try
+        {
+            events = await EventService.GetEventsAsync(ModuleState.ModuleId);
+            handlers = await HandlerService.GetHandlersAsync(ModuleState.ModuleId);
+            dogs = await DogService.GetDogsAsync(ModuleState.ModuleId);
+            classes = await EntryService.GetClassesAsync(ModuleState.ModuleId);
+
+            if (PageState.QueryString.ContainsKey("id"))
+            {
+                entryId = int.Parse(PageState.QueryString["id"]);
+                entry = await EntryService.GetEntryAsync(entryId, ModuleState.ModuleId);
+
+                // Load the event and trials for this entry
+                var allTrials = new List<MSSA_Trial>();
+                foreach (var evt in events)
+                {
+                    var eventTrials = await EventService.GetEventTrialsAsync(evt.EventId, ModuleState.ModuleId);
+                    allTrials.AddRange(eventTrials);
+                }
+
+                var selectedTrial = allTrials.FirstOrDefault(t => t.TrialId == entry.TrialId);
+                if (selectedTrial != null)
+                {
+                    selectedEventId = selectedTrial.EventId;
+                    trials = await EventService.GetEventTrialsAsync(selectedEventId, ModuleState.ModuleId);
+                }
+
+                // Convert TimeSpan to string for display
+                if (entry.RunTime.HasValue)
+                {
+                    runTimeString = $"{(int)entry.RunTime.Value.TotalMinutes}:{entry.RunTime.Value.Seconds:D2}";
+                }
+                if (entry.TieBreakerTime.HasValue)
+                {
+                    tieBreakerTimeString = $"{(int)entry.TieBreakerTime.Value.TotalMinutes}:{entry.TieBreakerTime.Value.Seconds:D2}";
+                }
+            }
+            else
+            {
+                entry = new MSSA_Entry
+                {
+                    HandlerIsMSSAMember = false
+                };
+
+                // Pre-select trial if passed in query string
+                if (PageState.QueryString.ContainsKey("trialId"))
+                {
+                    entry.TrialId = int.Parse(PageState.QueryString["trialId"]);
+
+                    var allTrials = new List<MSSA_Trial>();
+                    foreach (var evt in events)
+                    {
+                        var eventTrials = await EventService.GetEventTrialsAsync(evt.EventId, ModuleState.ModuleId);
+                        allTrials.AddRange(eventTrials);
+                    }
+
+                    var selectedTrial = allTrials.FirstOrDefault(t => t.TrialId == entry.TrialId);
+                    if (selectedTrial != null)
+                    {
+                        selectedEventId = selectedTrial.EventId;
+                        trials = await EventService.GetEventTrialsAsync(selectedEventId, ModuleState.ModuleId);
+                    }
+                }
+            }
+        }
+        catch (Exception ex)
+        {
+            await logger.LogError(ex, "Error loading entry for edit");
+            AddModuleMessage("Error loading entry", MessageType.Error);
+        }
+    }
+
+    private async Task OnEventChanged()
+    {
+        if (selectedEventId > 0)
+        {
+            trials = await EventService.GetEventTrialsAsync(selectedEventId, ModuleState.ModuleId);
+            entry.TrialId = 0;
+        }
+        else
+        {
+            trials = null;
+            entry.TrialId = 0;
+        }
+    }
+
+    private async Task SaveEntry()
+    {
+        try
+        {
+            errorMessage = "";
+
+            // Validation
+            if (entry.TrialId == 0)
+            {
+                errorMessage = "Please select a trial.";
+                return;
+            }
+
+            if (entry.HandlerId == 0)
+            {
+                errorMessage = "Please select a handler.";
+                return;
+            }
+
+            if (entry.DogId == 0)
+            {
+                errorMessage = "Please select a dog.";
+                return;
+            }
+
+            if (entry.ClassId == 0)
+            {
+                errorMessage = "Please select a class.";
+                return;
+            }
+
+            // Parse time strings
+            if (!string.IsNullOrWhiteSpace(runTimeString))
+            {
+                if (TryParseTime(runTimeString, out TimeSpan runTime))
+                {
+                    entry.RunTime = runTime;
+                }
+                else
+                {
+                    errorMessage = "Invalid run time format. Use mm:ss";
+                    return;
+                }
+            }
+
+            if (!string.IsNullOrWhiteSpace(tieBreakerTimeString))
+            {
+                if (TryParseTime(tieBreakerTimeString, out TimeSpan tieBreakerTime))
+                {
+                    entry.TieBreakerTime = tieBreakerTime;
+                }
+                else
+                {
+                    errorMessage = "Invalid tie breaker time format. Use mm:ss";
+                    return;
+                }
+            }
+
+            if (entryId == -1)
+            {
+                entry = await EntryService.AddEntryAsync(entry, ModuleState.ModuleId);
+                await logger.LogInformation("Entry added successfully");
+                NavigationManager.NavigateTo(NavigateUrl(PageState.Page.Path, "id=" + entry.EntryId));
+            }
+            else
+            {
+                await EntryService.UpdateEntryAsync(entry, ModuleState.ModuleId);
+                await logger.LogInformation("Entry updated successfully");
+                AddModuleMessage("Entry saved successfully", MessageType.Success);
+            }
+        }
+        catch (Exception ex)
+        {
+            await logger.LogError(ex, "Error saving entry");
+            errorMessage = "Error saving entry. Please try again.";
+        }
+    }
+
+    private async Task DeleteEntry()
+    {
+        try
+        {
+            if (await JSRuntime.InvokeAsync<bool>("confirm", "Are you sure you want to delete this entry?"))
+            {
+                await EntryService.DeleteEntryAsync(entryId, ModuleState.ModuleId);
+                await logger.LogInformation("Entry deleted");
+                NavigationManager.NavigateTo(NavigateUrl());
+            }
+        }
+        catch (Exception ex)
+        {
+            await logger.LogError(ex, "Error deleting entry");
+            errorMessage = "Error deleting entry. Please try again.";
+        }
+    }
+
+    private bool TryParseTime(string timeString, out TimeSpan result)
+    {
+        result = TimeSpan.Zero;
+
+        if (string.IsNullOrWhiteSpace(timeString))
+            return false;
+
+        var parts = timeString.Split(':');
+        if (parts.Length != 2)
+            return false;
+
+        if (int.TryParse(parts[0], out int minutes) && int.TryParse(parts[1], out int seconds))
+        {
+            if (seconds >= 0 && seconds < 60)
+            {
+                result = new TimeSpan(0, minutes, seconds);
+                return true;
+            }
+        }
+
+        return false;
+    }
+}
