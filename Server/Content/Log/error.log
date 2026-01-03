@@ -1,6 +1,68 @@
-[2025-12-26 19:51:17+00:00] [Error] [Oqtane.Infrastructure.DatabaseManager] An Error Occurred Installing TopDogs - ServerManagerType MountainStates.MSSA.Module.TopDogs.Manager.TopDogsManager, MountainStates.MSSA.Module.TopDogs.Server.Oqtane Does Not Exist 
-[2025-12-26 19:51:17+00:00] [Error] [Oqtane.Server.Program.Main] An Error Occurred Installing TopDogs - ServerManagerType MountainStates.MSSA.Module.TopDogs.Manager.TopDogsManager, MountainStates.MSSA.Module.TopDogs.Server.Oqtane Does Not Exist 
-[2025-12-26 19:51:43+00:00] [Error] [Oqtane.Infrastructure.DatabaseManager] An Error Occurred Installing TopDogs - ServerManagerType MountainStates.MSSA.Module.TopDogs.Manager.TopDogsManager, MountainStates.MSSA.Module.TopDogs.Server.Oqtane Does Not Exist 
-[2025-12-26 19:51:43+00:00] [Error] [Oqtane.Server.Program.Main] An Error Occurred Installing TopDogs - ServerManagerType MountainStates.MSSA.Module.TopDogs.Manager.TopDogsManager, MountainStates.MSSA.Module.TopDogs.Server.Oqtane Does Not Exist 
-[2026-01-01 22:45:13+00:00] [Error] [Oqtane.Infrastructure.DatabaseManager] An Error Occurred Installing MSSA Handlers - ServerManagerType MountainStates.MSSA.Module.MSSA_Handlers.Manager.MSSA_HandlerManager, MountainStates.MSSA.Module.MSSA_Handlers.Server.Oqtane Does Not Exist 
-[2026-01-01 22:45:13+00:00] [Error] [Oqtane.Server.Program.Main] An Error Occurred Installing MSSA Handlers - ServerManagerType MountainStates.MSSA.Module.MSSA_Handlers.Manager.MSSA_HandlerManager, MountainStates.MSSA.Module.MSSA_Handlers.Server.Oqtane Does Not Exist 
+[2026-01-03 02:02:03+00:00] [Error] Failed executing DbCommand (9ms) [Parameters=[], CommandType='Text', CommandTimeout='30']
+SELECT [m].[EventId], [m].[Arena], [m].[Cattle], [m].[ChairmanName], [m].[ChairmanPhone], [m].[City], [m].[CreatedDate], [m].[EndDate], [m].[EventIdentifier], [m].[EventName], [m].[FeeReceivedDate], [m].[Field], [m].[Horseback], [m].[Intermediate], [m].[IsActive], [m].[IsMSSASanctioned], [m].[Junior], [m].[ModifiedDate], [m].[Notes], [m].[Novice], [m].[NumberOfRuns], [m].[Nursery], [m].[OnFoot], [m].[Open], [m].[PointYear], [m].[ResultsReceivedDate], [m].[ResultsUploaded], [m].[SanctionFee], [m].[Sheep], [m].[StartDate], [m].[StateCode]
+FROM [MSSA_Events] AS [m]
+WHERE [m].[IsActive] = CAST(1 AS bit)
+ORDER BY [m].[StartDate] DESC 
+[2026-01-03 02:02:03+00:00] [Error] An exception occurred while iterating over the results of a query for context type 'MountainStates.MSSA.Module.MSSA_Handlers.Data.MSSADbContext'.
+Microsoft.Data.SqlClient.SqlException (0x80131904): Invalid column name 'EndDate'.
+Invalid column name 'StartDate'.
+Invalid column name 'StartDate'.
+   at Microsoft.Data.SqlClient.SqlCommand.<>c.<ExecuteDbDataReaderAsync>b__195_0(Task`1 result)
+   at System.Threading.Tasks.ContinuationResultTaskFromResultTask`2.InnerInvoke()
+   at System.Threading.ExecutionContext.RunInternal(ExecutionContext executionContext, ContextCallback callback, Object state)
+--- End of stack trace from previous location ---
+   at System.Threading.ExecutionContext.RunInternal(ExecutionContext executionContext, ContextCallback callback, Object state)
+   at System.Threading.Tasks.Task.ExecuteWithThreadLocal(Task& currentTaskSlot, Thread threadPoolThread)
+--- End of stack trace from previous location ---
+   at Microsoft.EntityFrameworkCore.Storage.RelationalCommand.ExecuteReaderAsync(RelationalCommandParameterObject parameterObject, CancellationToken cancellationToken)
+   at Microsoft.EntityFrameworkCore.Storage.RelationalCommand.ExecuteReaderAsync(RelationalCommandParameterObject parameterObject, CancellationToken cancellationToken)
+   at Microsoft.EntityFrameworkCore.Query.Internal.SingleQueryingEnumerable`1.AsyncEnumerator.InitializeReaderAsync(AsyncEnumerator enumerator, CancellationToken cancellationToken)
+   at Microsoft.EntityFrameworkCore.SqlServer.Storage.Internal.SqlServerExecutionStrategy.ExecuteAsync[TState,TResult](TState state, Func`4 operation, Func`4 verifySucceeded, CancellationToken cancellationToken)
+   at Microsoft.EntityFrameworkCore.Query.Internal.SingleQueryingEnumerable`1.AsyncEnumerator.MoveNextAsync()
+ClientConnectionId:14095898-a8b1-40b0-9020-a59bfa7e7829
+Error Number:207,State:1,Class:16    at Microsoft.Data.SqlClient.SqlCommand.<>c.<ExecuteDbDataReaderAsync>b__195_0(Task`1 result)
+   at System.Threading.Tasks.ContinuationResultTaskFromResultTask`2.InnerInvoke()
+   at System.Threading.ExecutionContext.RunInternal(ExecutionContext executionContext, ContextCallback callback, Object state)
+--- End of stack trace from previous location ---
+   at System.Threading.ExecutionContext.RunInternal(ExecutionContext executionContext, ContextCallback callback, Object state)
+   at System.Threading.Tasks.Task.ExecuteWithThreadLocal(Task& currentTaskSlot, Thread threadPoolThread)
+--- End of stack trace from previous location ---
+   at Microsoft.EntityFrameworkCore.Storage.RelationalCommand.ExecuteReaderAsync(RelationalCommandParameterObject parameterObject, CancellationToken cancellationToken)
+   at Microsoft.EntityFrameworkCore.Storage.RelationalCommand.ExecuteReaderAsync(RelationalCommandParameterObject parameterObject, CancellationToken cancellationToken)
+   at Microsoft.EntityFrameworkCore.Query.Internal.SingleQueryingEnumerable`1.AsyncEnumerator.InitializeReaderAsync(AsyncEnumerator enumerator, CancellationToken cancellationToken)
+   at Microsoft.EntityFrameworkCore.SqlServer.Storage.Internal.SqlServerExecutionStrategy.ExecuteAsync[TState,TResult](TState state, Func`4 operation, Func`4 verifySucceeded, CancellationToken cancellationToken)
+   at Microsoft.EntityFrameworkCore.Query.Internal.SingleQueryingEnumerable`1.AsyncEnumerator.MoveNextAsync()
+[2026-01-03 02:02:21+00:00] [Error] Failed executing DbCommand (3ms) [Parameters=[], CommandType='Text', CommandTimeout='30']
+SELECT [m].[EventId], [m].[Arena], [m].[Cattle], [m].[ChairmanName], [m].[ChairmanPhone], [m].[City], [m].[CreatedDate], [m].[EndDate], [m].[EventIdentifier], [m].[EventName], [m].[FeeReceivedDate], [m].[Field], [m].[Horseback], [m].[Intermediate], [m].[IsActive], [m].[IsMSSASanctioned], [m].[Junior], [m].[ModifiedDate], [m].[Notes], [m].[Novice], [m].[NumberOfRuns], [m].[Nursery], [m].[OnFoot], [m].[Open], [m].[PointYear], [m].[ResultsReceivedDate], [m].[ResultsUploaded], [m].[SanctionFee], [m].[Sheep], [m].[StartDate], [m].[StateCode]
+FROM [MSSA_Events] AS [m]
+WHERE [m].[IsActive] = CAST(1 AS bit) AND [m].[Cattle] = CAST(1 AS bit)
+ORDER BY [m].[StartDate] DESC 
+[2026-01-03 02:02:21+00:00] [Error] An exception occurred while iterating over the results of a query for context type 'MountainStates.MSSA.Module.MSSA_Handlers.Data.MSSADbContext'.
+Microsoft.Data.SqlClient.SqlException (0x80131904): Invalid column name 'EndDate'.
+Invalid column name 'StartDate'.
+Invalid column name 'StartDate'.
+   at Microsoft.Data.SqlClient.SqlCommand.<>c.<ExecuteDbDataReaderAsync>b__195_0(Task`1 result)
+   at System.Threading.Tasks.ContinuationResultTaskFromResultTask`2.InnerInvoke()
+   at System.Threading.ExecutionContext.RunInternal(ExecutionContext executionContext, ContextCallback callback, Object state)
+--- End of stack trace from previous location ---
+   at System.Threading.ExecutionContext.RunInternal(ExecutionContext executionContext, ContextCallback callback, Object state)
+   at System.Threading.Tasks.Task.ExecuteWithThreadLocal(Task& currentTaskSlot, Thread threadPoolThread)
+--- End of stack trace from previous location ---
+   at Microsoft.EntityFrameworkCore.Storage.RelationalCommand.ExecuteReaderAsync(RelationalCommandParameterObject parameterObject, CancellationToken cancellationToken)
+   at Microsoft.EntityFrameworkCore.Storage.RelationalCommand.ExecuteReaderAsync(RelationalCommandParameterObject parameterObject, CancellationToken cancellationToken)
+   at Microsoft.EntityFrameworkCore.Query.Internal.SingleQueryingEnumerable`1.AsyncEnumerator.InitializeReaderAsync(AsyncEnumerator enumerator, CancellationToken cancellationToken)
+   at Microsoft.EntityFrameworkCore.SqlServer.Storage.Internal.SqlServerExecutionStrategy.ExecuteAsync[TState,TResult](TState state, Func`4 operation, Func`4 verifySucceeded, CancellationToken cancellationToken)
+   at Microsoft.EntityFrameworkCore.Query.Internal.SingleQueryingEnumerable`1.AsyncEnumerator.MoveNextAsync()
+ClientConnectionId:14095898-a8b1-40b0-9020-a59bfa7e7829
+Error Number:207,State:1,Class:16    at Microsoft.Data.SqlClient.SqlCommand.<>c.<ExecuteDbDataReaderAsync>b__195_0(Task`1 result)
+   at System.Threading.Tasks.ContinuationResultTaskFromResultTask`2.InnerInvoke()
+   at System.Threading.ExecutionContext.RunInternal(ExecutionContext executionContext, ContextCallback callback, Object state)
+--- End of stack trace from previous location ---
+   at System.Threading.ExecutionContext.RunInternal(ExecutionContext executionContext, ContextCallback callback, Object state)
+   at System.Threading.Tasks.Task.ExecuteWithThreadLocal(Task& currentTaskSlot, Thread threadPoolThread)
+--- End of stack trace from previous location ---
+   at Microsoft.EntityFrameworkCore.Storage.RelationalCommand.ExecuteReaderAsync(RelationalCommandParameterObject parameterObject, CancellationToken cancellationToken)
+   at Microsoft.EntityFrameworkCore.Storage.RelationalCommand.ExecuteReaderAsync(RelationalCommandParameterObject parameterObject, CancellationToken cancellationToken)
+   at Microsoft.EntityFrameworkCore.Query.Internal.SingleQueryingEnumerable`1.AsyncEnumerator.InitializeReaderAsync(AsyncEnumerator enumerator, CancellationToken cancellationToken)
+   at Microsoft.EntityFrameworkCore.SqlServer.Storage.Internal.SqlServerExecutionStrategy.ExecuteAsync[TState,TResult](TState state, Func`4 operation, Func`4 verifySucceeded, CancellationToken cancellationToken)
+   at Microsoft.EntityFrameworkCore.Query.Internal.SingleQueryingEnumerable`1.AsyncEnumerator.MoveNextAsync()
