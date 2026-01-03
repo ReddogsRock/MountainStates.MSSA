@@ -1,0 +1,296 @@
+﻿@using MountainStates.MSSA.Module.MSSA_Entries.Services
+@using MountainStates.MSSA.Module.MSSA_Entries.Models
+@using MountainStates.MSSA.Module.MSSA_Events.Services
+@using MountainStates.MSSA.Module.MSSA_Events.Models
+@using MountainStates.MSSA.Module.MSSA_Handlers.Enums
+@using Oqtane.Modules.Controls
+
+@namespace MountainStates.MSSA.Module.MSSA_Entries
+@inherits ModuleBase
+@inject IMSSA_EntryService EntryService
+@inject IMSSA_EventService EventService
+@inject NavigationManager NavigationManager
+
+<div class="container-fluid">
+    <div class="row mb-3">
+        <div class="col">
+            <h2>Trial Entries</h2>
+        </div>
+        @if (UserSecurity.IsAuthorized(PageState.User, RoleNames.Admin) ||
+                UserSecurity.IsAuthorized(PageState.User, MSSARoles.Scorekeeper))
+        {
+            <div class="col-auto">
+                <ActionLink Action="Edit" Security="SecurityAccessLevel.Edit" Text="Add Entry"
+                            ResourceKey="AddEntry" Class="btn btn-primary" />
+            </div>
+        }
+    </div>
+
+    @* Event/Trial Selection *@
+    <div class="row mb-3">
+        <div class="col-md-6">
+            <label for="eventSelect" class="form-label">Select Event</label>
+            <select id="eventSelect" class="form-select" @bind="selectedEventId" @bind:after="OnEventChanged">
+                <option value="">-- Select Event --</option>
+                @if (events != null)
+                {
+                    @foreach (var evt in events)
+                    {
+                        <option value="@evt.EventId">@evt.EventName - @evt.DateRange</option>
+                    }
+                }
+            </select>
+        </div>
+        <div class="col-md-6">
+            <label for="trialSelect" class="form-label">Select Trial</label>
+            <select id="trialSelect" class="form-select" @bind="selectedTrialId" @bind:after="LoadTrialEntries"
+                    disabled="@(trials == null || !trials.Any())">
+                <option value="">-- Select Trial --</option>
+                @if (trials != null)
+                {
+                    @foreach (var trial in trials)
+                    {
+                        <option value="@trial.TrialId">@trial.TrialDate.ToString("MMM dd, yyyy") - @trial.TrialName (@trial.Stock)</option>
+                    }
+                }
+            </select>
+        </div>
+    </div>
+
+    @* Entries List *@
+    @if (selectedTrialId > 0)
+    {
+        <div class="row mb-3">
+            <div class="col">
+                <h4>Entries for Selected Trial</h4>
+            </div>
+            @if (UserSecurity.IsAuthorized(PageState.User, RoleNames.Admin) ||
+                    UserSecurity.IsAuthorized(PageState.User, MSSARoles.Scorekeeper))
+            {
+                <div class="col-auto">
+                    <button class="btn btn-secondary btn-sm" @onclick="ShowRunOrderGenerator">
+                        <span class="oi oi-random"></span> Generate Run Order
+                    </button>
+                </div>
+            }
+        </div>
+
+        @if (showRunOrderForm)
+        {
+            <div class="alert alert-info">
+                <h5>Generate Run Order</h5>
+                <div class="row">
+                    <div class="col-md-6">
+                        <label class="form-label">Select Class</label>
+                        <select class="form-select" @bind="runOrderClassId">
+                            <option value="">-- Select Class --</option>
+                            @if (classes != null)
+                            {
+                                @foreach (var cls in classes)
+                                {
+                                    <option value="@cls.ClassId">@cls.ClassName @cls.SubClassName</option>
+                                }
+                            }
+                        </select>
+                    </div>
+                    <div class="col-md-6 d-flex align-items-end">
+                        <button class="btn btn-success me-2" @onclick="GenerateRunOrder">Generate</button>
+                        <button class="btn btn-secondary" @onclick="CancelRunOrder">Cancel</button>
+                    </div>
+                </div>
+            </div>
+        }
+
+        @if (entries == null)
+        {
+            <p><em>Loading entries...</em></p>
+        }
+        else if (!entries.Any())
+        {
+            <p><em>No entries found for this trial.</em></p>
+        }
+        else
+        {
+            @* Group entries by class *@
+            var groupedEntries = entries.GroupBy(e => new { e.ClassName, e.SubClassName })
+            .OrderBy(g => classes?.FirstOrDefault(c => c.ClassName == g.Key.ClassName && c.SubClassName == g.Key.SubClassName)?.PrintOrder ?? 999);
+
+            @foreach (var group in groupedEntries)
+            {
+                <div class="card mb-3">
+                    <div class="card-header">
+                        <h5>@group.Key.ClassName @group.Key.SubClassName</h5>
+                    </div>
+                    <div class="card-body">
+                        <table class="table table-sm table-striped">
+                            <thead>
+                                <tr>
+                                    <th>Run Order</th>
+                                    <th>Handler</th>
+                                    <th>Dog</th>
+                                    <th>Total Score</th>
+                                    <th>Placing</th>
+                                    <th>Points</th>
+                                    <th>Actions</th>
+                                </tr>
+                            </thead>
+                            <tbody>
+                                @foreach (var entry in group.OrderBy(e => e.RunOrder ?? int.MaxValue))
+                                {
+                                    <tr>
+                                        <td>@(entry.RunOrder?.ToString() ?? "-")</td>
+                                        <td>@entry.HandlerName</td>
+                                        <td>@entry.DogName</td>
+                                        <td>@(entry.TotalScore?.ToString("F2") ?? "-")</td>
+                                        <td>
+                                            @if (entry.Placing.HasValue)
+                                            {
+                                                if (entry.Placing.Value <= 3)
+                                                {
+                                                    <span class="badge bg-warning">@entry.Placing</span>
+                                                }
+                                                else
+                                                {
+                                                    @entry.Placing
+                                                }
+                                            }
+                                        </td>
+                                        <td>@entry.TrialPoints</td>
+                                        <td>
+                                            <ActionLink Action="Detail" Parameters="@($"id={entry.EntryId}")"
+                                                        Text="View" ResourceKey="ViewEntry" Class="btn btn-sm btn-info me-1" />
+                                            @if (UserSecurity.IsAuthorized(PageState.User, RoleNames.Admin) ||
+                                                                        UserSecurity.IsAuthorized(PageState.User, MSSARoles.Scorekeeper))
+                                            {
+                                                <ActionLink Action="Edit" Parameters="@($"id={entry.EntryId}")"
+                                                            Security="SecurityAccessLevel.Edit" Text="Edit"
+                                                            ResourceKey="EditEntry" Class="btn btn-sm btn-primary" />
+                                            }
+                                        </td>
+                                    </tr>
+                                }
+                            </tbody>
+                        </table>
+                        <p class="text-muted mb-0">Total entries: @group.Count()</p>
+                    </div>
+                </div>
+            }
+        }
+    }
+    else
+    {
+        <div class="alert alert-info">
+            <p class="mb-0">Please select an event and trial to view entries.</p>
+        </div>
+    }
+</div>
+
+@code {
+    private List<MSSA_Event> events;
+    private List<MSSA_Trial> trials;
+    private List<EntryListItem> entries;
+    private List<MSSA_Class> classes;
+
+    private int selectedEventId = 0;
+    private int selectedTrialId = 0;
+
+    private bool showRunOrderForm = false;
+    private int runOrderClassId = 0;
+
+    protected override async Task OnInitializedAsync()
+    {
+        try
+        {
+            events = await EventService.GetEventsAsync(ModuleState.ModuleId);
+            classes = await EntryService.GetClassesAsync(ModuleState.ModuleId);
+
+            // If we have a trial ID in query string, pre-select it
+            if (PageState.QueryString.ContainsKey("trialId"))
+            {
+                selectedTrialId = int.Parse(PageState.QueryString["trialId"]);
+
+                // Find the event for this trial
+                var allTrials = new List<MSSA_Trial>();
+                foreach (var evt in events)
+                {
+                    var eventTrials = await EventService.GetEventTrialsAsync(evt.EventId, ModuleState.ModuleId);
+                    allTrials.AddRange(eventTrials);
+                }
+
+                var selectedTrial = allTrials.FirstOrDefault(t => t.TrialId == selectedTrialId);
+                if (selectedTrial != null)
+                {
+                    selectedEventId = selectedTrial.EventId;
+                    trials = await EventService.GetEventTrialsAsync(selectedEventId, ModuleState.ModuleId);
+                    await LoadTrialEntries();
+                }
+            }
+        }
+        catch (Exception ex)
+        {
+            await logger.LogError(ex, "Error loading entries");
+            AddModuleMessage("Error loading entries", MessageType.Error);
+        }
+    }
+
+    private async Task OnEventChanged()
+    {
+        if (selectedEventId > 0)
+        {
+            trials = await EventService.GetEventTrialsAsync(selectedEventId, ModuleState.ModuleId);
+            selectedTrialId = 0;
+            entries = null;
+        }
+        else
+        {
+            trials = null;
+            selectedTrialId = 0;
+            entries = null;
+        }
+    }
+
+    private async Task LoadTrialEntries()
+    {
+        if (selectedTrialId > 0)
+        {
+            entries = await EntryService.GetTrialEntriesAsync(selectedTrialId, ModuleState.ModuleId);
+        }
+        else
+        {
+            entries = null;
+        }
+    }
+
+    private void ShowRunOrderGenerator()
+    {
+        showRunOrderForm = true;
+    }
+
+    private async Task GenerateRunOrder()
+    {
+        try
+        {
+            if (runOrderClassId == 0)
+            {
+                AddModuleMessage("Please select a class", MessageType.Warning);
+                return;
+            }
+
+            await EntryService.GenerateRunOrderAsync(selectedTrialId, runOrderClassId, ModuleState.ModuleId);
+            await LoadTrialEntries();
+            CancelRunOrder();
+            AddModuleMessage("Run order generated successfully", MessageType.Success);
+        }
+        catch (Exception ex)
+        {
+            await logger.LogError(ex, "Error generating run order");
+            AddModuleMessage("Error generating run order", MessageType.Error);
+        }
+    }
+
+    private void CancelRunOrder()
+    {
+        showRunOrderForm = false;
+        runOrderClassId = 0;
+    }
+}
