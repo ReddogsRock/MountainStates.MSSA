@@ -1,0 +1,225 @@
+﻿@using MountainStates.MSSA.Module.MSSA_Dogs.Services
+@using MountainStates.MSSA.Module.MSSA_Dogs.Models
+@using MountainStates.MSSA.Module.MSSA_Handlers.Enums
+@using Oqtane.Modules.Controls
+
+@namespace MountainStates.MSSA.Module.MSSA_Dogs
+@inherits ModuleBase
+@inject IMSSA_DogService DogService
+@inject NavigationManager NavigationManager
+
+<div class="container-fluid">
+    <div class="row mb-3">
+        <div class="col">
+            <h2>Dogs</h2>
+        </div>
+        @if (UserSecurity.IsAuthorized(PageState.User, RoleNames.Admin))
+        {
+            <div class="col-auto">
+                <ActionLink Action="Edit" Security="SecurityAccessLevel.Edit" Text="Add Dog"
+                            ResourceKey="AddDog" Class="btn btn-primary" />
+            </div>
+        }
+    </div>
+
+    @* Search/Filter Section *@
+    <div class="row mb-3">
+        <div class="col-md-3">
+            <label for="searchTerm" class="form-label">Search Name/Owner</label>
+            <input id="searchTerm" class="form-control" @bind="searchTerm"
+                   @bind:event="oninput" placeholder="Dog or Owner Name" />
+        </div>
+        <div class="col-md-2">
+            <label for="breedFilter" class="form-label">Breed</label>
+            <select id="breedFilter" class="form-select" @bind="selectedBreed">
+                <option value="">All Breeds</option>
+                @if (breeds != null)
+                {
+                    @foreach (var breed in breeds)
+                    {
+                        <option value="@breed">@breed</option>
+                    }
+                }
+            </select>
+        </div>
+        <div class="col-md-2">
+            <label for="ownerMemberFilter" class="form-label">Owner Member</label>
+            <select id="ownerMemberFilter" class="form-select" @bind="selectedOwnerMember">
+                <option value="">All</option>
+                <option value="true">Yes</option>
+                <option value="false">No</option>
+            </select>
+        </div>
+        <div class="col-md-2">
+            <label for="statusFilter" class="form-label">Status</label>
+            <select id="statusFilter" class="form-select" @bind="selectedStatus">
+                <option value="">Active Only</option>
+                <option value="all">All</option>
+            </select>
+        </div>
+        <div class="col-md-3 d-flex align-items-end">
+            <button class="btn btn-primary me-2" @onclick="SearchDogs">Search</button>
+            <button class="btn btn-secondary" @onclick="ClearFilters">Clear</button>
+        </div>
+    </div>
+
+    @* Results Section *@
+    @if (dogs == null)
+    {
+        <p><em>Loading...</em></p>
+    }
+    else if (!dogs.Any())
+    {
+        <p><em>No dogs found.</em></p>
+    }
+    else
+    {
+        <div class="table-responsive">
+            <table class="table table-striped table-hover">
+                <thead>
+                    <tr>
+                        <th>Name</th>
+                        <th>Breed</th>
+                        <th>Age</th>
+                        <th>Owner</th>
+                        <th>Owner Member</th>
+                        <th>Registration</th>
+                        <th>Status</th>
+                        <th>Actions</th>
+                    </tr>
+                </thead>
+                <tbody>
+                    @foreach (var dog in dogs)
+                    {
+                        <tr>
+                            <td>
+                                <a href="@NavigateUrl(PageState.Page.Path, "id=" + dog.DogId)">
+                                    @dog.Name
+                                </a>
+                            </td>
+                            <td>@dog.Breed</td>
+                            <td>@(dog.Age.HasValue ? $"{dog.Age} yrs" : "N/A")</td>
+                            <td>@dog.OwnerName</td>
+                            <td>
+                                @if (dog.OwnerIsMSSAMember)
+                                {
+                                    <span class="badge bg-success">Yes</span>
+                                }
+                                else
+                                {
+                                    <span class="badge bg-secondary">No</span>
+                                }
+                            </td>
+                            <td>@dog.RegistrationNumber</td>
+                            <td>
+                                @if (dog.IsDeceased)
+                                {
+                                    <span class="badge bg-dark">Deceased</span>
+                                }
+                                else if (dog.IsSold)
+                                {
+                                    <span class="badge bg-warning">Sold</span>
+                                }
+                                else if (!dog.IsActive)
+                                {
+                                    <span class="badge bg-secondary">Inactive</span>
+                                }
+                                else
+                                {
+                                    <span class="badge bg-success">Active</span>
+                                }
+                            </td>
+                            <td>
+                                <ActionLink Action="Detail" Parameters="@($"id={dog.DogId}")"
+                                            Text="View" ResourceKey="ViewDog" Class="btn btn-sm btn-info me-1" />
+                                @if (UserSecurity.IsAuthorized(PageState.User, RoleNames.Admin))
+                                {
+                                    <ActionLink Action="Edit" Parameters="@($"id={dog.DogId}")"
+                                                Security="SecurityAccessLevel.Edit" Text="Edit"
+                                                ResourceKey="EditDog" Class="btn btn-sm btn-primary" />
+                                }
+                            </td>
+                        </tr>
+                    }
+                </tbody>
+            </table>
+        </div>
+
+        <p class="text-muted">Total: @dogs.Count dog(s)</p>
+    }
+</div>
+
+@code {
+    private List<MSSA_Dog> dogs;
+    private List<string> breeds;
+
+    private string searchTerm = "";
+    private string selectedBreed = "";
+    private string selectedOwnerMember = "";
+    private string selectedStatus = "";
+
+    protected override async Task OnInitializedAsync()
+    {
+        try
+        {
+            await LoadDogs();
+
+            // Get unique breeds for filter
+            if (dogs != null)
+            {
+                breeds = dogs
+                    .Where(d => !string.IsNullOrWhiteSpace(d.Breed))
+                    .Select(d => d.Breed)
+                    .Distinct()
+                    .OrderBy(b => b)
+                    .ToList();
+            }
+        }
+        catch (Exception ex)
+        {
+            await logger.LogError(ex, "Error loading dogs");
+            AddModuleMessage("Error loading dogs", MessageType.Error);
+        }
+    }
+
+    private async Task LoadDogs()
+    {
+        dogs = await DogService.GetDogsAsync(ModuleState.ModuleId);
+    }
+
+    private async Task SearchDogs()
+    {
+        try
+        {
+            bool? ownerMemberFilter = null;
+            if (!string.IsNullOrEmpty(selectedOwnerMember))
+            {
+                ownerMemberFilter = selectedOwnerMember == "true";
+            }
+
+            bool? includeInactive = selectedStatus == "all" ? true : false;
+
+            dogs = await DogService.SearchDogsAsync(
+                searchTerm,
+                selectedBreed,
+                ownerMemberFilter,
+                includeInactive,
+                ModuleState.ModuleId
+            );
+        }
+        catch (Exception ex)
+        {
+            await logger.LogError(ex, "Error searching dogs");
+            AddModuleMessage("Error searching dogs", MessageType.Error);
+        }
+    }
+
+    private async Task ClearFilters()
+    {
+        searchTerm = "";
+        selectedBreed = "";
+        selectedOwnerMember = "";
+        selectedStatus = "";
+        await LoadDogs();
+    }
+}
