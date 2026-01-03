@@ -1,0 +1,286 @@
+﻿@using MountainStates.MSSA.Module.MSSA_Events.Services
+@using MountainStates.MSSA.Module.MSSA_Events.Models
+@using Oqtane.Modules.Controls
+
+@namespace MountainStates.MSSA.Module.MSSA_Events
+@inherits ModuleBase
+@inject IMSSA_EventService EventService
+@inject NavigationManager NavigationManager
+
+@if (evt == null)
+{
+    <p><em>Loading...</em></p>
+}
+else
+{
+    <div class="container-fluid">
+        <div class="row mb-3">
+            <div class="col">
+                <h2>@evt.EventName</h2>
+                <p class="text-muted">@evt.EventIdentifier</p>
+            </div>
+            <div class="col-auto">
+                <ActionLink Action="Index" Text="Back to List" ResourceKey="BackToList" Class="btn btn-secondary me-2" />
+                @if (UserSecurity.IsAuthorized(PageState.User, RoleNames.Admin))
+                {
+                    <ActionLink Action="Edit" Parameters="@($"id={evt.EventId}")"
+                                Security="SecurityAccessLevel.Edit" Text="Edit"
+                                ResourceKey="EditEvent" Class="btn btn-primary" />
+                }
+            </div>
+        </div>
+
+        @* Event Information *@
+        <div class="card mb-3">
+            <div class="card-header">
+                <h4>Event Information</h4>
+            </div>
+            <div class="card-body">
+                <div class="row">
+                    <div class="col-md-6">
+                        <dl class="row">
+                            <dt class="col-sm-4">Dates:</dt>
+                            <dd class="col-sm-8">@evt.DateRange</dd>
+
+                            <dt class="col-sm-4">Location:</dt>
+                            <dd class="col-sm-8">
+                                @if (!string.IsNullOrEmpty(evt.City))
+                                {
+                                    <text>@evt.City, @evt.StateCode</text>
+                                }
+                                else
+                                {
+                                    <em>Not specified</em>
+                                }
+                            </dd>
+
+                            <dt class="col-sm-4">Point Year:</dt>
+                            <dd class="col-sm-8">@(evt.PointYear?.ToString() ?? "N/A")</dd>
+                        </dl>
+                    </div>
+                    <div class="col-md-6">
+                        <dl class="row">
+                            <dt class="col-sm-4">Chairman:</dt>
+                            <dd class="col-sm-8">@(evt.ChairmanName ?? "Not specified")</dd>
+
+                            <dt class="col-sm-4">Chairman Phone:</dt>
+                            <dd class="col-sm-8">@(evt.ChairmanPhone ?? "Not provided")</dd>
+
+                            <dt class="col-sm-4">MSSA Sanctioned:</dt>
+                            <dd class="col-sm-8">
+                                @if (evt.IsMSSASanctioned)
+                                {
+                                    <span class="badge bg-success">Yes</span>
+                                }
+                                else
+                                {
+                                    <span class="badge bg-secondary">No</span>
+                                }
+                            </dd>
+                        </dl>
+                    </div>
+                </div>
+            </div>
+        </div>
+
+        @* Planning Information *@
+        <div class="card mb-3">
+            <div class="card-header">
+                <h4>Planning Information</h4>
+            </div>
+            <div class="card-body">
+                <div class="row">
+                    <div class="col-md-3">
+                        <strong>Stock:</strong>
+                        <ul class="list-unstyled">
+                            @if (evt.Cattle)
+                            {
+                                <li>✓ Cattle</li>
+                            }
+                            @if (evt.Sheep)
+                            {
+                                <li>✓ Sheep</li>
+                            }
+                            @if (!evt.Cattle && !evt.Sheep)
+                            {
+                                <li class="text-muted">None specified</li>
+                            }
+                        </ul>
+                    </div>
+                    <div class="col-md-3">
+                        <strong>Venue:</strong>
+                        <ul class="list-unstyled">
+                            @if (evt.Arena)
+                            {
+                                <li>✓ Arena</li>
+                            }
+                            @if (evt.Field)
+                            {
+                                <li>✓ Field</li>
+                            }
+                            @if (!evt.Arena && !evt.Field)
+                            {
+                                <li class="text-muted">None specified</li>
+                            }
+                        </ul>
+                    </div>
+                    <div class="col-md-3">
+                        <strong>Style:</strong>
+                        <ul class="list-unstyled">
+                            @if (evt.OnFoot)
+                            {
+                                <li>✓ On Foot</li>
+                            }
+                            @if (evt.Horseback)
+                            {
+                                <li>✓ Horseback</li>
+                            }
+                            @if (!evt.OnFoot && !evt.Horseback)
+                            {
+                                <li class="text-muted">None specified</li>
+                            }
+                        </ul>
+                    </div>
+                    <div class="col-md-3">
+                        <strong>Classes:</strong>
+                        <ul class="list-unstyled">
+                            @if (evt.Open)
+                            {
+                                <li>✓ Open</li>
+                            }
+                            @if (evt.Nursery)
+                            {
+                                <li>✓ Nursery</li>
+                            }
+                            @if (evt.Intermediate)
+                            {
+                                <li>✓ Intermediate</li>
+                            }
+                            @if (evt.Novice)
+                            {
+                                <li>✓ Novice</li>
+                            }
+                            @if (evt.Junior)
+                            {
+                                <li>✓ Junior</li>
+                            }
+                            @if (!evt.Open && !evt.Nursery && !evt.Intermediate && !evt.Novice && !evt.Junior)
+                            {
+                                <li class="text-muted">None specified</li>
+                            }
+                        </ul>
+                    </div>
+                </div>
+                @if (evt.NumberOfRuns.HasValue)
+                {
+                    <div class="row mt-2">
+                        <div class="col-12">
+                            <strong>Number of Runs:</strong> @evt.NumberOfRuns
+                        </div>
+                    </div>
+                }
+                @if (!string.IsNullOrEmpty(evt.Notes))
+                {
+                    <div class="row mt-2">
+                        <div class="col-12">
+                            <strong>Notes:</strong>
+                            <p>@evt.Notes</p>
+                        </div>
+                    </div>
+                }
+            </div>
+        </div>
+
+        @* Administrative Information *@
+        <div class="card mb-3">
+            <div class="card-header">
+                <h4>Administrative Information</h4>
+            </div>
+            <div class="card-body">
+                <dl class="row">
+                    <dt class="col-sm-3">Results Received:</dt>
+                    <dd class="col-sm-9">@(evt.ResultsReceivedDate?.ToString("MMM dd, yyyy") ?? "Not received")</dd>
+
+                    <dt class="col-sm-3">Results Uploaded:</dt>
+                    <dd class="col-sm-9">
+                        @if (evt.ResultsUploaded)
+                        {
+                            <span class="badge bg-success">Yes</span>
+                        }
+                        else
+                        {
+                            <span class="badge bg-secondary">No</span>
+                        }
+                    </dd>
+
+                    <dt class="col-sm-3">Sanction Fee:</dt>
+                    <dd class="col-sm-9">@(evt.SanctionFee?.ToString("C") ?? "N/A")</dd>
+
+                    <dt class="col-sm-3">Fee Received:</dt>
+                    <dd class="col-sm-9">@(evt.FeeReceivedDate?.ToString("MMM dd, yyyy") ?? "Not received")</dd>
+                </dl>
+            </div>
+        </div>
+
+        @* Trials *@
+        <div class="card">
+            <div class="card-header">
+                <h4>Trials (@evt.TrialCount)</h4>
+            </div>
+            <div class="card-body">
+                @if (trials == null)
+                {
+                    <p><em>Loading trials...</em></p>
+                }
+                else if (!trials.Any())
+                {
+                    <p><em>No trials scheduled for this event.</em></p>
+                }
+                else
+                {
+                    <table class="table table-sm">
+                        <thead>
+                            <tr>
+                                <th>Date</th>
+                                <th>Trial Name</th>
+                                <th>Identifier</th>
+                                <th>Stock</th>
+                            </tr>
+                        </thead>
+                        <tbody>
+                            @foreach (var trial in trials)
+                            {
+                                <tr>
+                                    <td>@trial.TrialDate.ToString("MMM dd, yyyy")</td>
+                                    <td>@trial.TrialName</td>
+                                    <td><small class="text-muted">@trial.TrialIdentifier</small></td>
+                                    <td>@trial.Stock</td>
+                                </tr>
+                            }
+                        </tbody>
+                    </table>
+                }
+            </div>
+        </div>
+    </div>
+}
+
+@code {
+    private MSSA_Event evt;
+    private List<MSSA_Trial> trials;
+
+    protected override async Task OnInitializedAsync()
+    {
+        try
+        {
+            int eventId = int.Parse(PageState.QueryString["id"]);
+            evt = await EventService.GetEventAsync(eventId, ModuleState.ModuleId);
+            trials = await EventService.GetEventTrialsAsync(eventId, ModuleState.ModuleId);
+        }
+        catch (Exception ex)
+        {
+            await logger.LogError(ex, "Error loading event details");
+            AddModuleMessage("Error loading event details", MessageType.Error);
+        }
+    }
+}

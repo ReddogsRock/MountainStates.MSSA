@@ -1,0 +1,306 @@
+﻿@using MountainStates.MSSA.Module.MSSA_Events.Services
+@using MountainStates.MSSA.Module.MSSA_Events.Models
+@using MountainStates.MSSA.Module.MSSA_Handlers.Services
+@using MountainStates.MSSA.Module.MSSA_Handlers.Models
+@using MountainStates.MSSA.Module.MSSA_Handlers.Enums
+@using Oqtane.Modules.Controls
+
+@namespace MountainStates.MSSA.Module.MSSA_Events
+@inherits ModuleBase
+@inject IMSSA_EventService EventService
+@inject IMSSA_StateService StateService
+@inject NavigationManager NavigationManager
+
+<div class="container-fluid">
+    <div class="row mb-3">
+        <div class="col">
+            <h2>Events</h2>
+        </div>
+        @if (UserSecurity.IsAuthorized(PageState.User, RoleNames.Admin))
+        {
+            <div class="col-auto">
+                <ActionLink Action="Edit" Security="SecurityAccessLevel.Edit" Text="Add Event"
+                            ResourceKey="AddEvent" Class="btn btn-primary" />
+            </div>
+        }
+    </div>
+
+    @* Search/Filter Section *@
+    <div class="row mb-3">
+        <div class="col-md-3">
+            <label for="searchTerm" class="form-label">Search Name/City</label>
+            <input id="searchTerm" class="form-control" @bind="searchTerm"
+                   @bind:event="oninput" placeholder="Event Name or City" />
+        </div>
+        <div class="col-md-2">
+            <label for="stateFilter" class="form-label">State</label>
+            <select id="stateFilter" class="form-select" @bind="selectedState">
+                <option value="">All States</option>
+                @if (states != null)
+                {
+                    <optgroup label="US States">
+                        @foreach (var state in states.Where(s => s.Country == "US"))
+                        {
+                            <option value="@state.StateCode">@state.StateName</option>
+                        }
+                    </optgroup>
+                    <optgroup label="Canadian Provinces">
+                        @foreach (var state in states.Where(s => s.Country == "CA"))
+                        {
+                            <option value="@state.StateCode">@state.StateName</option>
+                        }
+                    </optgroup>
+                }
+            </select>
+        </div>
+        <div class="col-md-2">
+            <label for="yearFilter" class="form-label">Year</label>
+            <input id="yearFilter" type="number" class="form-control" @bind="selectedYear"
+                   min="2000" max="2100" placeholder="Year" />
+        </div>
+        <div class="col-md-2">
+            <button class="btn btn-primary me-2" style="margin-top: 32px;" @onclick="SearchEvents">Search</button>
+            <button class="btn btn-secondary" style="margin-top: 32px;" @onclick="ClearFilters">Clear</button>
+        </div>
+    </div>
+
+    @* Planning Filters *@
+    <div class="row mb-3">
+        <div class="col-12">
+            <div class="card">
+                <div class="card-header">
+                    <button class="btn btn-link" @onclick="ToggleFilters">
+                        @(showFilters ? "▼" : "▶") Filter by Planning Options
+                    </button>
+                </div>
+                @if (showFilters)
+                {
+                    <div class="card-body">
+                        <div class="row">
+                            <div class="col-md-3">
+                                <strong>Stock:</strong>
+                                <div class="form-check">
+                                    <input type="checkbox" class="form-check-input" id="cattle" @bind="filterCattle" />
+                                    <label class="form-check-label" for="cattle">Cattle</label>
+                                </div>
+                                <div class="form-check">
+                                    <input type="checkbox" class="form-check-input" id="sheep" @bind="filterSheep" />
+                                    <label class="form-check-label" for="sheep">Sheep</label>
+                                </div>
+                            </div>
+                            <div class="col-md-3">
+                                <strong>Venue:</strong>
+                                <div class="form-check">
+                                    <input type="checkbox" class="form-check-input" id="arena" @bind="filterArena" />
+                                    <label class="form-check-label" for="arena">Arena</label>
+                                </div>
+                                <div class="form-check">
+                                    <input type="checkbox" class="form-check-input" id="field" @bind="filterField" />
+                                    <label class="form-check-label" for="field">Field</label>
+                                </div>
+                            </div>
+                            <div class="col-md-3">
+                                <strong>Style:</strong>
+                                <div class="form-check">
+                                    <input type="checkbox" class="form-check-input" id="onFoot" @bind="filterOnFoot" />
+                                    <label class="form-check-label" for="onFoot">On Foot</label>
+                                </div>
+                                <div class="form-check">
+                                    <input type="checkbox" class="form-check-input" id="horseback" @bind="filterHorseback" />
+                                    <label class="form-check-label" for="horseback">Horseback</label>
+                                </div>
+                            </div>
+                            <div class="col-md-3">
+                                <strong>Classes:</strong>
+                                <div class="form-check">
+                                    <input type="checkbox" class="form-check-input" id="open" @bind="filterOpen" />
+                                    <label class="form-check-label" for="open">Open</label>
+                                </div>
+                                <div class="form-check">
+                                    <input type="checkbox" class="form-check-input" id="nursery" @bind="filterNursery" />
+                                    <label class="form-check-label" for="nursery">Nursery</label>
+                                </div>
+                                <div class="form-check">
+                                    <input type="checkbox" class="form-check-input" id="intermediate" @bind="filterIntermediate" />
+                                    <label class="form-check-label" for="intermediate">Intermediate</label>
+                                </div>
+                                <div class="form-check">
+                                    <input type="checkbox" class="form-check-input" id="novice" @bind="filterNovice" />
+                                    <label class="form-check-label" for="novice">Novice</label>
+                                </div>
+                                <div class="form-check">
+                                    <input type="checkbox" class="form-check-input" id="junior" @bind="filterJunior" />
+                                    <label class="form-check-label" for="junior">Junior</label>
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+                }
+            </div>
+        </div>
+    </div>
+
+    @* Results Section *@
+    @if (events == null)
+    {
+        <p><em>Loading...</em></p>
+    }
+    else if (!events.Any())
+    {
+        <p><em>No events found.</em></p>
+    }
+    else
+    {
+        <div class="table-responsive">
+            <table class="table table-striped table-hover">
+                <thead>
+                    <tr>
+                        <th>Event Name</th>
+                        <th>Dates</th>
+                        <th>Location</th>
+                        <th>Trials</th>
+                        <th>Sanctioned</th>
+                        <th>Actions</th>
+                    </tr>
+                </thead>
+                <tbody>
+                    @foreach (var evt in events)
+                    {
+                        <tr>
+                            <td>
+                                <a href="@NavigateUrl(PageState.Page.Path, "id=" + evt.EventId)">
+                                    @evt.EventName
+                                </a>
+                                <br />
+                                <small class="text-muted">@evt.EventIdentifier</small>
+                            </td>
+                            <td>@evt.DateRange</td>
+                            <td>
+                                @evt.City@(string.IsNullOrEmpty(evt.City) ? "" : ", ")@evt.StateCode
+                            </td>
+                            <td>
+                                <span class="badge bg-info">@evt.TrialCount trials</span>
+                            </td>
+                            <td>
+                                @if (evt.IsMSSASanctioned)
+                                {
+                                    <span class="badge bg-success">Yes</span>
+                                }
+                                else
+                                {
+                                    <span class="badge bg-secondary">No</span>
+                                }
+                            </td>
+                            <td>
+                                <ActionLink Action="Detail" Parameters="@($"id={evt.EventId}")"
+                                            Text="View" ResourceKey="ViewEvent" Class="btn btn-sm btn-info me-1" />
+                                @if (UserSecurity.IsAuthorized(PageState.User, RoleNames.Admin))
+                                {
+                                    <ActionLink Action="Edit" Parameters="@($"id={evt.EventId}")"
+                                                Security="SecurityAccessLevel.Edit" Text="Edit"
+                                                ResourceKey="EditEvent" Class="btn btn-sm btn-primary" />
+                                }
+                            </td>
+                        </tr>
+                    }
+                </tbody>
+            </table>
+        </div>
+
+        <p class="text-muted">Total: @events.Count event(s)</p>
+    }
+</div>
+
+@code {
+    private List<MSSA_Event> events;
+    private List<MSSA_State> states;
+
+    private string searchTerm = "";
+    private string selectedState = "";
+    private int? selectedYear = null;
+
+    private bool showFilters = false;
+    private bool filterCattle = false;
+    private bool filterSheep = false;
+    private bool filterArena = false;
+    private bool filterField = false;
+    private bool filterOnFoot = false;
+    private bool filterHorseback = false;
+    private bool filterOpen = false;
+    private bool filterNursery = false;
+    private bool filterIntermediate = false;
+    private bool filterNovice = false;
+    private bool filterJunior = false;
+
+    protected override async Task OnInitializedAsync()
+    {
+        try
+        {
+            states = await StateService.GetStatesAsync(ModuleState.ModuleId);
+            await LoadEvents();
+        }
+        catch (Exception ex)
+        {
+            await logger.LogError(ex, "Error loading events");
+            AddModuleMessage("Error loading events", MessageType.Error);
+        }
+    }
+
+    private async Task LoadEvents()
+    {
+        events = await EventService.GetEventsAsync(ModuleState.ModuleId);
+    }
+
+    private async Task SearchEvents()
+    {
+        try
+        {
+            events = await EventService.SearchEventsAsync(
+                searchTerm,
+                selectedState,
+                selectedYear,
+                filterCattle ? true : null,
+                filterSheep ? true : null,
+                filterArena ? true : null,
+                filterField ? true : null,
+                filterOnFoot ? true : null,
+                filterHorseback ? true : null,
+                filterOpen ? true : null,
+                filterNursery ? true : null,
+                filterIntermediate ? true : null,
+                filterNovice ? true : null,
+                filterJunior ? true : null,
+                ModuleState.ModuleId
+            );
+        }
+        catch (Exception ex)
+        {
+            await logger.LogError(ex, "Error searching events");
+            AddModuleMessage("Error searching events", MessageType.Error);
+        }
+    }
+
+    private async Task ClearFilters()
+    {
+        searchTerm = "";
+        selectedState = "";
+        selectedYear = null;
+        filterCattle = false;
+        filterSheep = false;
+        filterArena = false;
+        filterField = false;
+        filterOnFoot = false;
+        filterHorseback = false;
+        filterOpen = false;
+        filterNursery = false;
+        filterIntermediate = false;
+        filterNovice = false;
+        filterJunior = false;
+        await LoadEvents();
+    }
+
+    private void ToggleFilters()
+    {
+        showFilters = !showFilters;
+    }
+}

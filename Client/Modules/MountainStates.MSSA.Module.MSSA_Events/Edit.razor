@@ -1,0 +1,570 @@
+﻿@using MountainStates.MSSA.Module.MSSA_Events.Services
+@using MountainStates.MSSA.Module.MSSA_Events.Models
+@using MountainStates.MSSA.Module.MSSA_Events.Enums
+@using MountainStates.MSSA.Module.MSSA_Handlers.Services
+@using MountainStates.MSSA.Module.MSSA_Handlers.Models
+@using Oqtane.Modules.Controls
+
+@namespace MountainStates.MSSA.Module.MSSA_Events
+@inherits ModuleBase
+@inject IMSSA_EventService EventService
+@inject IMSSA_StateService StateService
+@inject NavigationManager NavigationManager
+
+<form @onsubmit="SaveEvent">
+    <div class="container-fluid">
+        <div class="row mb-3">
+            <div class="col">
+                <h2>@(eventId == -1 ? "Add Event" : "Edit Event")</h2>
+            </div>
+        </div>
+
+        @if (!string.IsNullOrEmpty(errorMessage))
+        {
+            <div class="alert alert-danger" role="alert">
+                @errorMessage
+            </div>
+        }
+
+        @* Basic Information *@
+        <div class="card mb-3">
+            <div class="card-header">
+                <h4>Basic Information</h4>
+            </div>
+            <div class="card-body">
+                <div class="row mb-3">
+                    <div class="col-md-6">
+                        <label for="eventName" class="form-label">Event Name <span class="text-danger">*</span></label>
+                        <input id="eventName" class="form-control" @bind="evt.EventName" required maxlength="255" />
+                    </div>
+                    <div class="col-md-6">
+                        <label for="eventId" class="form-label">Event Identifier <span class="text-danger">*</span></label>
+                        <input id="eventId" class="form-control" @bind="evt.EventIdentifier" required maxlength="50"
+                               placeholder="e.g., 2024-CO-Boulder" />
+                        <small class="form-text text-muted">Unique identifier for this event</small>
+                    </div>
+                </div>
+            </div>
+        </div>
+
+        @* Dates and Location *@
+        <div class="card mb-3">
+            <div class="card-header">
+                <h4>Dates and Location</h4>
+            </div>
+            <div class="card-body">
+                <div class="row mb-3">
+                    <div class="col-md-4">
+                        <label for="startDate" class="form-label">Start Date</label>
+                        <input id="startDate" type="date" class="form-control"
+                               value="@(evt.StartDate?.ToString("yyyy-MM-dd"))"
+                               @onchange="@(e => evt.StartDate = string.IsNullOrEmpty(e.Value?.ToString()) ? null : DateTime.Parse(e.Value.ToString()))" />
+                    </div>
+                    <div class="col-md-4">
+                        <label for="endDate" class="form-label">End Date</label>
+                        <input id="endDate" type="date" class="form-control"
+                               value="@(evt.EndDate?.ToString("yyyy-MM-dd"))"
+                               @onchange="@(e => evt.EndDate = string.IsNullOrEmpty(e.Value?.ToString()) ? null : DateTime.Parse(e.Value.ToString()))" />
+                    </div>
+                    <div class="col-md-4">
+                        <label for="pointYear" class="form-label">Point Year</label>
+                        <input id="pointYear" type="number" class="form-control" @bind="evt.PointYear"
+                               min="2000" max="2100" />
+                    </div>
+                </div>
+
+                <div class="row mb-3">
+                    <div class="col-md-5">
+                        <label for="city" class="form-label">City</label>
+                        <input id="city" class="form-control" @bind="evt.City" maxlength="100" />
+                    </div>
+                    <div class="col-md-4">
+                        <label for="state" class="form-label">State/Province</label>
+                        <select id="state" class="form-select" @bind="evt.StateCode">
+                            <option value="">Select State/Province</option>
+                            @if (states != null)
+                            {
+                                <optgroup label="US States">
+                                    @foreach (var state in states.Where(s => s.Country == "US"))
+                                    {
+                                        <option value="@state.StateCode">@state.StateName</option>
+                                    }
+                                </optgroup>
+                                <optgroup label="Canadian Provinces">
+                                    @foreach (var state in states.Where(s => s.Country == "CA"))
+                                    {
+                                        <option value="@state.StateCode">@state.StateName</option>
+                                    }
+                                </optgroup>
+                            }
+                        </select>
+                    </div>
+                </div>
+            </div>
+        </div>
+
+        @* Event Leadership *@
+        <div class="card mb-3">
+            <div class="card-header">
+                <h4>Event Leadership</h4>
+            </div>
+            <div class="card-body">
+                <div class="row mb-3">
+                    <div class="col-md-6">
+                        <label for="chairman" class="form-label">Chairman Name</label>
+                        <input id="chairman" class="form-control" @bind="evt.ChairmanName" maxlength="255" />
+                    </div>
+                    <div class="col-md-6">
+                        <label for="chairmanPhone" class="form-label">Chairman Phone</label>
+                        <input id="chairmanPhone" type="tel" class="form-control" @bind="evt.ChairmanPhone" maxlength="20" />
+                    </div>
+                </div>
+            </div>
+        </div>
+
+        @* Planning Information *@
+        <div class="card mb-3">
+            <div class="card-header">
+                <h4>Planning Information</h4>
+            </div>
+            <div class="card-body">
+                <div class="row mb-3">
+                    <div class="col-md-3">
+                        <label class="form-label"><strong>Stock</strong></label>
+                        <div class="form-check">
+                            <input type="checkbox" class="form-check-input" id="cattle" @bind="evt.Cattle" />
+                            <label class="form-check-label" for="cattle">Cattle</label>
+                        </div>
+                        <div class="form-check">
+                            <input type="checkbox" class="form-check-input" id="sheep" @bind="evt.Sheep" />
+                            <label class="form-check-label" for="sheep">Sheep</label>
+                        </div>
+                    </div>
+                    <div class="col-md-3">
+                        <label class="form-label"><strong>Venue</strong></label>
+                        <div class="form-check">
+                            <input type="checkbox" class="form-check-input" id="arena" @bind="evt.Arena" />
+                            <label class="form-check-label" for="arena">Arena</label>
+                        </div>
+                        <div class="form-check">
+                            <input type="checkbox" class="form-check-input" id="field" @bind="evt.Field" />
+                            <label class="form-check-label" for="field">Field</label>
+                        </div>
+                    </div>
+                    <div class="col-md-3">
+                        <label class="form-label"><strong>Style</strong></label>
+                        <div class="form-check">
+                            <input type="checkbox" class="form-check-input" id="onFoot" @bind="evt.OnFoot" />
+                            <label class="form-check-label" for="onFoot">On Foot</label>
+                        </div>
+                        <div class="form-check">
+                            <input type="checkbox" class="form-check-input" id="horseback" @bind="evt.Horseback" />
+                            <label class="form-check-label" for="horseback">Horseback</label>
+                        </div>
+                    </div>
+                    <div class="col-md-3">
+                        <label class="form-label"><strong>Classes</strong></label>
+                        <div class="form-check">
+                            <input type="checkbox" class="form-check-input" id="open" @bind="evt.Open" />
+                            <label class="form-check-label" for="open">Open</label>
+                        </div>
+                        <div class="form-check">
+                            <input type="checkbox" class="form-check-input" id="nursery" @bind="evt.Nursery" />
+                            <label class="form-check-label" for="nursery">Nursery</label>
+                        </div>
+                        <div class="form-check">
+                            <input type="checkbox" class="form-check-input" id="intermediate" @bind="evt.Intermediate" />
+                            <label class="form-check-label" for="intermediate">Intermediate</label>
+                        </div>
+                        <div class="form-check">
+                            <input type="checkbox" class="form-check-input" id="novice" @bind="evt.Novice" />
+                            <label class="form-check-label" for="novice">Novice</label>
+                        </div>
+                        <div class="form-check">
+                            <input type="checkbox" class="form-check-input" id="junior" @bind="evt.Junior" />
+                            <label class="form-check-label" for="junior">Junior</label>
+                        </div>
+                    </div>
+                </div>
+
+                <div class="row mb-3">
+                    <div class="col-md-6">
+                        <label for="numberOfRuns" class="form-label">Number of Runs</label>
+                        <input id="numberOfRuns" type="number" class="form-control" @bind="evt.NumberOfRuns" min="1" />
+                    </div>
+                </div>
+
+                <div class="row mb-3">
+                    <div class="col-md-12">
+                        <label for="notes" class="form-label">Notes</label>
+                        <textarea id="notes" class="form-control" @bind="evt.Notes" rows="4"></textarea>
+                    </div>
+                </div>
+            </div>
+        </div>
+
+        @* Administrative Information *@
+        <div class="card mb-3">
+            <div class="card-header">
+                <h4>Administrative Information</h4>
+            </div>
+            <div class="card-body">
+                <div class="row mb-3">
+                    <div class="col-md-4">
+                        <div class="form-check">
+                            <input type="checkbox" class="form-check-input" id="sanctioned" @bind="evt.IsMSSASanctioned" />
+                            <label class="form-check-label" for="sanctioned">MSSA Sanctioned</label>
+                        </div>
+                    </div>
+                    <div class="col-md-4">
+                        <label for="sanctionFee" class="form-label">Sanction Fee</label>
+                        <input id="sanctionFee" type="number" step="0.01" class="form-control" @bind="evt.SanctionFee" />
+                    </div>
+                    <div class="col-md-4">
+                        <label for="feeReceived" class="form-label">Fee Received Date</label>
+                        <input id="feeReceived" type="date" class="form-control"
+                               value="@(evt.FeeReceivedDate?.ToString("yyyy-MM-dd"))"
+                               @onchange="@(e => evt.FeeReceivedDate = string.IsNullOrEmpty(e.Value?.ToString()) ? null : DateTime.Parse(e.Value.ToString()))" />
+                    </div>
+                </div>
+
+                <div class="row mb-3">
+                    <div class="col-md-4">
+                        <div class="form-check">
+                            <input type="checkbox" class="form-check-input" id="resultsUploaded" @bind="evt.ResultsUploaded" />
+                            <label class="form-check-label" for="resultsUploaded">Results Uploaded</label>
+                        </div>
+                    </div>
+                    <div class="col-md-4">
+                        <label for="resultsReceived" class="form-label">Results Received Date</label>
+                        <input id="resultsReceived" type="datetime-local" class="form-control"
+                               value="@(evt.ResultsReceivedDate?.ToString("yyyy-MM-ddTHH:mm"))"
+                               @onchange="@(e => evt.ResultsReceivedDate = string.IsNullOrEmpty(e.Value?.ToString()) ? null : DateTime.Parse(e.Value.ToString()))" />
+                    </div>
+                </div>
+            </div>
+        </div>
+
+        @* Trials Management (only for existing events) *@
+        @if (eventId != -1)
+        {
+            <div class="card mb-3">
+                <div class="card-header d-flex justify-content-between align-items-center">
+                    <h4>Trials</h4>
+                    <button type="button" class="btn btn-sm btn-primary" @onclick="ShowAddTrial">
+                        Add Trial
+                    </button>
+                </div>
+                <div class="card-body">
+                    @if (showTrialForm)
+                    {
+                        <div class="border p-3 mb-3 bg-light">
+                            <h5>@(editingTrialId == -1 ? "Add New Trial" : "Edit Trial")</h5>
+                            <div class="row mb-2">
+                                <div class="col-md-4">
+                                    <label class="form-label">Trial Identifier <span class="text-danger">*</span></label>
+                                    <input type="text" class="form-control" @bind="currentTrial.TrialIdentifier"
+                                           maxlength="50" required placeholder="e.g., 2024-CO-Boulder-1" />
+                                </div>
+                                <div class="col-md-4">
+                                    <label class="form-label">Trial Name</label>
+                                    <input type="text" class="form-control" @bind="currentTrial.TrialName"
+                                           maxlength="255" placeholder="e.g., Saturday Morning" />
+                                </div>
+                                <div class="col-md-4">
+                                    <label class="form-label">Trial Date <span class="text-danger">*</span></label>
+                                    <input type="date" class="form-control"
+                                           value="@currentTrial.TrialDate.ToString("yyyy-MM-dd")"
+                                           @onchange="@(e => currentTrial.TrialDate = DateTime.Parse(e.Value.ToString()))" required />
+                                </div>
+                            </div>
+                            <div class="row mb-2">
+                                <div class="col-md-4">
+                                    <label class="form-label">Stock</label>
+                                    <select class="form-select" @bind="currentTrial.Stock">
+                                        <option value="">Select...</option>
+                                        @foreach (var stock in StockType.All)
+                                        {
+                                            <option value="@stock">@stock</option>
+                                        }
+                                    </select>
+                                </div>
+                            </div>
+                            <div class="mt-2">
+                                <button type="button" class="btn btn-sm btn-success me-2" @onclick="SaveTrial">Save</button>
+                                <button type="button" class="btn btn-sm btn-secondary" @onclick="CancelTrial">Cancel</button>
+                            </div>
+                        </div>
+                    }
+
+                    @if (trials == null)
+                    {
+                        <p><em>Loading...</em></p>
+                    }
+                    else if (!trials.Any())
+                    {
+                        <p><em>No trials scheduled for this event.</em></p>
+                    }
+                    else
+                    {
+                        <table class="table table-sm">
+                            <thead>
+                                <tr>
+                                    <th>Date</th>
+                                    <th>Trial Name</th>
+                                    <th>Identifier</th>
+                                    <th>Stock</th>
+                                    <th>Actions</th>
+                                </tr>
+                            </thead>
+                            <tbody>
+                                @foreach (var trial in trials)
+                                {
+                                    <tr>
+                                        <td>@trial.TrialDate.ToString("MMM dd, yyyy")</td>
+                                        <td>@trial.TrialName</td>
+                                        <td><small class="text-muted">@trial.TrialIdentifier</small></td>
+                                        <td>@trial.Stock</td>
+                                        <td>
+                                            <button type="button" class="btn btn-sm btn-primary me-1"
+                                                    @onclick="() => EditTrial(trial)">
+                                                Edit
+                                            </button>
+                                            <button type="button" class="btn btn-sm btn-danger"
+                                                    @onclick="() => DeleteTrial(trial.TrialId)">
+                                                Delete
+                                            </button>
+                                        </td>
+                                    </tr>
+                                }
+                            </tbody>
+                        </table>
+                    }
+                </div>
+            </div>
+        }
+
+        @* Status *@
+        <div class="card mb-3">
+            <div class="card-header">
+                <h4>Status</h4>
+            </div>
+            <div class="card-body">
+                <div class="form-check">
+                    <input id="isActive" type="checkbox" class="form-check-input" @bind="evt.IsActive" />
+                    <label for="isActive" class="form-check-label">Active</label>
+                    <small class="form-text text-muted d-block">Inactive events will not appear in searches</small>
+                </div>
+            </div>
+        </div>
+
+        @* Action Buttons *@
+        <div class="row">
+            <div class="col">
+                <button type="submit" class="btn btn-success me-2">
+                    <span class="oi oi-check"></span> Save
+                </button>
+                <ActionLink Action="Index" Text="Cancel" ResourceKey="Cancel" Class="btn btn-secondary me-2" />
+                @if (eventId != -1)
+                {
+                    <ActionLink Action="Detail" Parameters="@($"id={eventId}")" Text="View Details"
+                                ResourceKey="ViewDetails" Class="btn btn-info me-2" />
+                    <button type="button" class="btn btn-danger" @onclick="DeleteEvent">
+                        <span class="oi oi-trash"></span> Delete
+                    </button>
+                }
+            </div>
+        </div>
+    </div>
+</form>
+
+@code {
+    private int eventId = -1;
+    private MSSA_Event evt = new();
+    private List<MSSA_State> states;
+    private List<MSSA_Trial> trials;
+    private string errorMessage = "";
+
+    // Trial form state
+    private bool showTrialForm = false;
+    private int editingTrialId = -1;
+    private MSSA_Trial currentTrial = new();
+
+    protected override async Task OnInitializedAsync()
+    {
+        try
+        {
+            states = await StateService.GetStatesAsync(ModuleState.ModuleId);
+
+            if (PageState.QueryString.ContainsKey("id"))
+            {
+                eventId = int.Parse(PageState.QueryString["id"]);
+                evt = await EventService.GetEventAsync(eventId, ModuleState.ModuleId);
+                trials = await EventService.GetEventTrialsAsync(eventId, ModuleState.ModuleId);
+            }
+            else
+            {
+                evt = new MSSA_Event
+                {
+                    IsActive = true,
+                    IsMSSASanctioned = false,
+                    ResultsUploaded = false
+                };
+                trials = new List<MSSA_Trial>();
+            }
+        }
+        catch (Exception ex)
+        {
+            await logger.LogError(ex, "Error loading event for edit");
+            AddModuleMessage("Error loading event", MessageType.Error);
+        }
+    }
+
+    private async Task SaveEvent()
+    {
+        try
+        {
+            errorMessage = "";
+
+            if (string.IsNullOrWhiteSpace(evt.EventName) || string.IsNullOrWhiteSpace(evt.EventIdentifier))
+            {
+                errorMessage = "Event Name and Event Identifier are required.";
+                return;
+            }
+
+            if (evt.StartDate.HasValue && evt.EndDate.HasValue && evt.EndDate < evt.StartDate)
+            {
+                errorMessage = "End Date cannot be before Start Date.";
+                return;
+            }
+
+            if (eventId == -1)
+            {
+                evt = await EventService.AddEventAsync(evt, ModuleState.ModuleId);
+                await logger.LogInformation("Event added successfully");
+                NavigationManager.NavigateTo(NavigateUrl(PageState.Page.Path, "id=" + evt.EventId));
+            }
+            else
+            {
+                await EventService.UpdateEventAsync(evt, ModuleState.ModuleId);
+                await logger.LogInformation("Event updated successfully");
+                AddModuleMessage("Event saved successfully", MessageType.Success);
+            }
+        }
+        catch (Exception ex)
+        {
+            await logger.LogError(ex, "Error saving event");
+            errorMessage = "Error saving event. Please try again.";
+        }
+    }
+
+    private async Task DeleteEvent()
+    {
+        try
+        {
+            if (await JSRuntime.InvokeAsync<bool>("confirm", "Are you sure you want to delete this event?"))
+            {
+                await EventService.DeleteEventAsync(eventId, ModuleState.ModuleId);
+                await logger.LogInformation("Event deleted");
+                NavigationManager.NavigateTo(NavigateUrl());
+            }
+        }
+        catch (Exception ex)
+        {
+            await logger.LogError(ex, "Error deleting event");
+            errorMessage = "Error deleting event. Please try again.";
+        }
+    }
+
+    // Trial management
+    private void ShowAddTrial()
+    {
+        currentTrial = new MSSA_Trial
+        {
+            EventId = eventId,
+            TrialDate = evt.StartDate ?? DateTime.Today,
+            TrialIdentifier = $"{evt.EventIdentifier}-{trials.Count + 1}"
+        };
+        editingTrialId = -1;
+        showTrialForm = true;
+    }
+
+    private void EditTrial(MSSA_Trial trial)
+    {
+        currentTrial = new MSSA_Trial
+        {
+            TrialId = trial.TrialId,
+            EventId = trial.EventId,
+            TrialIdentifier = trial.TrialIdentifier,
+            TrialName = trial.TrialName,
+            TrialDate = trial.TrialDate,
+            Stock = trial.Stock
+        };
+        editingTrialId = trial.TrialId;
+        showTrialForm = true;
+    }
+
+    private async Task SaveTrial()
+    {
+        try
+        {
+            if (string.IsNullOrWhiteSpace(currentTrial.TrialIdentifier))
+            {
+                errorMessage = "Trial Identifier is required.";
+                return;
+            }
+
+            if (editingTrialId == -1)
+            {
+                await EventService.AddTrialAsync(currentTrial, ModuleState.ModuleId);
+            }
+            else
+            {
+                await EventService.UpdateTrialAsync(currentTrial, ModuleState.ModuleId);
+            }
+
+            trials = await EventService.GetEventTrialsAsync(eventId, ModuleState.ModuleId);
+
+            // Update event trial count
+            evt.TrialCount = trials.Count;
+
+            CancelTrial();
+            AddModuleMessage("Trial saved successfully", MessageType.Success);
+        }
+        catch (Exception ex)
+        {
+            await logger.LogError(ex, "Error saving trial");
+            errorMessage = "Error saving trial. Please try again.";
+        }
+    }
+
+    private async Task DeleteTrial(int trialId)
+    {
+        try
+        {
+            if (await JSRuntime.InvokeAsync<bool>("confirm", "Are you sure you want to delete this trial?"))
+            {
+                await EventService.DeleteTrialAsync(trialId, ModuleState.ModuleId);
+                trials = await EventService.GetEventTrialsAsync(eventId, ModuleState.ModuleId);
+
+                // Update event trial count
+                evt.TrialCount = trials.Count;
+
+                AddModuleMessage("Trial deleted successfully", MessageType.Success);
+            }
+        }
+        catch (Exception ex)
+        {
+            await logger.LogError(ex, "Error deleting trial");
+            errorMessage = "Error deleting trial. Please try again.";
+        }
+    }
+
+    private void CancelTrial()
+    {
+        showTrialForm = false;
+        editingTrialId = -1;
+        currentTrial = new();
+        errorMessage = "";
+    }
+}
