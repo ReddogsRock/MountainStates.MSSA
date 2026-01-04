@@ -154,7 +154,7 @@ namespace MountainStates.MSSA.Module.MSSA_Dogs.Repository
         public async Task<IEnumerable<MSSA_DogEntry>> GetDogEntriesAsync(int dogId)
         {
             // TODO: Uncomment when MSSA_Entries, MSSA_Trials, MSSA_Events, MSSA_Handlers, MSSA_Classes tables are created
-            /*
+            
             using var db = await _dbContextFactory.CreateDbContextAsync();
             
             var entries = await (from e in db.MSSA_Entries
@@ -180,10 +180,10 @@ namespace MountainStates.MSSA.Module.MSSA_Dogs.Repository
                                 .ToListAsync();
 
             return entries;
-            */
+          
 
             // Temporary: Return empty list until other tables are created
-            return await Task.FromResult(new List<MSSA_DogEntry>());
+            //return await Task.FromResult(new List<MSSA_DogEntry>());
         }
     }
 }
