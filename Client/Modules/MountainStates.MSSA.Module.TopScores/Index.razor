@@ -1,0 +1,143 @@
+﻿@using Oqtane.Modules
+@using Oqtane.Enums
+@using MountainStates.MSSA.Module.MSSA_TopScores.Services
+@using MountainStates.MSSA.Module.MSSA_TopScores.Models
+@inherits ModuleBase
+@inject IMSSA_TopScoresService TopScoresService
+@inject ISettingService SettingService
+@inject NavigationManager NavigationManager
+
+@if (isLoading)
+{
+    <div class="text-center">
+        <div class="spinner-border" role="status">
+            <span class="visually-hidden">Loading...</span>
+        </div>
+    </div>
+}
+else if (!isConfigured)
+{
+    <div class="alert alert-warning">
+        <strong>Module Not Configured</strong>
+        <p>Please configure this module's settings to display top scores.</p>
+    </div>
+}
+else if (topScores != null && topScores.Any())
+{
+    <div class="card">
+        <div class="card-header">
+            <h4>
+                Top @_quantity - @_className @_stock (@GetYearDisplay(_year))
+            </h4>
+        </div>
+        <div class="card-body">
+            <table class="table table-striped">
+                <thead>
+                    <tr>
+                        <th style="width: 80px;">Rank</th>
+                        <th>Dog</th>
+                        <th>Handler</th>
+                        <th class="text-end" style="width: 120px;">Points</th>
+                    </tr>
+                </thead>
+                <tbody>
+                    @foreach (var result in topScores)
+                    {
+                        <tr>
+                            <td>
+                                @if (result.Rank <= 3)
+                                {
+                                    <span class="badge bg-warning fs-6">@result.Rank</span>
+                                }
+                                else
+                                {
+                                    <span class="fs-5">@result.Rank</span>
+                                }
+                            </td>
+                            <td class="fw-bold">@result.DogName</td>
+                            <td>@result.HandlerName</td>
+                            <td class="text-end">
+                                <strong class="text-primary">@result.TotalPoints</strong>
+                            </td>
+                        </tr>
+                    }
+                </tbody>
+            </table>
+        </div>
+    </div>
+}
+else
+{
+    <div class="alert alert-info">
+        No results found for the configured criteria.
+    </div>
+}
+
+@code {
+    public override SecurityAccessLevel SecurityAccessLevel => SecurityAccessLevel.Anonymous;
+
+    private int _year = 0;
+    private string _className = "";
+    private string _stock = "";
+    private int _quantity = 10;
+
+    private List<TopScoreResult> topScores;
+    private bool isLoading = false;
+    private bool isConfigured = false;
+
+    protected override async Task OnInitializedAsync()
+    {
+        try
+        {
+            // Load settings
+            _year = int.Parse(SettingService.GetSetting(ModuleState.Settings, "Year", "0"));
+            _className = SettingService.GetSetting(ModuleState.Settings, "ClassName", "");
+            _stock = SettingService.GetSetting(ModuleState.Settings, "Stock", "");
+            _quantity = int.Parse(SettingService.GetSetting(ModuleState.Settings, "Quantity", "10"));
+
+            // Check if module is configured
+            isConfigured = _year > 0 && !string.IsNullOrEmpty(_className) && !string.IsNullOrEmpty(_stock);
+
+            if (isConfigured)
+            {
+                isLoading = true;
+                await LoadTopScores();
+            }
+        }
+        catch (Exception ex)
+        {
+            await logger.LogError(ex, "Error loading top scores");
+        }
+        finally
+        {
+            isLoading = false;
+        }
+    }
+
+    private async Task LoadTopScores()
+    {
+        try
+        {
+            var parameters = new TopScoreParameters
+            {
+                Year = _year,
+                ClassName = _className,
+                Stock = _stock,
+                Quantity = _quantity
+            };
+
+            var results = await TopScoresService.GetTopScoresAsync(ModuleState.ModuleId, parameters);
+            topScores = results?.ToList() ?? new List<TopScoreResult>();
+        }
+        catch (Exception ex)
+        {
+            await logger.LogError(ex, "Error retrieving top scores");
+            topScores = new List<TopScoreResult>();
+        }
+    }
+
+    private string GetYearDisplay(int year)
+    {
+        return $"20{year:D2}";
+    }
+}
