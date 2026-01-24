@@ -1,0 +1,113 @@
+﻿@using Oqtane.Modules
+@using Oqtane.Services
+@using Oqtane.Shared
+@using MountainStates.MSSA.Module.MSSA_TopScores.Services
+@inherits ModuleBase
+@inject IMSSA_TopScoresService TopScoresService
+@inject ISettingService SettingService
+@inject NavigationManager NavigationManager
+
+<div class="container">
+    <div class="row mb-3">
+        <label class="col-sm-3">Year:</label>
+        <div class="col-sm-9">
+            <select class="form-select" @bind="@_year">
+                <option value="0">Select Year...</option>
+                @foreach (var year in _availableYears)
+                {
+                    <option value="@year">20@(year)</option>
+                }
+            </select>
+        </div>
+    </div>
+    <div class="row mb-3">
+        <label class="col-sm-3">Level:</label>
+        <div class="col-sm-9">
+            <select class="form-select" @bind="@_className">
+                <option value="">Select Level...</option>
+                <option value="Open">Open</option>
+                <option value="Nursery">Nursery</option>
+                <option value="Intermediate">Intermediate</option>
+                <option value="Novice">Novice</option>
+                <option value="Jr Handler">Jr Handler</option>
+                <option value="Pro Novice">Pro Novice</option>
+            </select>
+        </div>
+    </div>
+    <div class="row mb-3">
+        <label class="col-sm-3">Stock Type:</label>
+        <div class="col-sm-9">
+            <select class="form-select" @bind="@_stock">
+                <option value="">Select Stock...</option>
+                <option value="Cattle">Cattle</option>
+                <option value="Sheep">Sheep</option>
+            </select>
+        </div>
+    </div>
+    <div class="row mb-3">
+        <label class="col-sm-3">Display Top:</label>
+        <div class="col-sm-9">
+            <input type="number" class="form-control" @bind="@_quantity" min="1" max="50" />
+        </div>
+    </div>
+    <div class="row mb-3">
+        <div class="col-sm-9 offset-sm-3">
+            <button type="button" class="btn btn-primary" @onclick="SaveSettings">Save</button>
+            <button type="button" class="btn btn-secondary" @onclick="Cancel">Cancel</button>
+        </div>
+    </div>
+</div>
+
+@code {
+    public override SecurityAccessLevel SecurityAccessLevel => SecurityAccessLevel.Edit;
+
+    private int _year = 0;
+    private string _className = "";
+    private string _stock = "";
+    private int _quantity = 10;
+    private List<int> _availableYears = new List<int>();
+
+    protected override async Task OnInitializedAsync()
+    {
+        try
+        {
+            // Load available years
+            var years = await TopScoresService.GetAvailableYearsAsync(ModuleState.ModuleId);
+            _availableYears = years.ToList();
+
+            // Load saved settings
+            _year = int.Parse(SettingService.GetSetting(ModuleState.Settings, "Year", "0"));
+            _className = SettingService.GetSetting(ModuleState.Settings, "ClassName", "");
+            _stock = SettingService.GetSetting(ModuleState.Settings, "Stock", "");
+            _quantity = int.Parse(SettingService.GetSetting(ModuleState.Settings, "Quantity", "10"));
+        }
+        catch (Exception ex)
+        {
+            await logger.LogError(ex, "Error loading settings");
+        }
+    }
+
+    private async Task SaveSettings()
+    {
+        try
+        {
+            var settings = await SettingService.GetModuleSettingsAsync(ModuleState.ModuleId);
+            SettingService.SetSetting(settings, "Year", _year.ToString());
+            SettingService.SetSetting(settings, "ClassName", _className);
+            SettingService.SetSetting(settings, "Stock", _stock);
+            SettingService.SetSetting(settings, "Quantity", _quantity.ToString());
+            await SettingService.UpdateModuleSettingsAsync(settings, ModuleState.ModuleId);
+
+            NavigationManager.NavigateTo(NavigateUrl());
+        }
+        catch (Exception ex)
+        {
+            await logger.LogError(ex, "Error saving settings");
+        }
+    }
+
+    private void Cancel()
+    {
+        NavigationManager.NavigateTo(NavigateUrl());
+    }
+}
