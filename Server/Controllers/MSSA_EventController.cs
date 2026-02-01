@@ -1,4 +1,4 @@
-﻿using Microsoft.AspNetCore.Authorization;
+using Microsoft.AspNetCore.Authorization;
 using Microsoft.AspNetCore.Http;
 using Microsoft.AspNetCore.Mvc;
 using Oqtane.Controllers;
@@ -10,6 +10,7 @@ using System.Threading.Tasks;
 using MountainStates.MSSA.Module.MSSA_Events.Manager;
 using MountainStates.MSSA.Module.MSSA_Events.Models;
 using MountainStates.MSSA.Module.MSSA_Handlers.Enums;
+using MountainStates.MSSA.Module.MSSA_Entries.Models;
 
 namespace MountainStates.MSSA.Module.MSSA_Events.Controllers
 {
@@ -98,6 +99,22 @@ namespace MountainStates.MSSA.Module.MSSA_Events.Controllers
             catch (System.Exception ex)
             {
                 _logger.Log(LogLevel.Error, this, LogFunction.Read, ex, "Error searching events");
+                throw;
+            }
+        }
+
+        // GET: api/MSSA_Event/trial/5/entries?moduleid=x
+        [HttpGet("trial/{trialId}/entries")]
+        [Authorize(Policy = PolicyNames.ViewModule)]
+        public async Task<List<EntryListItem>> GetTrialEntries(int trialId, int moduleId)
+        {
+            try
+            {
+                return await _manager.GetTrialEntriesAsync(trialId, moduleId);
+            }
+            catch (System.Exception ex)
+            {
+                _logger.Log(LogLevel.Error, this, LogFunction.Read, ex, "Error getting trial entries for {TrialId}", trialId);
                 throw;
             }
         }

@@ -1,5 +1,6 @@
-﻿using System.Collections.Generic;
+using System.Collections.Generic;
 using System.Threading.Tasks;
+using MountainStates.MSSA.Module.MSSA_Entries.Models;
 using MountainStates.MSSA.Module.MSSA_Events.Models;
 
 namespace MountainStates.MSSA.Module.MSSA_Events.Manager
@@ -36,5 +37,8 @@ namespace MountainStates.MSSA.Module.MSSA_Events.Manager
         Task<MSSA_Trial> AddTrialAsync(MSSA_Trial trial, int moduleId);
         Task<MSSA_Trial> UpdateTrialAsync(MSSA_Trial trial, int moduleId);
         Task DeleteTrialAsync(int trialId, int moduleId);
+        
+        // Entries
+        Task<List<EntryListItem>> GetTrialEntriesAsync(int trialId, int moduleId);
     }
 }

@@ -6,6 +6,7 @@ using Oqtane.Modules;
 using Oqtane.Services;
 using Oqtane.Shared;
 using MountainStates.MSSA.Module.MSSA_Entries.Models;
+using MountainStates.MSSA.Module.MSSA_Events.Models;
 
 namespace MountainStates.MSSA.Module.MSSA_Entries.Services
 {

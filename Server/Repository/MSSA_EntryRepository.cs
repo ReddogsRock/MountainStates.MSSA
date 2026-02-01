@@ -1,5 +1,6 @@
 ﻿using Microsoft.EntityFrameworkCore;
 using MountainStates.MSSA.Module.MSSA_Entries.Models;
+using MountainStates.MSSA.Module.MSSA_Events.Models;
 using MountainStates.MSSA.Module.MSSA_Handlers.Data;
 using Oqtane.Modules;
 using System;
