@@ -1,4 +1,4 @@
-﻿using System.Collections.Generic;
+using System.Collections.Generic;
 using System.Linq;
 using System.Net.Http;
 using System.Threading.Tasks;
@@ -6,6 +6,7 @@ using Oqtane.Modules;
 using Oqtane.Services;
 using Oqtane.Shared;
 using MountainStates.MSSA.Module.MSSA_Events.Models;
+using MountainStates.MSSA.Module.MSSA_Entries.Models;
 
 namespace MountainStates.MSSA.Module.MSSA_Events.Services
 {
@@ -127,6 +128,13 @@ namespace MountainStates.MSSA.Module.MSSA_Events.Services
         {
             var url = CreateApiUrl("MSSA_Trial");
             await DeleteAsync(CreateAuthorizationPolicyUrl($"{url}/{trialId}?moduleid={moduleId}", EntityNames.Module, moduleId));
+        }
+
+        // Entries
+        public async Task<List<EntryListItem>> GetTrialEntriesAsync(int trialId, int moduleId)
+        {
+            return await GetJsonAsync<List<EntryListItem>>(
+                CreateAuthorizationPolicyUrl($"{ApiUrl}/trial/{trialId}/entries?moduleid={moduleId}", EntityNames.Module, moduleId));
         }
     }
 }

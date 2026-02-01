@@ -1,8 +1,9 @@
-﻿using System.Collections.Generic;
+using System.Collections.Generic;
 using System.Threading.Tasks;
 using Oqtane.Modules;
 using MountainStates.MSSA.Module.MSSA_Events.Repository;
 using MountainStates.MSSA.Module.MSSA_Events.Models;
+using MountainStates.MSSA.Module.MSSA_Entries.Models;
 
 namespace MountainStates.MSSA.Module.MSSA_Events.Manager
 {
@@ -99,6 +100,12 @@ namespace MountainStates.MSSA.Module.MSSA_Events.Manager
         public async Task DeleteTrialAsync(int trialId, int moduleId)
         {
             await _repository.DeleteTrialAsync(trialId);
+        }
+
+        // Entries
+        public async Task<List<EntryListItem>> GetTrialEntriesAsync(int trialId, int moduleId)
+        {
+            return await _repository.GetTrialEntriesAsync(trialId);
         }
     }
 }

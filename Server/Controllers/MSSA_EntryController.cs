@@ -10,6 +10,7 @@ using System.Threading.Tasks;
 using MountainStates.MSSA.Module.MSSA_Entries.Manager;
 using MountainStates.MSSA.Module.MSSA_Entries.Models;
 using MountainStates.MSSA.Module.MSSA_Handlers.Enums;
+using MountainStates.MSSA.Module.MSSA_Events.Models;
 
 namespace MountainStates.MSSA.Module.MSSA_Entries.Controllers
 {

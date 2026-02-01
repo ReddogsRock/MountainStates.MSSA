@@ -1,4 +1,5 @@
-﻿using Microsoft.EntityFrameworkCore;
+using Microsoft.EntityFrameworkCore;
+using MountainStates.MSSA.Module.MSSA_Entries.Models;
 using MountainStates.MSSA.Module.MSSA_Events.Models;
 using MountainStates.MSSA.Module.MSSA_Handlers.Data;
 using Oqtane.Modules;
@@ -265,6 +266,40 @@ namespace MountainStates.MSSA.Module.MSSA_Events.Repository
                 db.MSSA_Trials.Remove(trial);
                 await db.SaveChangesAsync();
             }
+        }
+
+        // Entries
+        public async Task<List<EntryListItem>> GetTrialEntriesAsync(int trialId)
+        {
+            using var db = await _dbContextFactory.CreateDbContextAsync();
+
+            var entries = await (from e in db.MSSA_Entries
+                                 join h in db.MSSA_Handlers on e.HandlerId equals h.HandlerId
+                                 join d in db.MSSA_Dogs on e.DogId equals d.DogId
+                                 join c in db.MSSA_Classes on e.ClassId equals c.ClassId
+                                 where e.TrialId == trialId
+                                 select new EntryListItem
+                                 {
+                                     EntryId = e.EntryId,
+                                     TrialId = e.TrialId,
+                                     HandlerName = h.FullName,
+                                     DogName = d.Name,
+                                     ClassName = c.ClassName,
+                                     SubClassName = c.SubClassName,
+                                     RunOrder = e.RunOrder,
+                                     Placing = e.Placing,
+                                     RunTime = e.RunTime,
+                                     TieBreakerTime = e.TieBreakerTime,
+                                     SumOfObstacles = (e.ObstacleScore1 ?? 0) + (e.ObstacleScore2 ?? 0) +
+                                                     (e.ObstacleScore3 ?? 0) + (e.ObstacleScore4 ?? 0) +
+                                                     (e.ObstacleScore5 ?? 0) + (e.ObstacleScore6 ?? 0) +
+                                                     (e.ObstacleScore7 ?? 0) + (e.ObstacleScore8 ?? 0) +
+                                                     (e.ObstacleScore9 ?? 0),
+                                     TrialPoints = e.TrialPoints
+                                 })
+                                .ToListAsync();
+
+            return entries;
         }
     }
 }
