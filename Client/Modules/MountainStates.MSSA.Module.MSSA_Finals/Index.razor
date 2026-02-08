@@ -1,0 +1,488 @@
+@using MountainStates.MSSA.Module.MSSA_Finals.Services
+@using MountainStates.MSSA.Module.MSSA_Finals.Models
+@using Oqtane.Modules.Controls
+
+@namespace MountainStates.MSSA.Module.MSSA_Finals
+@inherits ModuleBase
+@inject IMSSA_FinalsService FinalsService
+@inject NavigationManager NavigationManager
+
+<div class="container-fluid">
+    <div class="row mb-3">
+        <div class="col">
+            <h2>Finals Results</h2>
+        </div>
+    </div>
+
+    @* Filter Section *@
+    <div class="card mb-3">
+        <div class="card-body">
+            <div class="row g-3">
+                <div class="col-md-2">
+                    <label for="yearFilter" class="form-label">Year</label>
+                    <select id="yearFilter" class="form-select" @bind="selectedYear" @bind:after="OnFilterChanged">
+                        @if (availableYears != null)
+                        {
+                            @foreach (var year in availableYears)
+                            {
+                                <option value="@year">@year</option>
+                            }
+                            <option value="">All Years</option>
+                        }
+                    </select>
+                </div>
+
+                <div class="col-md-2">
+                    <label for="levelFilter" class="form-label">Level</label>
+                    <select id="levelFilter" class="form-select" @bind="selectedLevel" @bind:after="OnFilterChanged">
+                        @if (orderedLevels != null)
+                        {
+                            @foreach (var level in orderedLevels)
+                            {
+                                <option value="@level">@level</option>
+                            }
+                            <option value="">All Levels</option>
+                        }
+                    </select>
+                </div>
+
+                <div class="col-md-2">
+                    <label for="stockFilter" class="form-label">Stock</label>
+                    <select id="stockFilter" class="form-select" @bind="selectedStock" @bind:after="OnStockChanged">
+                        @if (orderedStocks != null)
+                        {
+                            @foreach (var stock in orderedStocks)
+                            {
+                                <option value="@stock">@stock</option>
+                            }
+                        }
+                    </select>
+                </div>
+
+                <div class="col-md-2">
+                    <label for="roundFilter" class="form-label">Round</label>
+                    <select id="roundFilter" class="form-select" @bind="selectedRound" @bind:after="OnFilterChanged" disabled="@IsUltimateSelected">
+                        <option value="">All Rounds</option>
+                        @if (orderedRounds != null)
+                        {
+                            @foreach (var round in orderedRounds)
+                            {
+                                <option value="@round">@round</option>
+                            }
+                        }
+                    </select>
+                </div>
+
+                <div class="col-md-2">
+                    <label for="placeFilter" class="form-label">Place</label>
+                    <select id="placeFilter" class="form-select" @bind="selectedPlace" @bind:after="OnFilterChanged">
+                        <option value="">All Places</option>
+                        <option value="1">1st</option>
+                        <option value="2">2nd</option>
+                        <option value="3">3rd</option>
+                        <option value="4">4th</option>
+                        <option value="5">5th</option>
+                    </select>
+                </div>
+
+                <div class="col-md-2 d-flex align-items-end">
+                    <button class="btn btn-secondary w-100" @onclick="ClearFilters">Clear Filters</button>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    @* Results Section *@
+    @if (results == null)
+    {
+        <p><em>Loading...</em></p>
+    }
+    else if (!results.Any())
+    {
+        <p><em>No results found.</em></p>
+    }
+    else
+    {
+        <div class="table-responsive">
+            <table class="table table-striped table-hover">
+                <thead>
+                    <tr>
+                        <th>Place</th>
+                        <th>Team</th>
+                        <th>Level</th>
+                        <th>Stock</th>
+                        @if (!IsUltimateSelected)
+                        {
+                            <th>Round</th>
+                        }
+                        else
+                        {
+                            <th>Rounds</th>
+                        }
+                        <th>Points</th>
+                        <th>Time</th>
+                        @if (IsUltimateSelected)
+                        {
+                            <th>Actions</th>
+                        }
+                    </tr>
+                </thead>
+                <tbody>
+                    @foreach (var result in results)
+                    {
+                        <tr>
+                            <td>
+                                @if (result.Place.HasValue && result.Place.Value <= 3)
+                                {
+                                    <span class="badge bg-warning">@result.Place</span>
+                                }
+                                else if (result.Place.HasValue)
+                                {
+                                    @result.Place
+                                }
+                            </td>
+                            <td>@result.Team</td>
+                            <td>@result.Level</td>
+                            <td>@result.Stock</td>
+                            @if (!IsUltimateSelected)
+                            {
+                                <td>@result.Round</td>
+                            }
+                            else
+                            {
+                                <td>@result.RoundsCompleted</td>
+                            }
+                            <td>@result.TotalPoints?.ToString("F2")</td>
+                            <td>@result.DisplayTime</td>
+                            @if (IsUltimateSelected && result.HandlerId.HasValue && result.DogId.HasValue)
+                            {
+                                <td>
+                                    <button class="btn btn-sm btn-primary" @onclick="() => ShowBreakdown(result)">
+                                        View Breakdown
+                                    </button>
+                                </td>
+                            }
+                        </tr>
+                    }
+                </tbody>
+            </table>
+        </div>
+
+        <p class="text-muted">Total: @results.Count result(s)</p>
+    }
+
+    @* Breakdown Modal *@
+    @if (showBreakdownModal && breakdownResults != null)
+    {
+        <div class="modal fade show d-block" tabindex="-1" style="background-color: rgba(0,0,0,0.5);">
+            <div class="modal-dialog modal-lg">
+                <div class="modal-content">
+                    <div class="modal-header">
+                        <h5 class="modal-title">Ultimate Breakdown - @selectedBreakdownResult?.Team</h5>
+                        <button type="button" class="btn-close" @onclick="CloseBreakdown"></button>
+                    </div>
+                    <div class="modal-body">
+                        <table class="table table-sm">
+                            <thead>
+                                <tr>
+                                    <th>Stock</th>
+                                    <th>Round</th>
+                                    <th>Place</th>
+                                    <th>Points</th>
+                                    <th>Time</th>
+                                </tr>
+                            </thead>
+                            <tbody>
+                                @foreach (var detail in breakdownResults)
+                                {
+                                    <tr>
+                                        <td>@detail.Stock</td>
+                                        <td>@detail.Round</td>
+                                        <td>@detail.Place</td>
+                                        <td>@detail.Pts?.ToString("F2")</td>
+                                        <td>@detail.DisplayTime</td>
+                                    </tr>
+                                }
+                            </tbody>
+                            <tfoot>
+                                <tr class="fw-bold">
+                                    <td colspan="3">Total:</td>
+                                    <td>@breakdownResults.Sum(b => b.Pts ?? 0).ToString("F2")</td>
+                                    <td>@FormatTotalTime(breakdownResults.Sum(b => b.TimeSeconds ?? 0))</td>
+                                </tr>
+                            </tfoot>
+                        </table>
+                    </div>
+                    <div class="modal-footer">
+                        <button type="button" class="btn btn-secondary" @onclick="CloseBreakdown">Close</button>
+                    </div>
+                </div>
+            </div>
+        </div>
+    }
+</div>
+
+@code {
+    private List<MSSA_FinalsResult> results;
+    private List<int> availableYears;
+    private List<string> availableLevels;
+    private List<string> availableStocks;
+    private List<string> availableRounds;
+
+    // Ordered lists for display
+    private List<string> orderedLevels;
+    private List<string> orderedStocks;
+    private List<string> orderedRounds;
+
+    private string selectedYear = "";
+    private string selectedLevel = "";
+    private string selectedStock = "";
+    private string selectedRound = "";
+    private string selectedPlace = "";
+
+    // Custom level order: Open, Nursery, Futurity, Intermediate, Novice, Junior, Ol Timers
+    private readonly string[] levelOrder = new[] { "Open", "Nursery", "Futurity", "Intermediate", "Novice", "Junior", "Ol Timers" };
+
+    // Custom stock order: Ultimate, Cattle, Sheep
+    private readonly string[] stockOrder = new[] { "Ultimate", "Cattle", "Sheep" };
+
+    private bool IsUltimateSelected => selectedStock == "Ultimate";
+
+    // Breakdown modal
+    private bool showBreakdownModal = false;
+    private MSSA_FinalsResult selectedBreakdownResult;
+    private List<MSSA_UltimateBreakdown> breakdownResults;
+
+    protected override async Task OnInitializedAsync()
+    {
+        try
+        {
+            // Load filter options
+            availableYears = await FinalsService.GetAvailableYearsAsync(ModuleState.ModuleId);
+            availableLevels = await FinalsService.GetAvailableLevelsAsync(ModuleState.ModuleId);
+            availableStocks = await FinalsService.GetAvailableStocksAsync(ModuleState.ModuleId);
+
+            // Set defaults
+            if (availableYears != null && availableYears.Any())
+            {
+                selectedYear = availableYears.First().ToString(); // Most recent year
+            }
+
+            // Apply custom ordering
+            orderedLevels = OrderLevels(availableLevels);
+            orderedStocks = OrderStocks(availableStocks);
+
+            // Set default level and stock
+            if (orderedLevels != null && orderedLevels.Any())
+            {
+                selectedLevel = orderedLevels.First(); // Default to Open
+            }
+
+            if (orderedStocks != null && orderedStocks.Any())
+            {
+                selectedStock = orderedStocks.First(); // Default to Ultimate
+            }
+
+            // Load results with defaults
+            await LoadAvailableRounds();
+            await SearchResults();
+        }
+        catch (Exception ex)
+        {
+            await logger.LogError(ex, "Error loading finals results");
+            AddModuleMessage("Error loading finals results", MessageType.Error);
+        }
+    }
+
+    private List<string> OrderLevels(List<string> levels)
+    {
+        if (levels == null) return null;
+
+        var ordered = new List<string>();
+        
+        // Add in custom order
+        foreach (var level in levelOrder)
+        {
+            if (levels.Contains(level))
+            {
+                ordered.Add(level);
+            }
+        }
+
+        // Add any levels not in the custom order
+        foreach (var level in levels)
+        {
+            if (!ordered.Contains(level))
+            {
+                ordered.Add(level);
+            }
+        }
+
+        return ordered;
+    }
+
+    private List<string> OrderStocks(List<string> stocks)
+    {
+        if (stocks == null) return null;
+
+        var ordered = new List<string>();
+        
+        // Add in custom order
+        foreach (var stock in stockOrder)
+        {
+            if (stocks.Contains(stock))
+            {
+                ordered.Add(stock);
+            }
+        }
+
+        // Add any stocks not in the custom order
+        foreach (var stock in stocks)
+        {
+            if (!ordered.Contains(stock))
+            {
+                ordered.Add(stock);
+            }
+        }
+
+        return ordered;
+    }
+
+    private List<string> OrderRounds(List<string> rounds)
+    {
+        if (rounds == null) return null;
+
+        var ordered = new List<string>();
+
+        // Add Round 1, 2, 3 in order
+        for (int i = 1; i <= 3; i++)
+        {
+            var roundName = $"Round {i}";
+            if (rounds.Contains(roundName))
+            {
+                ordered.Add(roundName);
+            }
+        }
+
+        // Add Field
+        if (rounds.Contains("Field"))
+        {
+            ordered.Add("Field");
+        }
+
+        // Add any other rounds not in the custom order
+        foreach (var round in rounds)
+        {
+            if (!ordered.Contains(round))
+            {
+                ordered.Add(round);
+            }
+        }
+
+        return ordered;
+    }
+
+    private async Task OnFilterChanged()
+    {
+        // Reload rounds based on current filters
+        await LoadAvailableRounds();
+        await SearchResults();
+    }
+
+    private async Task OnStockChanged()
+    {
+        // When stock changes, clear round if Ultimate is selected
+        if (IsUltimateSelected)
+        {
+            selectedRound = "";
+        }
+        await OnFilterChanged();
+    }
+
+    private async Task LoadAvailableRounds()
+    {
+        try
+        {
+            int? year = string.IsNullOrEmpty(selectedYear) ? null : int.Parse(selectedYear);
+            availableRounds = await FinalsService.GetAvailableRoundsAsync(
+                year,
+                selectedLevel,
+                selectedStock,
+                ModuleState.ModuleId);
+            
+            // Apply custom ordering
+            orderedRounds = OrderRounds(availableRounds);
+        }
+        catch (Exception ex)
+        {
+            await logger.LogError(ex, "Error loading available rounds");
+        }
+    }
+
+    private async Task SearchResults()
+    {
+        try
+        {
+            int? year = string.IsNullOrEmpty(selectedYear) ? null : int.Parse(selectedYear);
+            int? place = string.IsNullOrEmpty(selectedPlace) ? null : int.Parse(selectedPlace);
+
+            results = await FinalsService.SearchFinalsResultsAsync(
+                year,
+                selectedLevel,
+                selectedStock,
+                selectedRound,
+                place,
+                ModuleState.ModuleId);
+        }
+        catch (Exception ex)
+        {
+            await logger.LogError(ex, "Error searching finals results");
+            AddModuleMessage("Error searching finals results", MessageType.Error);
+        }
+    }
+
+    private async Task ClearFilters()
+    {
+        // Reset to defaults
+        selectedYear = availableYears != null && availableYears.Any() ? availableYears.First().ToString() : "";
+        selectedLevel = orderedLevels != null && orderedLevels.Any() ? orderedLevels.First() : "";
+        selectedStock = orderedStocks != null && orderedStocks.Any() ? orderedStocks.First() : "";
+        selectedRound = "";
+        selectedPlace = "";
+        await OnFilterChanged();
+    }
+
+    private async Task ShowBreakdown(MSSA_FinalsResult result)
+    {
+        try
+        {
+            selectedBreakdownResult = result;
+            breakdownResults = await FinalsService.GetUltimateBreakdownAsync(
+                result.Year,
+                result.Level,
+                result.HandlerId.Value,
+                result.DogId.Value,
+                ModuleState.ModuleId);
+            showBreakdownModal = true;
+        }
+        catch (Exception ex)
+        {
+            await logger.LogError(ex, "Error loading breakdown");
+            AddModuleMessage("Error loading breakdown", MessageType.Error);
+        }
+    }
+
+    private void CloseBreakdown()
+    {
+        showBreakdownModal = false;
+        selectedBreakdownResult = null;
+        breakdownResults = null;
+    }
+
+    private string FormatTotalTime(int totalSeconds)
+    {
+        var minutes = totalSeconds / 60;
+        var seconds = totalSeconds % 60;
+        return $"{minutes}:{seconds:D2}";
+    }
+}

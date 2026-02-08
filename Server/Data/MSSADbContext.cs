@@ -3,6 +3,7 @@ using MountainStates.MSSA.Module.MSSA_Dogs.Models;
 using MountainStates.MSSA.Module.MSSA_Entries.Models;
 using MountainStates.MSSA.Module.MSSA_Events.Models;
 using MountainStates.MSSA.Module.MSSA_Handlers.Models;
+using MountainStates.MSSA.Module.MSSA_Finals.Models;
 
 namespace MountainStates.MSSA.Module.MSSA_Handlers.Data
 {
@@ -23,6 +24,9 @@ namespace MountainStates.MSSA.Module.MSSA_Handlers.Data
         public DbSet<MSSA_Entry> MSSA_Entries { get; set; }
         public DbSet<MSSA_DogFuturityParticipation> MSSA_DogFuturityParticipation { get; set; }
         public DbSet<MSSA_User> MSSA_Users { get; set; }
+        public DbSet<MSSA_FinalsData> MSSA_FinalsData { get; set; }
+        public DbSet<MSSA_FinalsResult> vw_AllFinalsResults { get; set; }
+
 
         protected override void OnModelCreating(ModelBuilder modelBuilder)
         {
@@ -41,6 +45,14 @@ namespace MountainStates.MSSA.Module.MSSA_Handlers.Data
             modelBuilder.Entity<MSSA_User>().ToTable("MSSA_Users");
 
             // Configure any specific relationships or constraints if needed
+
+            modelBuilder.Entity<MSSA_FinalsData>()
+                .HasKey(f => f.FinalsResultId);
+
+            modelBuilder.Entity<MSSA_FinalsResult>()
+                .HasNoKey()
+                .ToView("vw_AllFinalsResults");
+
             modelBuilder.Entity<MSSA_Handler>()
                 .HasOne<MSSA_State>()
                 .WithMany()
@@ -94,6 +106,7 @@ namespace MountainStates.MSSA.Module.MSSA_Handlers.Data
                 .WithMany()
                 .HasForeignKey(e => e.ClassId)
                 .OnDelete(DeleteBehavior.Restrict);
+
         }
     }
 }

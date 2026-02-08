@@ -1,0 +1,225 @@
+@page "/storage-test"
+@using MSSA.PWA.Services
+@using MountainStates.MSSA.Module.MSSA_Entries.Models
+@inject IOfflineStorageService Storage
+@inject ISyncService Sync
+
+<PageTitle>Storage Test</PageTitle>
+
+<h3>Storage & Sync Test</h3>
+
+<div class="card mb-3">
+    <div class="card-header">
+        <h5>Connection Status</h5>
+    </div>
+    <div class="card-body">
+        <p>
+            Status: 
+            @if (isOnline)
+            {
+                <span class="badge bg-success">🟢 Online</span>
+            }
+            else
+            {
+                <span class="badge bg-danger">🔴 Offline</span>
+            }
+        </p>
+        <p>Queue Count: <strong>@queueCount</strong></p>
+        <button class="btn btn-primary" @onclick="CheckStatus">Refresh Status</button>
+    </div>
+</div>
+
+<div class="card mb-3">
+    <div class="card-header">
+        <h5>Add Test Entry</h5>
+    </div>
+    <div class="card-body">
+        <div class="mb-3">
+            <label>Handler Name:</label>
+            <input type="text" class="form-control" @bind="testHandlerName" />
+        </div>
+        <div class="mb-3">
+            <label>Dog Name:</label>
+            <input type="text" class="form-control" @bind="testDogName" />
+        </div>
+        <div class="mb-3">
+            <label>Obstacle 1 Score:</label>
+            <input type="number" class="form-control" @bind="testScore" />
+        </div>
+        <button class="btn btn-success" @onclick="AddTestEntry">Add Entry to Queue</button>
+        @if (!string.IsNullOrEmpty(addMessage))
+        {
+            <div class="alert alert-info mt-2">@addMessage</div>
+        }
+    </div>
+</div>
+
+<div class="card mb-3">
+    <div class="card-header">
+        <h5>Queued Entries</h5>
+    </div>
+    <div class="card-body">
+        <button class="btn btn-primary mb-2" @onclick="LoadQueuedEntries">Load Queued Entries</button>
+        
+        @if (queuedEntries != null && queuedEntries.Any())
+        {
+            <table class="table table-sm">
+                <thead>
+                    <tr>
+                        <th>Trial ID</th>
+                        <th>Handler ID</th>
+                        <th>Dog ID</th>
+                        <th>Class ID</th>
+                        <th>Score 1</th>
+                    </tr>
+                </thead>
+                <tbody>
+                    @foreach (var entry in queuedEntries)
+                    {
+                        <tr>
+                            <td>@entry.TrialId</td>
+                            <td>@entry.HandlerId</td>
+                            <td>@entry.DogId</td>
+                            <td>@entry.ClassId</td>
+                            <td>@entry.ObstacleScore1</td>
+                        </tr>
+                    }
+                </tbody>
+            </table>
+        }
+        else
+        {
+            <p class="text-muted">No entries in queue</p>
+        }
+    </div>
+</div>
+
+<div class="card">
+    <div class="card-header">
+        <h5>Sync Operations</h5>
+    </div>
+    <div class="card-body">
+        <button class="btn btn-warning" @onclick="TriggerSync">Trigger Sync Now</button>
+        @if (!string.IsNullOrEmpty(syncMessage))
+        {
+            <div class="alert alert-info mt-2">@syncMessage</div>
+        }
+    </div>
+</div>
+
+@code {
+    private bool isOnline = false;
+    private int queueCount = 0;
+    private List<MSSA_Entry> queuedEntries;
+    private string addMessage;
+    private string syncMessage;
+
+    // Test data
+    private string testHandlerName = "Test Handler";
+    private string testDogName = "Test Dog";
+    private decimal testScore = 30;
+
+    protected override async Task OnInitializedAsync()
+    {
+        await CheckStatus();
+        
+        // Subscribe to sync status changes
+        Sync.SyncStatusChanged += OnSyncStatusChanged;
+    }
+
+    private async Task CheckStatus()
+    {
+        isOnline = await Sync.IsOnlineAsync();
+        queueCount = await Storage.GetQueueCountAsync();
+        StateHasChanged();
+    }
+
+    private async Task AddTestEntry()
+    {
+        try
+        {
+            var entry = new MSSA_Entry
+            {
+                TrialId = 1,
+                HandlerId = 1,
+                DogId = 1,
+                ClassId = 1,
+                ObstacleScore1 = testScore,
+                ObstacleScore2 = 25,
+                ObstacleScore3 = 28,
+                HandlerIsMSSAMember = true,
+                Comments = $"Test entry - {testHandlerName} with {testDogName}"
+            };
+
+            await Storage.AddEntryToQueueAsync(entry);
+            addMessage = $"✅ Entry added to queue! Handler: {testHandlerName}, Dog: {testDogName}";
+            
+            // Refresh status
+            await CheckStatus();
+        }
+        catch (Exception ex)
+        {
+            addMessage = $"❌ Error: {ex.Message}";
+        }
+    }
+
+    private async Task LoadQueuedEntries()
+    {
+        try
+        {
+            addMessage = "Loading entries...";
+            StateHasChanged();
+
+            queuedEntries = await Storage.GetUnsyncedEntriesAsync();
+            addMessage = $"Loaded {queuedEntries?.Count ?? 0} entries from storage";
+            StateHasChanged();
+        }
+        catch (Exception ex)
+        {
+            addMessage = $"❌ Error loading entries: {ex.Message} - {ex.StackTrace}";
+        }
+    }
+
+    private async Task TriggerSync()
+    {
+        try
+        {
+            syncMessage = "Syncing...";
+            StateHasChanged();
+
+            var result = await Sync.SyncPendingEntriesAsync();
+            
+            if (result.IsSuccess)
+            {
+                syncMessage = $"✅ Sync successful! {result.SuccessCount} entries synced.";
+            }
+            else
+            {
+                syncMessage = $"⚠️ Sync completed with issues. Success: {result.SuccessCount}, Failed: {result.FailedCount}";
+                if (result.Errors.Any())
+                {
+                    syncMessage += $"\nErrors: {string.Join(", ", result.Errors)}";
+                }
+            }
+
+            await CheckStatus();
+        }
+        catch (Exception ex)
+        {
+            syncMessage = $"❌ Sync error: {ex.Message}";
+        }
+    }
+
+    private void OnSyncStatusChanged(object sender, SyncStatusEventArgs e)
+    {
+        isOnline = e.IsOnline;
+        queueCount = e.QueuedCount;
+        syncMessage = e.Message;
+        InvokeAsync(StateHasChanged);
+    }
+
+    public void Dispose()
+    {
+        Sync.SyncStatusChanged -= OnSyncStatusChanged;
+    }
+}
