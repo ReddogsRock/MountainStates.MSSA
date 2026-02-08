@@ -1,0 +1,447 @@
+@page "/entry"
+@using MSSA.PWA.Services
+@using MountainStates.MSSA.Module.MSSA_Entries.Models
+@using MountainStates.MSSA.Module.MSSA_Events.Models
+@using MountainStates.MSSA.Module.MSSA_Handlers.Models
+@using MountainStates.MSSA.Module.MSSA_Dogs.Models
+@inject IOfflineStorageService Storage
+@inject ISyncService Sync
+@inject NavigationManager Navigation
+
+<PageTitle>Score Entry</PageTitle>
+
+<div class="container-fluid">
+    <div class="row mb-3">
+        <div class="col">
+            <h3>MSSA Herding Trials - Score Entry</h3>
+        </div>
+        <div class="col-auto">
+            @if (isOnline)
+            {
+                <span class="badge bg-success">🟢 Online</span>
+            }
+            else
+            {
+                <span class="badge bg-danger">🔴 Offline</span>
+            }
+            <span class="badge bg-info">Queue: @queueCount</span>
+        </div>
+    </div>
+
+    @if (!string.IsNullOrEmpty(statusMessage))
+    {
+        <div class="alert alert-@statusMessageType alert-dismissible fade show" role="alert">
+            @statusMessage
+            <button type="button" class="btn-close" @onclick="ClearMessage"></button>
+        </div>
+    }
+
+    <EditForm Model="@entry" OnValidSubmit="@HandleSubmit">
+        <DataAnnotationsValidator />
+
+        <!-- Trial Information -->
+        <div class="card mb-3">
+            <div class="card-header">
+                <h5>Trial Information</h5>
+            </div>
+            <div class="card-body">
+                <div class="row">
+                    <div class="col-md-6">
+                        <label>Trial:</label>
+                        <select class="form-select" @bind="selectedTrialId" @bind:after="OnTrialChanged">
+                            <option value="0">Select trial...</option>
+                            @foreach (var trial in trials)
+                            {
+                                <option value="@trial.TrialId">@trial.TrialName - @trial.TrialDate.ToShortDateString()</option>
+                            }
+                        </select>
+                    </div>
+                    <div class="col-md-6">
+                        @if (selectedTrialId > 0)
+                        {
+                            var trial = trials.FirstOrDefault(t => t.TrialId == selectedTrialId);
+                            if (trial != null)
+                            {
+                                <p class="mt-4"><strong>Species:</strong> @trial.Stock</p>
+                            }
+                        }
+                    </div>
+                </div>
+            </div>
+        </div>
+
+        <!-- Competitor Details -->
+        <div class="card mb-3">
+            <div class="card-header">
+                <h5>Competitor Details</h5>
+            </div>
+            <div class="card-body">
+                <div class="row mb-3">
+                    <div class="col-md-4">
+                        <label>Class: <span class="text-danger">*</span></label>
+                        <select class="form-select" @bind="entry.ClassId" required>
+                            <option value="0">Select class...</option>
+                            @foreach (var cls in classes)
+                            {
+                                <option value="@cls.ClassId">@cls.ClassName @(!string.IsNullOrEmpty(cls.SubClassName) ? $"- {cls.SubClassName}" : "")</option>
+                            }
+                        </select>
+                    </div>
+                    <div class="col-md-4">
+                        <label>Handler: <span class="text-danger">*</span></label>
+                        <select class="form-select" @bind="entry.HandlerId" @bind:after="OnHandlerChanged" required>
+                            <option value="0">Select handler...</option>
+                            @foreach (var handler in handlers)
+                            {
+                                <option value="@handler.HandlerId">@handler.FullName - @handler.HandlerLevel</option>
+                            }
+                        </select>
+                    </div>
+                    <div class="col-md-4">
+                        <label>Dog: <span class="text-danger">*</span></label>
+                        <select class="form-select" @bind="entry.DogId" required>
+                            <option value="0">Select dog...</option>
+                            @foreach (var dog in filteredDogs)
+                            {
+                                <option value="@dog.DogId">@dog.Name (@dog.Breed)</option>
+                            }
+                        </select>
+                    </div>
+                </div>
+            </div>
+        </div>
+
+        <!-- Run Details -->
+        <div class="card mb-3">
+            <div class="card-header">
+                <h5>Run Details</h5>
+            </div>
+            <div class="card-body">
+                <div class="row mb-3">
+                    <div class="col-md-3">
+                        <label>Run Order:</label>
+                        <input type="number" class="form-control" @bind="entry.RunOrder" />
+                    </div>
+                    <div class="col-md-3">
+                        <label>Placing:</label>
+                        <input type="number" class="form-control" @bind="entry.Placing" />
+                    </div>
+                    <div class="col-md-3">
+                        <label>Time (MM:SS):</label>
+                        <input type="text" class="form-control" @bind="runTimeString" placeholder="2:45" />
+                    </div>
+                    <div class="col-md-3">
+                        <label>Tie Breaker (MM:SS):</label>
+                        <input type="text" class="form-control" @bind="tieTimeString" placeholder="1:30" />
+                    </div>
+                </div>
+            </div>
+        </div>
+
+        <!-- Obstacle Scores -->
+        <div class="card mb-3">
+            <div class="card-header">
+                <h5>Obstacle Scores</h5>
+            </div>
+            <div class="card-body">
+                <div class="row mb-3">
+                    <div class="col-md-2">
+                        <label>O1:</label>
+                        <input type="number" step="0.1" class="form-control" @bind="entry.ObstacleScore1" @bind:after="CalculateTotal" />
+                    </div>
+                    <div class="col-md-2">
+                        <label>O2:</label>
+                        <input type="number" step="0.1" class="form-control" @bind="entry.ObstacleScore2" @bind:after="CalculateTotal" />
+                    </div>
+                    <div class="col-md-2">
+                        <label>O3:</label>
+                        <input type="number" step="0.1" class="form-control" @bind="entry.ObstacleScore3" @bind:after="CalculateTotal" />
+                    </div>
+                    <div class="col-md-2">
+                        <label>O4:</label>
+                        <input type="number" step="0.1" class="form-control" @bind="entry.ObstacleScore4" @bind:after="CalculateTotal" />
+                    </div>
+                    <div class="col-md-2">
+                        <label>O5:</label>
+                        <input type="number" step="0.1" class="form-control" @bind="entry.ObstacleScore5" @bind:after="CalculateTotal" />
+                    </div>
+                </div>
+                <div class="row mb-3">
+                    <div class="col-md-2">
+                        <label>O6:</label>
+                        <input type="number" step="0.1" class="form-control" @bind="entry.ObstacleScore6" @bind:after="CalculateTotal" />
+                    </div>
+                    <div class="col-md-2">
+                        <label>O7:</label>
+                        <input type="number" step="0.1" class="form-control" @bind="entry.ObstacleScore7" @bind:after="CalculateTotal" />
+                    </div>
+                    <div class="col-md-2">
+                        <label>O8:</label>
+                        <input type="number" step="0.1" class="form-control" @bind="entry.ObstacleScore8" @bind:after="CalculateTotal" />
+                    </div>
+                    <div class="col-md-2">
+                        <label>O9:</label>
+                        <input type="number" step="0.1" class="form-control" @bind="entry.ObstacleScore9" @bind:after="CalculateTotal" />
+                    </div>
+                    <div class="col-md-2">
+                        <label>Penalty:</label>
+                        <input type="number" step="0.1" class="form-control" @bind="entry.Penalty" @bind:after="CalculateTotal" />
+                    </div>
+                </div>
+                <div class="row">
+                    <div class="col-md-12">
+                        <div class="alert alert-info">
+                            <strong>Total Points:</strong> @totalPoints.ToString("F1")
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </div>
+
+        <!-- Additional Information -->
+        <div class="card mb-3">
+            <div class="card-header">
+                <h5>Additional Information</h5>
+            </div>
+            <div class="card-body">
+                <div class="row mb-3">
+                    <div class="col-md-3">
+                        <div class="form-check">
+                            <input type="checkbox" class="form-check-input" id="mssamember" @bind="entry.HandlerIsMSSAMember" />
+                            <label class="form-check-label" for="mssamember">
+                                MSSA Member
+                            </label>
+                        </div>
+                    </div>
+                </div>
+                <div class="row">
+                    <div class="col-md-12">
+                        <label>Comments:</label>
+                        <textarea class="form-control" rows="3" @bind="entry.Comments"></textarea>
+                    </div>
+                </div>
+            </div>
+        </div>
+
+        <!-- Action Buttons -->
+        <div class="row mb-3">
+            <div class="col">
+                <button type="submit" class="btn btn-success btn-lg me-2">
+                    💾 Save Entry
+                </button>
+                <button type="button" class="btn btn-secondary btn-lg me-2" @onclick="ClearForm">
+                    🗑️ Clear Form
+                </button>
+                <button type="button" class="btn btn-info btn-lg" @onclick="ViewQueue">
+                    📋 View Queue (@queueCount)
+                </button>
+            </div>
+        </div>
+
+        <ValidationSummary />
+    </EditForm>
+</div>
+
+@code {
+    private MSSA_Entry entry = new MSSA_Entry();
+    private List<MSSA_Trial> trials = new List<MSSA_Trial>();
+    private List<MSSA_Handler> handlers = new List<MSSA_Handler>();
+    private List<MSSA_Dog> dogs = new List<MSSA_Dog>();
+    private List<MSSA_Dog> filteredDogs = new List<MSSA_Dog>();
+    private List<MSSA_Class> classes = new List<MSSA_Class>();
+
+    private int selectedTrialId = 0;
+    private bool isOnline = false;
+    private int queueCount = 0;
+    private string statusMessage;
+    private string statusMessageType = "info";
+    
+    private string runTimeString;
+    private string tieTimeString;
+    private decimal totalPoints = 0;
+
+    protected override async Task OnInitializedAsync()
+    {
+        await LoadData();
+        await CheckStatus();
+
+        // Subscribe to sync status
+        Sync.SyncStatusChanged += OnSyncStatusChanged;
+    }
+
+    private async Task LoadData()
+    {
+        // TODO: Load from API when online, or from cache when offline
+        // For now, load some test data
+        trials = new List<MSSA_Trial>
+        {
+            new MSSA_Trial { TrialId = 1, TrialName = "BWS Morning Trial", TrialDate = DateTime.Today, Stock = "Cattle" },
+            new MSSA_Trial { TrialId = 2, TrialName = "BWS Afternoon Trial", TrialDate = DateTime.Today, Stock = "Sheep" }
+        };
+
+        handlers = new List<MSSA_Handler>
+        {
+            new MSSA_Handler { HandlerId = 1, FirstName = "John", LastName = "Smith", FullName = "John Smith", HandlerLevel = "Open" },
+            new MSSA_Handler { HandlerId = 2, FirstName = "Jane", LastName = "Doe", FullName = "Jane Doe", HandlerLevel = "Started" }
+        };
+
+        dogs = new List<MSSA_Dog>
+        {
+            new MSSA_Dog { DogId = 1, Name = "Rex", Breed = "Border Collie" },
+            new MSSA_Dog { DogId = 2, Name = "Max", Breed = "Australian Shepherd" },
+            new MSSA_Dog { DogId = 3, Name = "Bella", Breed = "Kelpie" }
+        };
+
+        classes = new List<MSSA_Class>
+        {
+            new MSSA_Class { ClassId = 1, ClassName = "Open", SubClassName = "Horseback" },
+            new MSSA_Class { ClassId = 2, ClassName = "Started", SubClassName = "Afoot" },
+            new MSSA_Class { ClassId = 3, ClassName = "Intermediate", SubClassName = "Horseback" }
+        };
+
+        filteredDogs = dogs;
+    }
+
+    private async Task CheckStatus()
+    {
+        isOnline = await Sync.IsOnlineAsync();
+        queueCount = await Storage.GetQueueCountAsync();
+        StateHasChanged();
+    }
+
+    private void OnTrialChanged()
+    {
+        entry.TrialId = selectedTrialId;
+    }
+
+    private void OnHandlerChanged()
+    {
+        // In the real app, this would filter dogs by handler
+        // For now, just show all dogs
+        filteredDogs = dogs;
+    }
+
+    private void CalculateTotal()
+    {
+        decimal sum = 0;
+        if (entry.ObstacleScore1.HasValue) sum += entry.ObstacleScore1.Value;
+        if (entry.ObstacleScore2.HasValue) sum += entry.ObstacleScore2.Value;
+        if (entry.ObstacleScore3.HasValue) sum += entry.ObstacleScore3.Value;
+        if (entry.ObstacleScore4.HasValue) sum += entry.ObstacleScore4.Value;
+        if (entry.ObstacleScore5.HasValue) sum += entry.ObstacleScore5.Value;
+        if (entry.ObstacleScore6.HasValue) sum += entry.ObstacleScore6.Value;
+        if (entry.ObstacleScore7.HasValue) sum += entry.ObstacleScore7.Value;
+        if (entry.ObstacleScore8.HasValue) sum += entry.ObstacleScore8.Value;
+        if (entry.ObstacleScore9.HasValue) sum += entry.ObstacleScore9.Value;
+        if (entry.Penalty.HasValue) sum -= entry.Penalty.Value;
+        
+        totalPoints = sum;
+    }
+
+    private async Task HandleSubmit()
+    {
+        try
+        {
+            // Parse time strings
+            if (!string.IsNullOrEmpty(runTimeString))
+            {
+                entry.RunTime = ParseTime(runTimeString);
+            }
+            if (!string.IsNullOrEmpty(tieTimeString))
+            {
+                entry.TieBreakerTime = ParseTime(tieTimeString);
+            }
+
+            // Validate required fields
+            if (entry.TrialId == 0)
+            {
+                ShowMessage("Please select a trial", "warning");
+                return;
+            }
+            if (entry.HandlerId == 0)
+            {
+                ShowMessage("Please select a handler", "warning");
+                return;
+            }
+            if (entry.DogId == 0)
+            {
+                ShowMessage("Please select a dog", "warning");
+                return;
+            }
+            if (entry.ClassId == 0)
+            {
+                ShowMessage("Please select a class", "warning");
+                return;
+            }
+
+            // Save to offline storage
+            await Storage.AddEntryToQueueAsync(entry);
+            
+            ShowMessage("✅ Entry saved to queue! It will sync when online.", "success");
+            
+            // Refresh status
+            await CheckStatus();
+            
+            // Clear form for next entry
+            ClearForm();
+        }
+        catch (Exception ex)
+        {
+            ShowMessage($"❌ Error saving entry: {ex.Message}", "danger");
+        }
+    }
+
+    private void ClearForm()
+    {
+        entry = new MSSA_Entry();
+        runTimeString = string.Empty;
+        tieTimeString = string.Empty;
+        totalPoints = 0;
+    }
+
+    private void ViewQueue()
+    {
+        Navigation.NavigateTo("/queue");
+    }
+
+    private TimeSpan? ParseTime(string timeString)
+    {
+        if (string.IsNullOrWhiteSpace(timeString))
+            return null;
+
+        // Support formats: MM:SS or M:SS
+        var parts = timeString.Split(':');
+        if (parts.Length == 2)
+        {
+            if (int.TryParse(parts[0], out int minutes) && int.TryParse(parts[1], out int seconds))
+            {
+                return new TimeSpan(0, minutes, seconds);
+            }
+        }
+        return null;
+    }
+
+    private void ShowMessage(string message, string type)
+    {
+        statusMessage = message;
+        statusMessageType = type;
+        StateHasChanged();
+    }
+
+    private void ClearMessage()
+    {
+        statusMessage = null;
+    }
+
+    private void OnSyncStatusChanged(object sender, SyncStatusEventArgs e)
+    {
+        isOnline = e.IsOnline;
+        queueCount = e.QueuedCount;
+        InvokeAsync(StateHasChanged);
+    }
+
+    public void Dispose()
+    {
+        Sync.SyncStatusChanged -= OnSyncStatusChanged;
+    }
+}
