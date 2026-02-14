@@ -1,4 +1,4 @@
-﻿using System.Net.Http.Json;
+using System.Net.Http.Json;
 using MountainStates.MSSA.Module.MSSA_Entries.Models;
 using MountainStates.MSSA.Module.MSSA_Events.Models;
 using MountainStates.MSSA.Module.MSSA_Handlers.Models;
@@ -8,20 +8,19 @@ namespace MSSA.PWA.Services
 {
     /// <summary>
     /// Service for making API calls to the Oqtane backend
-    /// NOTE: This is a stub implementation. Update the base URL and endpoints
-    /// to match your actual Oqtane API structure.
     /// </summary>
     public class ApiService : IApiService
     {
         private readonly HttpClient _httpClient;
-        private readonly string _baseApiUrl;
+        private readonly int _moduleId;
 
         public ApiService(HttpClient httpClient, IConfiguration configuration)
         {
             _httpClient = httpClient;
-
-            // TODO: Update this with your actual Oqtane API base URL
-            _baseApiUrl = configuration["ApiBaseUrl"] ?? "https://your-oqtane-site.com/api";
+            
+            // Get the module ID from configuration
+            // You'll need to set this in appsettings.json
+            _moduleId = configuration.GetValue<int>("ModuleId", 1);
         }
 
         // Entry operations
@@ -29,8 +28,14 @@ namespace MSSA.PWA.Services
         {
             try
             {
-                var response = await _httpClient.PostAsJsonAsync($"{_baseApiUrl}/entries", entry);
+                // Set audit fields
+                entry.CreatedDate = DateTime.Now;
+                entry.ModifiedDate = DateTime.Now;
 
+                var response = await _httpClient.PostAsJsonAsync(
+                    $"/api/MSSA_Entry?moduleid={_moduleId}", 
+                    entry);
+                
                 if (response.IsSuccessStatusCode)
                 {
                     var savedEntry = await response.Content.ReadFromJsonAsync<MSSA_Entry>();
@@ -40,7 +45,7 @@ namespace MSSA.PWA.Services
                 {
                     var errorMessage = await response.Content.ReadAsStringAsync();
                     return ApiResponse<MSSA_Entry>.ErrorResponse(
-                        $"Failed to save entry: {errorMessage}",
+                        $"Failed to save entry: {errorMessage}", 
                         (int)response.StatusCode);
                 }
             }
@@ -54,9 +59,10 @@ namespace MSSA.PWA.Services
         {
             try
             {
+                // Note: The endpoint returns EntryListItem, but we'll use MSSA_Entry for now
                 var entries = await _httpClient.GetFromJsonAsync<List<MSSA_Entry>>(
-                    $"{_baseApiUrl}/entries/trial/{trialId}");
-
+                    $"/api/MSSA_Entry/trial/{trialId}?moduleid={_moduleId}");
+                
                 return ApiResponse<List<MSSA_Entry>>.SuccessResponse(entries ?? new List<MSSA_Entry>());
             }
             catch (Exception ex)
@@ -71,8 +77,8 @@ namespace MSSA.PWA.Services
             try
             {
                 var trial = await _httpClient.GetFromJsonAsync<MSSA_Trial>(
-                    $"{_baseApiUrl}/trials/{trialId}");
-
+                    $"/api/MSSA_Trial/{trialId}?moduleid={_moduleId}");
+                
                 return ApiResponse<MSSA_Trial>.SuccessResponse(trial);
             }
             catch (Exception ex)
@@ -85,10 +91,42 @@ namespace MSSA.PWA.Services
         {
             try
             {
-                var trials = await _httpClient.GetFromJsonAsync<List<MSSA_Trial>>(
-                    $"{_baseApiUrl}/trials/active");
+                // Get all events (which contain trials)
+                var events = await _httpClient.GetFromJsonAsync<List<MSSA_Event>>(
+                    $"/api/MSSA_Event?moduleid={_moduleId}");
+                
+                if (events == null || !events.Any())
+                    return ApiResponse<List<MSSA_Trial>>.SuccessResponse(new List<MSSA_Trial>());
 
-                return ApiResponse<List<MSSA_Trial>>.SuccessResponse(trials ?? new List<MSSA_Trial>());
+                // Get trials for recent events (last 90 days and upcoming)
+                var recentEvents = events.Where(e => 
+                    e.StartDate >= DateTime.Now.AddDays(-90) ||
+                    e.EndDate >= DateTime.Now).ToList();
+
+                var allTrials = new List<MSSA_Trial>();
+
+                // Get trials for each recent event
+                foreach (var evt in recentEvents)
+                {
+                    try
+                    {
+                        var trials = await _httpClient.GetFromJsonAsync<List<MSSA_Trial>>(
+                            $"/api/MSSA_Trial/event/{evt.EventId}?moduleid={_moduleId}");
+                        
+                        if (trials != null)
+                            allTrials.AddRange(trials);
+                    }
+                    catch
+                    {
+                        // Skip events that fail
+                        continue;
+                    }
+                }
+
+                // Sort by date
+                allTrials = allTrials.OrderByDescending(t => t.TrialDate).ToList();
+                
+                return ApiResponse<List<MSSA_Trial>>.SuccessResponse(allTrials);
             }
             catch (Exception ex)
             {
@@ -101,13 +139,19 @@ namespace MSSA.PWA.Services
         {
             try
             {
+                Console.WriteLine($"Calling: /api/MSSA_Handler?moduleid={_moduleId}");
                 var handlers = await _httpClient.GetFromJsonAsync<List<MSSA_Handler>>(
-                    $"{_baseApiUrl}/handlers/active");
+                    $"/api/MSSA_Handler?moduleid={_moduleId}");
 
-                return ApiResponse<List<MSSA_Handler>>.SuccessResponse(handlers ?? new List<MSSA_Handler>());
+                // Filter to active only
+                var activeHandlers = handlers?.Where(h => h.IsActive).ToList() ?? new List<MSSA_Handler>();
+
+                return ApiResponse<List<MSSA_Handler>>.SuccessResponse(activeHandlers);
             }
             catch (Exception ex)
             {
+                Console.WriteLine($"ERROR getting handlers: {ex.Message}");
+                Console.WriteLine($"Stack: {ex.StackTrace}");
                 return ApiResponse<List<MSSA_Handler>>.ErrorResponse($"Error getting handlers: {ex.Message}");
             }
         }
@@ -117,8 +161,8 @@ namespace MSSA.PWA.Services
             try
             {
                 var handler = await _httpClient.GetFromJsonAsync<MSSA_Handler>(
-                    $"{_baseApiUrl}/handlers/{handlerId}");
-
+                    $"/api/MSSA_Handler/{handlerId}?moduleid={_moduleId}");
+                
                 return ApiResponse<MSSA_Handler>.SuccessResponse(handler);
             }
             catch (Exception ex)
@@ -133,9 +177,13 @@ namespace MSSA.PWA.Services
             try
             {
                 var dogs = await _httpClient.GetFromJsonAsync<List<MSSA_Dog>>(
-                    $"{_baseApiUrl}/dogs/active");
-
-                return ApiResponse<List<MSSA_Dog>>.SuccessResponse(dogs ?? new List<MSSA_Dog>());
+                    $"/api/MSSA_Dog?moduleid={_moduleId}");
+                
+                // Filter to active only
+                var activeDogs = dogs?.Where(d => d.IsActive && !d.IsDeceased && !d.IsSold).ToList() 
+                                ?? new List<MSSA_Dog>();
+                
+                return ApiResponse<List<MSSA_Dog>>.SuccessResponse(activeDogs);
             }
             catch (Exception ex)
             {
@@ -147,10 +195,16 @@ namespace MSSA.PWA.Services
         {
             try
             {
-                var dogs = await _httpClient.GetFromJsonAsync<List<MSSA_Dog>>(
-                    $"{_baseApiUrl}/dogs/handler/{handlerId}");
+                // Get all dogs and filter client-side
+                // (We could add a server endpoint for this later for better performance)
+                var allDogs = await GetActiveDogsAsync();
+                
+                if (!allDogs.Success)
+                    return allDogs;
 
-                return ApiResponse<List<MSSA_Dog>>.SuccessResponse(dogs ?? new List<MSSA_Dog>());
+                // For now, return all dogs since we don't have handler-dog relationships in the API
+                // TODO: Add handler-dog relationship filtering
+                return allDogs;
             }
             catch (Exception ex)
             {
@@ -164,9 +218,15 @@ namespace MSSA.PWA.Services
             try
             {
                 var classes = await _httpClient.GetFromJsonAsync<List<MSSA_Class>>(
-                    $"{_baseApiUrl}/classes/active");
-
-                return ApiResponse<List<MSSA_Class>>.SuccessResponse(classes ?? new List<MSSA_Class>());
+                    $"/api/MSSA_Class?moduleid={_moduleId}");
+                
+                // Filter to active only
+                var activeClasses = classes?.Where(c => c.IsActive).ToList() ?? new List<MSSA_Class>();
+                
+                // Sort by print order
+                activeClasses = activeClasses.OrderBy(c => c.PrintOrder ?? 999).ToList();
+                
+                return ApiResponse<List<MSSA_Class>>.SuccessResponse(activeClasses);
             }
             catch (Exception ex)
             {
@@ -179,7 +239,7 @@ namespace MSSA.PWA.Services
         {
             try
             {
-                var response = await _httpClient.GetAsync($"{_baseApiUrl}/health");
+                var response = await _httpClient.GetAsync("/api/Health");
                 return response.IsSuccessStatusCode;
             }
             catch

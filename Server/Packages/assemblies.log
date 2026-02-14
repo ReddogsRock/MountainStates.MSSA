@@ -64,5 +64,11 @@
   "System.Security.Cryptography.ProtectedData.dll": 1,
   "System.Security.Permissions.dll": 1,
   "System.Windows.Extensions.dll": 1,
-  "ZstdSharp.dll": 1
+  "ZstdSharp.dll": 1,
+  "EPPlus.dll": 1,
+  "EPPlus.Interfaces.dll": 1,
+  "Microsoft.IO.RecyclableMemoryStream.dll": 1,
+  "EPPlus.System.Drawing.dll": 1,
+  "Microsoft.Win32.SystemEvents.dll": 1,
+  "System.Drawing.Common.dll": 1
 }

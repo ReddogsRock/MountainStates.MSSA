@@ -1,0 +1,781 @@
+@using Oqtane.Modules.Controls
+@using MountainStates.MSSA.Module.TrialSecretary.Services
+@using MountainStates.MSSA.Module.TrialSecretary.Models
+@using MountainStates.MSSA.Module.MSSA_Handlers.Models
+@using MountainStates.MSSA.Module.MSSA_Dogs.Models
+
+@namespace MountainStates.MSSA.Module.TrialSecretary
+@inherits ModuleBase
+@inject ITrialSecretaryService TrialSecretaryService
+@inject NavigationManager NavigationManager
+@inject IStringLocalizer<Index> Localizer
+
+<div class="container-fluid">
+    <h3>Trial Entry Registration</h3>
+
+    @if (_isLoading)
+    {
+        <div class="text-center my-5">
+            <div class="spinner-border" role="status">
+                <span class="sr-only">Loading...</span>
+            </div>
+            <p class="mt-2">Loading recent events...</p>
+        </div>
+    }
+    else if (_errorMessage != null)
+    {
+        <div class="alert alert-danger">
+            <strong>Error:</strong> @_errorMessage
+        </div>
+    }
+    else
+    {
+        <!-- Event Selection -->
+        <div class="card mb-4">
+            <div class="card-header bg-primary text-white">
+                <h5 class="mb-0">1. Select Event</h5>
+            </div>
+            <div class="card-body">
+                @if (_recentEvents.Count == 0)
+                {
+                    <div class="alert alert-warning">
+                        No events found within the last 30 days.
+                    </div>
+                }
+                else
+                {
+                    <div class="form-group">
+                        <label for="eventSelect">Recent Events (Last 30 Days):</label>
+                        <select id="eventSelect" class="form-control" @onchange="OnEventSelected">
+                            <option value="">-- Select an Event --</option>
+                            @foreach (var evt in _recentEvents)
+                            {
+                                <option value="@evt.EventId">
+                                    @evt.EventName - @evt.DateRange (@evt.City, @evt.StateCode)
+                                </option>
+                            }
+                        </select>
+                    </div>
+
+                    @if (_selectedEvent != null)
+                    {
+                        <div class="mt-4">
+                            <h6>Trials for @_selectedEvent.EventName:</h6>
+                            @if (_selectedEvent.Trials.Count == 0)
+                            {
+                                <div class="alert alert-info">No trials found for this event.</div>
+                            }
+                            else
+                            {
+                                <table class="table table-sm table-bordered">
+                                    <thead class="thead-light">
+                                        <tr>
+                                            <th>Trial Name</th>
+                                            <th>Trial ID</th>
+                                            <th>Stock</th>
+                                            <th>Class</th>
+                                        </tr>
+                                    </thead>
+                                    <tbody>
+                                        @foreach (var trial in _selectedEvent.Trials)
+                                        {
+                                            <tr>
+                                                <td>@trial.TrialName</td>
+                                                <td>@trial.TrialIdentifier</td>
+                                                <td>@trial.Stock</td>
+                                                <td>
+                                                    <select class="form-control form-control-sm" 
+                                                            value="@(_selectedTrialClasses.ContainsKey(trial.TrialId) ? _selectedTrialClasses[trial.TrialId] : 0)"
+                                                            @onchange="@(e => OnClassSelected(trial.TrialId, int.Parse(e.Value.ToString())))">
+                                                        <option value="0">-- Select Class --</option>
+                                                        @foreach (var cls in trial.AvailableClasses)
+                                                        {
+                                                            <option value="@cls.ClassId">
+                                                                @cls.DisplayName
+                                                            </option>
+                                                        }
+                                                    </select>
+                                                </td>
+                                            </tr>
+                                        }
+                                    </tbody>
+                                </table>
+                            }
+                        </div>
+                    }
+                }
+            </div>
+        </div>
+
+        <!-- Handler Selection -->
+        <div class="card mb-4">
+            <div class="card-header bg-success text-white">
+                <h5 class="mb-0">2. Select Handler</h5>
+            </div>
+            <div class="card-body">
+                <div class="row">
+                    <div class="col-md-4">
+                        <div class="form-group">
+                            <label for="handlerId">Handler ID:</label>
+                            <input id="handlerId" type="number" class="form-control" @bind="_handlerIdInput" 
+                                   placeholder="Enter Handler ID" />
+                            <button class="btn btn-sm btn-outline-primary mt-1" @onclick="SearchHandlerById">
+                                Find by ID
+                            </button>
+                        </div>
+                    </div>
+                    <div class="col-md-8">
+                        <div class="form-group">
+                            <label for="handlerSearch">Search by Name:</label>
+                            <div class="input-group">
+                                <input id="handlerSearch" type="text" class="form-control" @bind="_handlerSearchTerm" 
+                                       placeholder="Enter handler name..." @onkeyup="OnHandlerSearchKeyUp" />
+                                <div class="input-group-append">
+                                    <button class="btn btn-outline-primary" @onclick="SearchHandlers">Search</button>
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+
+                @if (_handlerSearchResults.Count > 0)
+                {
+                    <div class="mt-2">
+                        <label>Search Results:</label>
+                        <div class="list-group">
+                            @foreach (var handler in _handlerSearchResults)
+                            {
+                                <button type="button" class="list-group-item list-group-item-action" 
+                                        @onclick="@(() => SelectHandler(handler))">
+                                    <strong>@handler.FullName</strong> (ID: @handler.HandlerId)
+                                    <br />
+                                    <small>@handler.City, @handler.StateCode</small>
+                                    @if (handler.HasActiveMembership)
+                                    {
+                                        <span class="badge badge-success float-right">MSSA Member</span>
+                                    }
+                                </button>
+                            }
+                        </div>
+                    </div>
+                }
+
+                @if (_selectedHandler != null)
+                {
+                    <div class="alert alert-success mt-3">
+                        <strong>Selected Handler:</strong> @_selectedHandler.FullName (ID: @_selectedHandler.HandlerId)
+                        <br />
+                        @_selectedHandler.City, @_selectedHandler.StateCode
+                        @if (_selectedHandler.HasActiveMembership)
+                        {
+                            <span class="badge badge-success">MSSA Member</span>
+                        }
+                        <button class="btn btn-sm btn-outline-secondary float-right" @onclick="ClearHandler">
+                            Clear
+                        </button>
+                    </div>
+                }
+
+                <!-- Add New Handler -->
+                <div class="mt-3">
+                    <button class="btn btn-sm btn-outline-success" @onclick="ToggleAddHandler">
+                        @(_showAddHandler ? "Cancel" : "Add New Handler")
+                    </button>
+                </div>
+
+                @if (_showAddHandler)
+                {
+                    <div class="card mt-2">
+                        <div class="card-body">
+                            <h6>Create New Handler</h6>
+                            <div class="row">
+                                <div class="col-md-6">
+                                    <div class="form-group">
+                                        <label>First Name: <span class="text-danger">*</span></label>
+                                        <input type="text" class="form-control" @bind="_newHandler.FirstName" />
+                                    </div>
+                                </div>
+                                <div class="col-md-6">
+                                    <div class="form-group">
+                                        <label>Last Name: <span class="text-danger">*</span></label>
+                                        <input type="text" class="form-control" @bind="_newHandler.LastName" />
+                                    </div>
+                                </div>
+                            </div>
+                            <div class="row">
+                                <div class="col-md-6">
+                                    <div class="form-group">
+                                        <label>Email:</label>
+                                        <input type="email" class="form-control" @bind="_newHandler.Email" />
+                                    </div>
+                                </div>
+                                <div class="col-md-6">
+                                    <div class="form-group">
+                                        <label>Phone:</label>
+                                        <input type="tel" class="form-control" @bind="_newHandler.Phone" />
+                                    </div>
+                                </div>
+                            </div>
+                            <div class="row">
+                                <div class="col-md-8">
+                                    <div class="form-group">
+                                        <label>City:</label>
+                                        <input type="text" class="form-control" @bind="_newHandler.City" />
+                                    </div>
+                                </div>
+                                <div class="col-md-4">
+                                    <div class="form-group">
+                                        <label>State:</label>
+                                        <input type="text" class="form-control" maxlength="2" @bind="_newHandler.StateCode" />
+                                    </div>
+                                </div>
+                            </div>
+                            <button class="btn btn-success" @onclick="CreateNewHandler">Create Handler</button>
+                        </div>
+                    </div>
+                }
+            </div>
+        </div>
+
+        <!-- Dog Selection -->
+        <div class="card mb-4">
+            <div class="card-header bg-info text-white">
+                <h5 class="mb-0">3. Select Dog</h5>
+            </div>
+            <div class="card-body">
+                <div class="row">
+                    <div class="col-md-4">
+                        <div class="form-group">
+                            <label for="dogId">Dog ID:</label>
+                            <input id="dogId" type="number" class="form-control" @bind="_dogIdInput" 
+                                   placeholder="Enter Dog ID" />
+                            <button class="btn btn-sm btn-outline-primary mt-1" @onclick="SearchDogById">
+                                Find by ID
+                            </button>
+                        </div>
+                    </div>
+                    <div class="col-md-8">
+                        <div class="form-group">
+                            <label for="dogSearch">Search by Name:</label>
+                            <div class="input-group">
+                                <input id="dogSearch" type="text" class="form-control" @bind="_dogSearchTerm" 
+                                       placeholder="Enter dog name..." @onkeyup="OnDogSearchKeyUp" />
+                                <div class="input-group-append">
+                                    <button class="btn btn-outline-primary" @onclick="SearchDogs">Search</button>
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+
+                @if (_dogSearchResults.Count > 0)
+                {
+                    <div class="mt-2">
+                        <label>Search Results:</label>
+                        <div class="list-group">
+                            @foreach (var dog in _dogSearchResults)
+                            {
+                                <button type="button" class="list-group-item list-group-item-action" 
+                                        @onclick="@(() => SelectDog(dog))">
+                                    <strong>@dog.Name</strong> (ID: @dog.DogId)
+                                    <br />
+                                    <small>@dog.DisplayInfo</small>
+                                </button>
+                            }
+                        </div>
+                    </div>
+                }
+
+                @if (_selectedDog != null)
+                {
+                    <div class="alert alert-info mt-3">
+                        <strong>Selected Dog:</strong> @_selectedDog.Name (ID: @_selectedDog.DogId)
+                        <br />
+                        @if (!string.IsNullOrWhiteSpace(_selectedDog.Breed))
+                        {
+                            <span>Breed: @_selectedDog.Breed</span>
+                        }
+                        <button class="btn btn-sm btn-outline-secondary float-right" @onclick="ClearDog">
+                            Clear
+                        </button>
+                    </div>
+                }
+
+                <!-- Add New Dog -->
+                <div class="mt-3">
+                    <button class="btn btn-sm btn-outline-info" @onclick="ToggleAddDog">
+                        @(_showAddDog ? "Cancel" : "Add New Dog")
+                    </button>
+                </div>
+
+                @if (_showAddDog)
+                {
+                    <div class="card mt-2">
+                        <div class="card-body">
+                            <h6>Create New Dog</h6>
+                            <div class="row">
+                                <div class="col-md-6">
+                                    <div class="form-group">
+                                        <label>Dog Name: <span class="text-danger">*</span></label>
+                                        <input type="text" class="form-control" @bind="_newDog.Name" />
+                                    </div>
+                                </div>
+                                <div class="col-md-6">
+                                    <div class="form-group">
+                                        <label>Breed:</label>
+                                        <input type="text" class="form-control" @bind="_newDog.Breed" />
+                                    </div>
+                                </div>
+                            </div>
+                            <div class="form-group">
+                                <label>Owner Name:</label>
+                                <input type="text" class="form-control" @bind="_newDog.OwnerName" />
+                            </div>
+                            <button class="btn btn-info" @onclick="CreateNewDog">Create Dog</button>
+                        </div>
+                    </div>
+                }
+            </div>
+        </div>
+
+        <!-- Submit Entries -->
+        <div class="card">
+            <div class="card-header bg-warning">
+                <h5 class="mb-0">4. Submit Entries</h5>
+            </div>
+            <div class="card-body">
+                @if (_submitMessage != null)
+                {
+                    <div class="alert @(_submitSuccess ? "alert-success" : "alert-danger")">
+                        @_submitMessage
+                    </div>
+                }
+
+                <div class="mb-3">
+                    <strong>Summary:</strong>
+                    <ul>
+                        <li>Event: @(_selectedEvent?.EventName ?? "Not selected")</li>
+                        <li>Handler: @(_selectedHandler?.FullName ?? "Not selected")</li>
+                        <li>Dog: @(_selectedDog?.Name ?? "Not selected")</li>
+                        <li>Classes selected: @_selectedTrialClasses.Count</li>
+                    </ul>
+                </div>
+
+                <button class="btn btn-primary btn-lg" @onclick="SubmitEntries" 
+                        disabled="@(!CanSubmitEntries)">
+                    <i class="oi oi-check"></i> Enter Trials
+                </button>
+
+                @if (!CanSubmitEntries)
+                {
+                    <div class="text-muted mt-2">
+                        <small>Please select an event, handler, dog, and at least one class before submitting.</small>
+                    </div>
+                }
+            </div>
+        </div>
+
+        <!-- Current Entries for Event -->
+        @if (_selectedEvent != null && _eventEntries != null)
+        {
+            <div class="card mt-4">
+                <div class="card-header bg-secondary text-white">
+                    <h5 class="mb-0">Current Entries for @_eventEntries.EventName</h5>
+                </div>
+                <div class="card-body">
+                    @if (_eventEntries.Trials.Count == 0 || !_eventEntries.Trials.Any(t => t.Classes.Any()))
+                    {
+                        <div class="alert alert-info">No entries have been recorded for this event yet.</div>
+                    }
+                    else
+                    {
+                        @foreach (var trial in _eventEntries.Trials.Where(t => t.Classes.Any()))
+                        {
+                            <div class="mb-4">
+                                <h6 class="text-primary">
+                                    <strong>@trial.TrialName</strong> 
+                                    (@trial.TrialIdentifier) - @trial.Stock
+                                </h6>
+
+                                @foreach (var classGroup in trial.Classes)
+                                {
+                                    <div class="ml-3 mb-3">
+                                        <h6 class="text-secondary">@classGroup.DisplayName</h6>
+                                        <table class="table table-sm table-striped">
+                                            <thead>
+                                                <tr>
+                                                    <th>Run Order</th>
+                                                    <th>Handler</th>
+                                                    <th>Dog</th>
+                                                    <th>Member</th>
+                                                </tr>
+                                            </thead>
+                                            <tbody>
+                                                @foreach (var entry in classGroup.Entries)
+                                                {
+                                                    <tr>
+                                                        <td>@(entry.RunOrder?.ToString() ?? "-")</td>
+                                                        <td>@entry.HandlerName</td>
+                                                        <td>@entry.DogName</td>
+                                                        <td>
+                                                            @if (entry.HandlerIsMSSAMember)
+                                                            {
+                                                                <span class="badge badge-success">Member</span>
+                                                            }
+                                                            else
+                                                            {
+                                                                <span class="badge badge-secondary">Non-Member</span>
+                                                            }
+                                                        </td>
+                                                    </tr>
+                                                }
+                                            </tbody>
+                                        </table>
+                                        <small class="text-muted">@classGroup.Entries.Count entry(ies)</small>
+                                    </div>
+                                }
+                            </div>
+                        }
+                    }
+                </div>
+            </div>
+        }
+    }
+</div>
+
+@code {
+    private bool _isLoading = true;
+    private string _errorMessage;
+    private string _submitMessage;
+    private bool _submitSuccess;
+
+    private List<RecentEventDto> _recentEvents = new List<RecentEventDto>();
+    private RecentEventDto _selectedEvent;
+    private Dictionary<int, int> _selectedTrialClasses = new Dictionary<int, int>();
+    private EventEntriesSummaryDto _eventEntries;
+
+    // Handler selection
+    private string _handlerSearchTerm = "";
+    private int? _handlerIdInput;
+    private List<HandlerSearchDto> _handlerSearchResults = new List<HandlerSearchDto>();
+    private HandlerSearchDto _selectedHandler;
+    private bool _showAddHandler = false;
+    private CreateHandlerDto _newHandler = new CreateHandlerDto();
+
+    // Dog selection
+    private string _dogSearchTerm = "";
+    private int? _dogIdInput;
+    private List<DogSearchDto> _dogSearchResults = new List<DogSearchDto>();
+    private DogSearchDto _selectedDog;
+    private bool _showAddDog = false;
+    private CreateDogDto _newDog = new CreateDogDto();
+
+    private bool CanSubmitEntries =>
+        _selectedEvent != null &&
+        _selectedHandler != null &&
+        _selectedDog != null &&
+        _selectedTrialClasses.Count > 0;
+
+    protected override async Task OnInitializedAsync()
+    {
+        try
+        {
+            _recentEvents = await TrialSecretaryService.GetRecentEventsWithTrialsAsync(ModuleState.ModuleId);
+            _isLoading = false;
+        }
+        catch (Exception ex)
+        {
+            _errorMessage = $"Failed to load recent events: {ex.Message}";
+            _isLoading = false;
+        }
+    }
+
+    private async Task OnEventSelected(ChangeEventArgs e)
+    {
+        if (int.TryParse(e.Value.ToString(), out int eventId) && eventId > 0)
+        {
+            _selectedEvent = _recentEvents.FirstOrDefault(ev => ev.EventId == eventId);
+            _selectedTrialClasses.Clear();
+            _submitMessage = null;
+            
+            // Load entries for this event
+            await LoadEventEntries(eventId);
+        }
+        else
+        {
+            _selectedEvent = null;
+            _selectedTrialClasses.Clear();
+            _eventEntries = null;
+        }
+    }
+
+    private async Task LoadEventEntries(int eventId)
+    {
+        try
+        {
+            _eventEntries = await TrialSecretaryService.GetEventEntriesAsync(eventId, ModuleState.ModuleId);
+        }
+        catch (Exception ex)
+        {
+            _errorMessage = $"Failed to load event entries: {ex.Message}";
+        }
+    }
+
+    private void OnClassSelected(int trialId, int classId)
+    {
+        if (classId > 0)
+        {
+            _selectedTrialClasses[trialId] = classId;
+        }
+        else
+        {
+            _selectedTrialClasses.Remove(trialId);
+        }
+        _submitMessage = null;
+    }
+
+    // Handler methods
+    private async Task OnHandlerSearchKeyUp(KeyboardEventArgs e)
+    {
+        if (e.Key == "Enter")
+        {
+            await SearchHandlers();
+        }
+    }
+
+    private async Task SearchHandlers()
+    {
+        try
+        {
+            _handlerSearchResults = await TrialSecretaryService.SearchHandlersAsync(_handlerSearchTerm, ModuleState.ModuleId);
+        }
+        catch (Exception ex)
+        {
+            _errorMessage = $"Handler search failed: {ex.Message}";
+        }
+    }
+
+    private async Task SearchHandlerById()
+    {
+        if (_handlerIdInput.HasValue && _handlerIdInput.Value > 0)
+        {
+            try
+            {
+                var handler = await TrialSecretaryService.GetHandlerByIdAsync(_handlerIdInput.Value, ModuleState.ModuleId);
+                if (handler != null)
+                {
+                    SelectHandler(handler);
+                }
+                else
+                {
+                    _errorMessage = $"Handler with ID {_handlerIdInput.Value} not found.";
+                }
+            }
+            catch (Exception ex)
+            {
+                _errorMessage = $"Failed to find handler: {ex.Message}";
+            }
+        }
+    }
+
+    private void SelectHandler(HandlerSearchDto handler)
+    {
+        _selectedHandler = handler;
+        _handlerSearchResults.Clear();
+        _handlerSearchTerm = "";
+        _handlerIdInput = null;
+        _showAddHandler = false;
+        _submitMessage = null;
+    }
+
+    private void ClearHandler()
+    {
+        _selectedHandler = null;
+        _submitMessage = null;
+    }
+
+    private void ToggleAddHandler()
+    {
+        _showAddHandler = !_showAddHandler;
+        if (_showAddHandler)
+        {
+            _newHandler = new CreateHandlerDto();
+        }
+    }
+
+    private async Task CreateNewHandler()
+    {
+        if (string.IsNullOrWhiteSpace(_newHandler.FirstName) || string.IsNullOrWhiteSpace(_newHandler.LastName))
+        {
+            _errorMessage = "First name and last name are required.";
+            return;
+        }
+
+        try
+        {
+            var handler = await TrialSecretaryService.CreateHandlerAsync(_newHandler, ModuleState.ModuleId);
+            
+            // Select the newly created handler
+            _selectedHandler = new HandlerSearchDto
+            {
+                HandlerId = handler.HandlerId,
+                FullName = handler.FullName,
+                City = handler.City,
+                StateCode = handler.StateCode,
+                Email = handler.Email,
+                Phone = handler.Phone,
+                HasActiveMembership = false
+            };
+
+            _showAddHandler = false;
+            _newHandler = new CreateHandlerDto();
+            _submitMessage = null;
+        }
+        catch (Exception ex)
+        {
+            _errorMessage = $"Failed to create handler: {ex.Message}";
+        }
+    }
+
+    // Dog methods
+    private async Task OnDogSearchKeyUp(KeyboardEventArgs e)
+    {
+        if (e.Key == "Enter")
+        {
+            await SearchDogs();
+        }
+    }
+
+    private async Task SearchDogs()
+    {
+        try
+        {
+            _dogSearchResults = await TrialSecretaryService.SearchDogsAsync(_dogSearchTerm, ModuleState.ModuleId);
+        }
+        catch (Exception ex)
+        {
+            _errorMessage = $"Dog search failed: {ex.Message}";
+        }
+    }
+
+    private async Task SearchDogById()
+    {
+        if (_dogIdInput.HasValue && _dogIdInput.Value > 0)
+        {
+            try
+            {
+                var dog = await TrialSecretaryService.GetDogByIdAsync(_dogIdInput.Value, ModuleState.ModuleId);
+                if (dog != null)
+                {
+                    SelectDog(dog);
+                }
+                else
+                {
+                    _errorMessage = $"Dog with ID {_dogIdInput.Value} not found.";
+                }
+            }
+            catch (Exception ex)
+            {
+                _errorMessage = $"Failed to find dog: {ex.Message}";
+            }
+        }
+    }
+
+    private void SelectDog(DogSearchDto dog)
+    {
+        _selectedDog = dog;
+        _dogSearchResults.Clear();
+        _dogSearchTerm = "";
+        _dogIdInput = null;
+        _showAddDog = false;
+        _submitMessage = null;
+    }
+
+    private void ClearDog()
+    {
+        _selectedDog = null;
+        _submitMessage = null;
+    }
+
+    private void ToggleAddDog()
+    {
+        _showAddDog = !_showAddDog;
+        if (_showAddDog)
+        {
+            _newDog = new CreateDogDto();
+        }
+    }
+
+    private async Task CreateNewDog()
+    {
+        if (string.IsNullOrWhiteSpace(_newDog.Name))
+        {
+            _errorMessage = "Dog name is required.";
+            return;
+        }
+
+        try
+        {
+            var dog = await TrialSecretaryService.CreateDogAsync(_newDog, ModuleState.ModuleId);
+            
+            // Select the newly created dog
+            _selectedDog = new DogSearchDto
+            {
+                DogId = dog.DogId,
+                Name = dog.Name,
+                Breed = dog.Breed,
+                OwnerName = dog.OwnerName
+            };
+
+            _showAddDog = false;
+            _newDog = new CreateDogDto();
+            _submitMessage = null;
+        }
+        catch (Exception ex)
+        {
+            _errorMessage = $"Failed to create dog: {ex.Message}";
+        }
+    }
+
+    // Submit entries
+    private async Task SubmitEntries()
+    {
+        if (!CanSubmitEntries)
+        {
+            return;
+        }
+
+        try
+        {
+            var entriesDto = new CreateEntriesDto
+            {
+                HandlerId = _selectedHandler.HandlerId,
+                DogId = _selectedDog.DogId,
+                TrialEntries = _selectedTrialClasses.Select(kvp => new TrialEntryDto
+                {
+                    TrialId = kvp.Key,
+                    ClassId = kvp.Value
+                }).ToList()
+            };
+
+            var entryIds = await TrialSecretaryService.CreateEntriesAsync(entriesDto, ModuleState.ModuleId);
+
+            _submitSuccess = true;
+            _submitMessage = $"Successfully created {entryIds.Count} entries!";
+
+            // Reset class selections for next entry
+            _selectedTrialClasses.Clear();
+            
+            // Reload entries to show the new ones
+            if (_selectedEvent != null)
+            {
+                await LoadEventEntries(_selectedEvent.EventId);
+            }
+        }
+        catch (Exception ex)
+        {
+            _submitSuccess = false;
+            _submitMessage = $"Failed to submit entries: {ex.Message}";
+        }
+    }
+}
