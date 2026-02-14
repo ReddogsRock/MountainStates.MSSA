@@ -1,0 +1,630 @@
+@namespace MountainStates.MSSA.Module.MSSA_Excel
+@inherits ModuleBase
+@using Microsoft.AspNetCore.Components.Forms
+@using MountainStates.MSSA.Module.MSSA_Events.Models
+@inject HttpClient Http
+@inject NavigationManager NavigationManager
+@inject IJSRuntime JSRuntime
+
+@if (currentView == "menu")
+{
+    <!-- Main Menu -->
+    <div class="container">
+        <div class="row mb-4">
+            <div class="col">
+                <h3>📊 MSSA Excel Tools</h3>
+                <p class="text-muted">Manage trial entries and scores using Excel spreadsheets</p>
+            </div>
+        </div>
+
+        <div class="row">
+            <!-- Import Entries Card -->
+            <div class="col-md-4 mb-3">
+                <div class="card h-100">
+                    <div class="card-body">
+                        <h5 class="card-title">📤 Import Entries</h5>
+                        <p class="card-text">Upload an Excel file containing trial entries (Handler ID, Dog ID, Trial ID, Class ID)</p>
+                        <p class="text-muted small">
+                            <strong>When:</strong> After receiving entries from handlers<br/>
+                            <strong>Who:</strong> Trial Secretary
+                        </p>
+                    </div>
+                    <div class="card-footer">
+                        <button class="btn btn-primary w-100" @onclick='() => SwitchView("importentries")'>
+                            Import Entries →
+                        </button>
+                    </div>
+                </div>
+            </div>
+
+            <!-- Generate Run Order Card -->
+            <div class="col-md-4 mb-3">
+                <div class="card h-100">
+                    <div class="card-body">
+                        <h5 class="card-title">🎲 Generate Run Order</h5>
+                        <p class="card-text">Create a randomized run order spreadsheet for scorekeepers to use at trials</p>
+                        <p class="text-muted small">
+                            <strong>When:</strong> Day before trial<br/>
+                            <strong>Who:</strong> Trial Secretary
+                        </p>
+                    </div>
+                    <div class="card-footer">
+                        <button class="btn btn-success w-100" @onclick='() => SwitchView("runorder")'>
+                            Generate Run Order →
+                        </button>
+                    </div>
+                </div>
+            </div>
+
+            <!-- Import Scores Card -->
+            <div class="col-md-4 mb-3">
+                <div class="card h-100">
+                    <div class="card-body">
+                        <h5 class="card-title">📥 Import Scores</h5>
+                        <p class="card-text">Upload completed run order with scores. System calculates placing and points automatically</p>
+                        <p class="text-muted small">
+                            <strong>When:</strong> After trial completion<br/>
+                            <strong>Who:</strong> Scorekeeper/Secretary
+                        </p>
+                    </div>
+                    <div class="card-footer">
+                        <button class="btn btn-info w-100" @onclick='() => SwitchView("importscores")'>
+                            Import Scores →
+                        </button>
+                    </div>
+                </div>
+            </div>
+        </div>
+
+        <div class="row mt-4">
+            <div class="col">
+                <div class="card">
+                    <div class="card-header">
+                        <h5>ℹ️ Quick Guide</h5>
+                    </div>
+                    <div class="card-body">
+                        <h6>Typical Workflow:</h6>
+                        <ol>
+                            <li><strong>Import Entries</strong> - Trial secretary uploads Excel with all entries received from handlers</li>
+                            <li><strong>Generate Run Order</strong> - System creates randomized run order (grouped by class)</li>
+                            <li>Scorekeeper uses run order at trial to record times and obstacle scores</li>
+                            <li><strong>Import Scores</strong> - Upload completed run order, system calculates placing and points</li>
+                        </ol>
+                        <hr/>
+                        <h6>Time Entry Format:</h6>
+                        <p class="mb-0">Scorekeepers type digits only - system auto-converts:
+                            <code>245</code> → 2:45, 
+                            <code>1234</code> → 12:34
+                        </p>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+}
+else if (currentView == "importentries")
+{
+    <!-- Import Entries View -->
+    <div class="container">
+        <div class="row mb-3">
+            <div class="col">
+                <button class="btn btn-link" @onclick='() => SwitchView("menu")'>← Back to Excel Tools</button>
+                <h3>Import Entries from Excel</h3>
+                <p class="text-muted">Upload an Excel file containing trial entries (Handler ID, Dog ID, Trial ID, Class ID)</p>
+            </div>
+        </div>
+
+        @if (!string.IsNullOrEmpty(statusMessage))
+        {
+            <div class="alert alert-@statusType alert-dismissible fade show" role="alert">
+                @statusMessage
+                @if (result != null && result.Errors.Any())
+                {
+                    <hr />
+                    <strong>Errors:</strong>
+                    <ul>
+                        @foreach (var error in result.Errors)
+                        {
+                            <li>@error</li>
+                        }
+                    </ul>
+                }
+                @if (result != null && result.Warnings.Any())
+                {
+                    <hr />
+                    <strong>Warnings:</strong>
+                    <ul>
+                        @foreach (var warning in result.Warnings)
+                        {
+                            <li>@warning</li>
+                        }
+                    </ul>
+                }
+                <button type="button" class="btn-close" @onclick="ClearMessage"></button>
+            </div>
+        }
+
+        <div class="card">
+            <div class="card-header">
+                <h5>Excel File Format</h5>
+            </div>
+            <div class="card-body">
+                <p>Your Excel file should have the following columns (with headers in row 1):</p>
+                <table class="table table-sm">
+                    <thead>
+                        <tr>
+                            <th>Column A</th>
+                            <th>Column B</th>
+                            <th>Column C</th>
+                            <th>Column D</th>
+                        </tr>
+                    </thead>
+                    <tbody>
+                        <tr>
+                            <td>TrialId</td>
+                            <td>HandlerId</td>
+                            <td>DogId</td>
+                            <td>ClassId</td>
+                        </tr>
+                        <tr class="text-muted">
+                            <td>1</td>
+                            <td>25</td>
+                            <td>103</td>
+                            <td>2</td>
+                        </tr>
+                    </tbody>
+                </table>
+            </div>
+        </div>
+
+        <div class="card mt-3">
+            <div class="card-body">
+                <InputFile OnChange="HandleFileSelected" class="form-control mb-3" accept=".xlsx,.xls" />
+                
+                @if (selectedFile != null)
+                {
+                    <p><strong>Selected:</strong> @selectedFile.Name (@selectedFile.Size bytes)</p>
+                }
+
+                <button class="btn btn-primary" @onclick="UploadEntriesFile" disabled="@(selectedFile == null || uploading)">
+                    @if (uploading)
+                    {
+                        <span class="spinner-border spinner-border-sm me-2"></span>
+                        <text>Uploading...</text>
+                    }
+                    else
+                    {
+                        <text>📤 Upload and Import</text>
+                    }
+                </button>
+            </div>
+        </div>
+
+        @if (result != null && result.Success)
+        {
+            <div class="card mt-3">
+                <div class="card-header bg-success text-white">
+                    <h5>✅ Import Summary</h5>
+                </div>
+                <div class="card-body">
+                    <dl class="row">
+                        <dt class="col-sm-4">Rows Processed:</dt>
+                        <dd class="col-sm-8">@result.RowsProcessed</dd>
+
+                        <dt class="col-sm-4">Rows Inserted:</dt>
+                        <dd class="col-sm-8">@result.RowsInserted</dd>
+
+                        <dt class="col-sm-4">Rows Skipped:</dt>
+                        <dd class="col-sm-8">@result.RowsSkipped</dd>
+                    </dl>
+                </div>
+            </div>
+        }
+    </div>
+}
+else if (currentView == "runorder")
+{
+    <!-- Generate Run Order View -->
+    <div class="container">
+        <div class="row mb-3">
+            <div class="col">
+                <button class="btn btn-link" @onclick='() => SwitchView("menu")'>← Back to Excel Tools</button>
+                <h3>Generate Run Order</h3>
+                <p class="text-muted">Select a trial to generate a randomized run order Excel file for scorekeepers</p>
+            </div>
+        </div>
+
+        @if (!string.IsNullOrEmpty(statusMessage))
+        {
+            <div class="alert alert-@statusType alert-dismissible fade show" role="alert">
+                @statusMessage
+                <button type="button" class="btn-close" @onclick="ClearMessage"></button>
+            </div>
+        }
+
+        @if (loadingTrials)
+        {
+            <div class="text-center">
+                <div class="spinner-border" role="status">
+                    <span class="visually-hidden">Loading...</span>
+                </div>
+            </div>
+        }
+        else
+        {
+            <div class="card">
+                <div class="card-body">
+                    <div class="mb-3">
+                        <label class="form-label">Select Trial:</label>
+                        <select class="form-select" @bind="selectedTrialId">
+                            <option value="0">-- Select a trial --</option>
+                            @foreach (var trial in trials)
+                            {
+                                <option value="@trial.TrialId">
+                                    @trial.TrialName - @trial.TrialDate.ToShortDateString() (@trial.Stock)
+                                </option>
+                            }
+                        </select>
+                    </div>
+
+                    @if (selectedTrialId > 0)
+                    {
+                        var trial = trials.FirstOrDefault(t => t.TrialId == selectedTrialId);
+                        if (trial != null)
+                        {
+                            <div class="alert alert-info">
+                                <h6>Selected Trial:</h6>
+                                <dl class="row mb-0">
+                                    <dt class="col-sm-3">Trial:</dt>
+                                    <dd class="col-sm-9">@trial.TrialName</dd>
+
+                                    <dt class="col-sm-3">Date:</dt>
+                                    <dd class="col-sm-9">@trial.TrialDate.ToShortDateString()</dd>
+
+                                    <dt class="col-sm-3">Stock:</dt>
+                                    <dd class="col-sm-9">@trial.Stock</dd>
+                                </dl>
+                            </div>
+                        }
+                    }
+
+                    <button class="btn btn-success" @onclick="DownloadRunOrderFile" disabled="@(selectedTrialId == 0 || generating)">
+                        @if (generating)
+                        {
+                            <span class="spinner-border spinner-border-sm me-2"></span>
+                            <text>Generating...</text>
+                        }
+                        else
+                        {
+                            <text>📥 Generate and Download Run Order</text>
+                        }
+                    </button>
+                </div>
+            </div>
+        }
+    </div>
+}
+else if (currentView == "importscores")
+{
+    <!-- Import Scores View -->
+    <div class="container">
+        <div class="row mb-3">
+            <div class="col">
+                <button class="btn btn-link" @onclick='() => SwitchView("menu")'>← Back to Excel Tools</button>
+                <h3>Import Scores from Excel</h3>
+                <p class="text-muted">Upload a completed run order Excel file with scores filled in</p>
+            </div>
+        </div>
+
+        @if (!string.IsNullOrEmpty(statusMessage))
+        {
+            <div class="alert alert-@statusType alert-dismissible fade show" role="alert">
+                @statusMessage
+                @if (result != null && result.Errors.Any())
+                {
+                    <hr />
+                    <strong>Errors:</strong>
+                    <ul>
+                        @foreach (var error in result.Errors)
+                        {
+                            <li>@error</li>
+                        }
+                    </ul>
+                }
+                @if (result != null && result.Warnings.Any())
+                {
+                    <hr />
+                    <strong>Warnings:</strong>
+                    <ul>
+                        @foreach (var warning in result.Warnings)
+                        {
+                            <li>@warning</li>
+                        }
+                    </ul>
+                }
+                <button type="button" class="btn-close" @onclick="ClearMessage"></button>
+            </div>
+        }
+
+        <div class="card">
+            <div class="card-header">
+                <h5>Instructions</h5>
+            </div>
+            <div class="card-body">
+                <ol>
+                    <li>Generate a run order from the <strong>Generate Run Order</strong> section</li>
+                    <li>Scorekeeper fills in:
+                        <ul>
+                            <li><strong>Time</strong> - Enter as digits only (e.g., "245" for 2:45)</li>
+                            <li><strong>Tie Time</strong> - Enter as digits only (e.g., "130" for 1:30)</li>
+                            <li><strong>Obstacle Scores</strong> - 9 obstacle columns (O1-O9)</li>
+                            <li><strong>Penalty</strong> - Points deducted</li>
+                        </ul>
+                    </li>
+                    <li>Upload the completed Excel file here</li>
+                    <li>System will calculate Course Points, Placing, and Trial Points automatically</li>
+                </ol>
+            </div>
+        </div>
+
+        <div class="card mt-3">
+            <div class="card-body">
+                <InputFile OnChange="HandleFileSelected" class="form-control mb-3" accept=".xlsx,.xls" />
+                
+                @if (selectedFile != null)
+                {
+                    <p><strong>Selected:</strong> @selectedFile.Name (@selectedFile.Size bytes)</p>
+                }
+
+                <button class="btn btn-primary" @onclick="UploadScoresFile" disabled="@(selectedFile == null || uploading)">
+                    @if (uploading)
+                    {
+                        <span class="spinner-border spinner-border-sm me-2"></span>
+                        <text>Uploading...</text>
+                    }
+                    else
+                    {
+                        <text>📤 Upload and Import Scores</text>
+                    }
+                </button>
+            </div>
+        </div>
+
+        @if (result != null && result.Success)
+        {
+            <div class="card mt-3">
+                <div class="card-header bg-success text-white">
+                    <h5>✅ Import Summary</h5>
+                </div>
+                <div class="card-body">
+                    <dl class="row">
+                        <dt class="col-sm-4">Rows Processed:</dt>
+                        <dd class="col-sm-8">@result.RowsProcessed</dd>
+
+                        <dt class="col-sm-4">Rows Updated:</dt>
+                        <dd class="col-sm-8">@result.RowsUpdated</dd>
+
+                        <dt class="col-sm-4">Rows Skipped:</dt>
+                        <dd class="col-sm-8">@result.RowsSkipped</dd>
+                    </dl>
+                    <p class="mb-0"><strong>✨ Placing and Trial Points have been automatically calculated!</strong></p>
+                </div>
+            </div>
+        }
+    </div>
+}
+
+@code {
+    private string currentView = "menu";
+    private IBrowserFile selectedFile;
+    private bool uploading = false;
+    private bool loadingTrials = false;
+    private bool generating = false;
+    private string statusMessage;
+    private string statusType = "info";
+    private ExcelImportResult result;
+    
+    // Run Order data
+    private List<MSSA_Trial> trials = new List<MSSA_Trial>();
+    private int selectedTrialId = 0;
+
+    private void SwitchView(string view)
+    {
+        currentView = view;
+        ClearMessage();
+        selectedFile = null;
+        result = null;
+        
+        // Load trials when switching to run order view
+        if (view == "runorder" && !trials.Any())
+        {
+            _ = LoadTrials();
+        }
+    }
+
+    private async Task LoadTrials()
+    {
+        loadingTrials = true;
+        try
+        {
+            var events = await Http.GetFromJsonAsync<List<MSSA_Event>>(
+                $"{PageState.Alias.BaseUrl}/api/MSSA_Event?moduleid={PageState.ModuleId}");
+
+            var recentEvents = events?.Where(e =>
+                (e.StartDate.HasValue && e.StartDate.Value >= DateTime.Now.AddDays(-30)) ||
+                (e.EndDate.HasValue && e.EndDate.Value >= DateTime.Now.AddDays(-30)))
+                .ToList() ?? new List<MSSA_Event>();
+
+            trials = new List<MSSA_Trial>();
+            foreach (var evt in recentEvents)
+            {
+                var eventTrials = await Http.GetFromJsonAsync<List<MSSA_Trial>>(
+                    $"{PageState.Alias.BaseUrl}/api/MSSA_Trial/event/{evt.EventId}?moduleid={PageState.ModuleId}");
+                
+                if (eventTrials != null)
+                    trials.AddRange(eventTrials);
+            }
+
+            trials = trials.OrderByDescending(t => t.TrialDate).ToList();
+        }
+        catch (Exception ex)
+        {
+            ShowMessage($"Error loading trials: {ex.Message}", "danger");
+        }
+        finally
+        {
+            loadingTrials = false;
+        }
+    }
+
+    private void HandleFileSelected(InputFileChangeEventArgs e)
+    {
+        selectedFile = e.File;
+        ClearMessage();
+    }
+
+    private async Task UploadEntriesFile()
+    {
+        if (selectedFile == null) return;
+
+        uploading = true;
+        ClearMessage();
+
+        try
+        {
+            var stream = selectedFile.OpenReadStream(maxAllowedSize: 10 * 1024 * 1024);
+            var content = new MultipartFormDataContent();
+            var fileContent = new StreamContent(stream);
+            fileContent.Headers.ContentType = new System.Net.Http.Headers.MediaTypeHeaderValue(selectedFile.ContentType);
+            content.Add(fileContent, "file", selectedFile.Name);
+
+            var response = await Http.PostAsync(
+                $"{PageState.Alias.BaseUrl}/api/MSSA_Excel/importentries?moduleid={PageState.ModuleId}",
+                content);
+
+            if (response.IsSuccessStatusCode)
+            {
+                result = await response.Content.ReadFromJsonAsync<ExcelImportResult>();
+                
+                if (result.Success)
+                {
+                    ShowMessage($"✅ {result.Message}", "success");
+                }
+                else
+                {
+                    ShowMessage($"⚠️ Import completed with errors: {result.Message}", "warning");
+                }
+            }
+            else
+            {
+                var errorMsg = await response.Content.ReadAsStringAsync();
+                ShowMessage($"❌ Upload failed: {errorMsg}", "danger");
+            }
+        }
+        catch (Exception ex)
+        {
+            ShowMessage($"❌ Error: {ex.Message}", "danger");
+        }
+        finally
+        {
+            uploading = false;
+            selectedFile = null;
+        }
+    }
+
+    private async Task UploadScoresFile()
+    {
+        if (selectedFile == null) return;
+
+        uploading = true;
+        ClearMessage();
+
+        try
+        {
+            var stream = selectedFile.OpenReadStream(maxAllowedSize: 10 * 1024 * 1024);
+            var content = new MultipartFormDataContent();
+            var fileContent = new StreamContent(stream);
+            fileContent.Headers.ContentType = new System.Net.Http.Headers.MediaTypeHeaderValue(selectedFile.ContentType);
+            content.Add(fileContent, "file", selectedFile.Name);
+
+            var response = await Http.PostAsync(
+                $"{PageState.Alias.BaseUrl}/api/MSSA_Excel/importscores?moduleid={PageState.ModuleId}",
+                content);
+
+            if (response.IsSuccessStatusCode)
+            {
+                result = await response.Content.ReadFromJsonAsync<ExcelImportResult>();
+                
+                if (result.Success)
+                {
+                    ShowMessage($"✅ {result.Message}", "success");
+                }
+                else
+                {
+                    ShowMessage($"⚠️ Import completed with errors: {result.Message}", "warning");
+                }
+            }
+            else
+            {
+                var errorMsg = await response.Content.ReadAsStringAsync();
+                ShowMessage($"❌ Upload failed: {errorMsg}", "danger");
+            }
+        }
+        catch (Exception ex)
+        {
+            ShowMessage($"❌ Error: {ex.Message}", "danger");
+        }
+        finally
+        {
+            uploading = false;
+            selectedFile = null;
+        }
+    }
+
+    private async Task DownloadRunOrderFile()
+    {
+        if (selectedTrialId == 0) return;
+
+        generating = true;
+        ClearMessage();
+
+        try
+        {
+            var url = $"{PageState.Alias.BaseUrl}/api/MSSA_Excel/generaterunorder/{selectedTrialId}?moduleid={PageState.ModuleId}";
+            await JSRuntime.InvokeVoidAsync("eval", $"window.open('{url}', '_blank')");
+            ShowMessage($"✅ Run order generated! Check your downloads folder.", "success");
+        }
+        catch (Exception ex)
+        {
+            ShowMessage($"❌ Error generating run order: {ex.Message}", "danger");
+        }
+        finally
+        {
+            generating = false;
+        }
+    }
+
+    private void ShowMessage(string message, string type)
+    {
+        statusMessage = message;
+        statusType = type;
+    }
+
+    private void ClearMessage()
+    {
+        statusMessage = null;
+        result = null;
+    }
+
+    public class ExcelImportResult
+    {
+        public bool Success { get; set; }
+        public int RowsProcessed { get; set; }
+        public int RowsInserted { get; set; }
+        public int RowsUpdated { get; set; }
+        public int RowsSkipped { get; set; }
+        public List<string> Errors { get; set; } = new List<string>();
+        public List<string> Warnings { get; set; } = new List<string>();
+        public string Message { get; set; }
+    }
+}

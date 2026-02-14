@@ -6,6 +6,7 @@
 @using MountainStates.MSSA.Module.MSSA_Dogs.Models
 @inject IOfflineStorageService Storage
 @inject ISyncService Sync
+@inject IApiService Api
 @inject NavigationManager Navigation
 
 <PageTitle>Score Entry</PageTitle>
@@ -28,218 +29,230 @@
         </div>
     </div>
 
-    @if (!string.IsNullOrEmpty(statusMessage))
+    @if (loading)
     {
-        <div class="alert alert-@statusMessageType alert-dismissible fade show" role="alert">
-            @statusMessage
-            <button type="button" class="btn-close" @onclick="ClearMessage"></button>
+        <div class="text-center">
+            <div class="spinner-border" role="status">
+                <span class="visually-hidden">Loading data...</span>
+            </div>
+            <p>Loading trial data from server...</p>
         </div>
     }
+    else
+    {
+        @if (!string.IsNullOrEmpty(statusMessage))
+        {
+            <div class="alert alert-@statusMessageType alert-dismissible fade show" role="alert">
+                @statusMessage
+                <button type="button" class="btn-close" @onclick="ClearMessage"></button>
+            </div>
+        }
 
-    <EditForm Model="@entry" OnValidSubmit="@HandleSubmit">
-        <DataAnnotationsValidator />
+        <EditForm Model="@entry" OnValidSubmit="@HandleSubmit">
+            <DataAnnotationsValidator />
 
-        <!-- Trial Information -->
-        <div class="card mb-3">
-            <div class="card-header">
-                <h5>Trial Information</h5>
-            </div>
-            <div class="card-body">
-                <div class="row">
-                    <div class="col-md-6">
-                        <label>Trial:</label>
-                        <select class="form-select" @bind="selectedTrialId" @bind:after="OnTrialChanged">
-                            <option value="0">Select trial...</option>
-                            @foreach (var trial in trials)
-                            {
-                                <option value="@trial.TrialId">@trial.TrialName - @trial.TrialDate.ToShortDateString()</option>
-                            }
-                        </select>
-                    </div>
-                    <div class="col-md-6">
-                        @if (selectedTrialId > 0)
-                        {
-                            var trial = trials.FirstOrDefault(t => t.TrialId == selectedTrialId);
-                            if (trial != null)
-                            {
-                                <p class="mt-4"><strong>Species:</strong> @trial.Stock</p>
-                            }
-                        }
-                    </div>
+            <!-- Trial Information -->
+            <div class="card mb-3">
+                <div class="card-header">
+                    <h5>Trial Information</h5>
                 </div>
-            </div>
-        </div>
-
-        <!-- Competitor Details -->
-        <div class="card mb-3">
-            <div class="card-header">
-                <h5>Competitor Details</h5>
-            </div>
-            <div class="card-body">
-                <div class="row mb-3">
-                    <div class="col-md-4">
-                        <label>Class: <span class="text-danger">*</span></label>
-                        <select class="form-select" @bind="entry.ClassId" required>
-                            <option value="0">Select class...</option>
-                            @foreach (var cls in classes)
+                <div class="card-body">
+                    <div class="row">
+                        <div class="col-md-6">
+                            <label>Trial:</label>
+                            <select class="form-select" @bind="selectedTrialId" @bind:after="OnTrialChanged">
+                                <option value="0">Select trial...</option>
+                                @foreach (var trial in trials)
+                                {
+                                    <option value="@trial.TrialId">@trial.TrialName - @trial.TrialDate.ToShortDateString()</option>
+                                }
+                            </select>
+                        </div>
+                        <div class="col-md-6">
+                            @if (selectedTrialId > 0)
                             {
-                                <option value="@cls.ClassId">@cls.ClassName @(!string.IsNullOrEmpty(cls.SubClassName) ? $"- {cls.SubClassName}" : "")</option>
+                                var trial = trials.FirstOrDefault(t => t.TrialId == selectedTrialId);
+                                if (trial != null)
+                                {
+                                    <p class="mt-4"><strong>Species:</strong> @trial.Stock</p>
+                                }
                             }
-                        </select>
-                    </div>
-                    <div class="col-md-4">
-                        <label>Handler: <span class="text-danger">*</span></label>
-                        <select class="form-select" @bind="entry.HandlerId" @bind:after="OnHandlerChanged" required>
-                            <option value="0">Select handler...</option>
-                            @foreach (var handler in handlers)
-                            {
-                                <option value="@handler.HandlerId">@handler.FullName - @handler.HandlerLevel</option>
-                            }
-                        </select>
-                    </div>
-                    <div class="col-md-4">
-                        <label>Dog: <span class="text-danger">*</span></label>
-                        <select class="form-select" @bind="entry.DogId" required>
-                            <option value="0">Select dog...</option>
-                            @foreach (var dog in filteredDogs)
-                            {
-                                <option value="@dog.DogId">@dog.Name (@dog.Breed)</option>
-                            }
-                        </select>
-                    </div>
-                </div>
-            </div>
-        </div>
-
-        <!-- Run Details -->
-        <div class="card mb-3">
-            <div class="card-header">
-                <h5>Run Details</h5>
-            </div>
-            <div class="card-body">
-                <div class="row mb-3">
-                    <div class="col-md-3">
-                        <label>Run Order:</label>
-                        <input type="number" class="form-control" @bind="entry.RunOrder" />
-                    </div>
-                    <div class="col-md-3">
-                        <label>Placing:</label>
-                        <input type="number" class="form-control" @bind="entry.Placing" />
-                    </div>
-                    <div class="col-md-3">
-                        <label>Time (MM:SS):</label>
-                        <input type="text" class="form-control" @bind="runTimeString" placeholder="2:45" />
-                    </div>
-                    <div class="col-md-3">
-                        <label>Tie Breaker (MM:SS):</label>
-                        <input type="text" class="form-control" @bind="tieTimeString" placeholder="1:30" />
-                    </div>
-                </div>
-            </div>
-        </div>
-
-        <!-- Obstacle Scores -->
-        <div class="card mb-3">
-            <div class="card-header">
-                <h5>Obstacle Scores</h5>
-            </div>
-            <div class="card-body">
-                <div class="row mb-3">
-                    <div class="col-md-2">
-                        <label>O1:</label>
-                        <input type="number" step="0.1" class="form-control" @bind="entry.ObstacleScore1" @bind:after="CalculateTotal" />
-                    </div>
-                    <div class="col-md-2">
-                        <label>O2:</label>
-                        <input type="number" step="0.1" class="form-control" @bind="entry.ObstacleScore2" @bind:after="CalculateTotal" />
-                    </div>
-                    <div class="col-md-2">
-                        <label>O3:</label>
-                        <input type="number" step="0.1" class="form-control" @bind="entry.ObstacleScore3" @bind:after="CalculateTotal" />
-                    </div>
-                    <div class="col-md-2">
-                        <label>O4:</label>
-                        <input type="number" step="0.1" class="form-control" @bind="entry.ObstacleScore4" @bind:after="CalculateTotal" />
-                    </div>
-                    <div class="col-md-2">
-                        <label>O5:</label>
-                        <input type="number" step="0.1" class="form-control" @bind="entry.ObstacleScore5" @bind:after="CalculateTotal" />
-                    </div>
-                </div>
-                <div class="row mb-3">
-                    <div class="col-md-2">
-                        <label>O6:</label>
-                        <input type="number" step="0.1" class="form-control" @bind="entry.ObstacleScore6" @bind:after="CalculateTotal" />
-                    </div>
-                    <div class="col-md-2">
-                        <label>O7:</label>
-                        <input type="number" step="0.1" class="form-control" @bind="entry.ObstacleScore7" @bind:after="CalculateTotal" />
-                    </div>
-                    <div class="col-md-2">
-                        <label>O8:</label>
-                        <input type="number" step="0.1" class="form-control" @bind="entry.ObstacleScore8" @bind:after="CalculateTotal" />
-                    </div>
-                    <div class="col-md-2">
-                        <label>O9:</label>
-                        <input type="number" step="0.1" class="form-control" @bind="entry.ObstacleScore9" @bind:after="CalculateTotal" />
-                    </div>
-                    <div class="col-md-2">
-                        <label>Penalty:</label>
-                        <input type="number" step="0.1" class="form-control" @bind="entry.Penalty" @bind:after="CalculateTotal" />
-                    </div>
-                </div>
-                <div class="row">
-                    <div class="col-md-12">
-                        <div class="alert alert-info">
-                            <strong>Total Points:</strong> @totalPoints.ToString("F1")
                         </div>
                     </div>
                 </div>
             </div>
-        </div>
 
-        <!-- Additional Information -->
-        <div class="card mb-3">
-            <div class="card-header">
-                <h5>Additional Information</h5>
-            </div>
-            <div class="card-body">
-                <div class="row mb-3">
-                    <div class="col-md-3">
-                        <div class="form-check">
-                            <input type="checkbox" class="form-check-input" id="mssamember" @bind="entry.HandlerIsMSSAMember" />
-                            <label class="form-check-label" for="mssamember">
-                                MSSA Member
-                            </label>
+            <!-- Competitor Details -->
+            <div class="card mb-3">
+                <div class="card-header">
+                    <h5>Competitor Details</h5>
+                </div>
+                <div class="card-body">
+                    <div class="row mb-3">
+                        <div class="col-md-4">
+                            <label>Class: <span class="text-danger">*</span></label>
+                            <select class="form-select" @bind="entry.ClassId" required>
+                                <option value="0">Select class...</option>
+                                @foreach (var cls in classes)
+                                {
+                                    <option value="@cls.ClassId">@cls.ClassName @(!string.IsNullOrEmpty(cls.SubClassName) ? $"- {cls.SubClassName}" : "")</option>
+                                }
+                            </select>
+                        </div>
+                        <div class="col-md-4">
+                            <label>Handler: <span class="text-danger">*</span></label>
+                            <select class="form-select" @bind="entry.HandlerId" @bind:after="OnHandlerChanged" required>
+                                <option value="0">Select handler...</option>
+                                @foreach (var handler in handlers)
+                                {
+                                    <option value="@handler.HandlerId">@handler.FullName @(!string.IsNullOrEmpty(handler.HandlerLevel) ? $"- {handler.HandlerLevel}" : "")</option>
+                                }
+                            </select>
+                        </div>
+                        <div class="col-md-4">
+                            <label>Dog: <span class="text-danger">*</span></label>
+                            <select class="form-select" @bind="entry.DogId" required>
+                                <option value="0">Select dog...</option>
+                                @foreach (var dog in filteredDogs)
+                                {
+                                    <option value="@dog.DogId">@dog.Name (@dog.Breed)</option>
+                                }
+                            </select>
                         </div>
                     </div>
                 </div>
-                <div class="row">
-                    <div class="col-md-12">
-                        <label>Comments:</label>
-                        <textarea class="form-control" rows="3" @bind="entry.Comments"></textarea>
+            </div>
+
+            <!-- Run Details -->
+            <div class="card mb-3">
+                <div class="card-header">
+                    <h5>Run Details</h5>
+                </div>
+                <div class="card-body">
+                    <div class="row mb-3">
+                        <div class="col-md-3">
+                            <label>Run Order:</label>
+                            <input type="number" class="form-control" @bind="entry.RunOrder" />
+                        </div>
+                        <div class="col-md-3">
+                            <label>Placing:</label>
+                            <input type="number" class="form-control" @bind="entry.Placing" />
+                        </div>
+                        <div class="col-md-3">
+                            <label>Time (MM:SS):</label>
+                            <input type="text" class="form-control" @bind="runTimeString" placeholder="2:45" />
+                        </div>
+                        <div class="col-md-3">
+                            <label>Tie Breaker (MM:SS):</label>
+                            <input type="text" class="form-control" @bind="tieTimeString" placeholder="1:30" />
+                        </div>
                     </div>
                 </div>
             </div>
-        </div>
 
-        <!-- Action Buttons -->
-        <div class="row mb-3">
-            <div class="col">
-                <button type="submit" class="btn btn-success btn-lg me-2">
-                    💾 Save Entry
-                </button>
-                <button type="button" class="btn btn-secondary btn-lg me-2" @onclick="ClearForm">
-                    🗑️ Clear Form
-                </button>
-                <button type="button" class="btn btn-info btn-lg" @onclick="ViewQueue">
-                    📋 View Queue (@queueCount)
-                </button>
+            <!-- Obstacle Scores -->
+            <div class="card mb-3">
+                <div class="card-header">
+                    <h5>Obstacle Scores</h5>
+                </div>
+                <div class="card-body">
+                    <div class="row mb-3">
+                        <div class="col-md-2">
+                            <label>O1:</label>
+                            <input type="number" step="0.1" class="form-control" @bind="entry.ObstacleScore1" @bind:after="CalculateTotal" />
+                        </div>
+                        <div class="col-md-2">
+                            <label>O2:</label>
+                            <input type="number" step="0.1" class="form-control" @bind="entry.ObstacleScore2" @bind:after="CalculateTotal" />
+                        </div>
+                        <div class="col-md-2">
+                            <label>O3:</label>
+                            <input type="number" step="0.1" class="form-control" @bind="entry.ObstacleScore3" @bind:after="CalculateTotal" />
+                        </div>
+                        <div class="col-md-2">
+                            <label>O4:</label>
+                            <input type="number" step="0.1" class="form-control" @bind="entry.ObstacleScore4" @bind:after="CalculateTotal" />
+                        </div>
+                        <div class="col-md-2">
+                            <label>O5:</label>
+                            <input type="number" step="0.1" class="form-control" @bind="entry.ObstacleScore5" @bind:after="CalculateTotal" />
+                        </div>
+                    </div>
+                    <div class="row mb-3">
+                        <div class="col-md-2">
+                            <label>O6:</label>
+                            <input type="number" step="0.1" class="form-control" @bind="entry.ObstacleScore6" @bind:after="CalculateTotal" />
+                        </div>
+                        <div class="col-md-2">
+                            <label>O7:</label>
+                            <input type="number" step="0.1" class="form-control" @bind="entry.ObstacleScore7" @bind:after="CalculateTotal" />
+                        </div>
+                        <div class="col-md-2">
+                            <label>O8:</label>
+                            <input type="number" step="0.1" class="form-control" @bind="entry.ObstacleScore8" @bind:after="CalculateTotal" />
+                        </div>
+                        <div class="col-md-2">
+                            <label>O9:</label>
+                            <input type="number" step="0.1" class="form-control" @bind="entry.ObstacleScore9" @bind:after="CalculateTotal" />
+                        </div>
+                        <div class="col-md-2">
+                            <label>Penalty:</label>
+                            <input type="number" step="0.1" class="form-control" @bind="entry.Penalty" @bind:after="CalculateTotal" />
+                        </div>
+                    </div>
+                    <div class="row">
+                        <div class="col-md-12">
+                            <div class="alert alert-info">
+                                <strong>Total Points:</strong> @totalPoints.ToString("F1")
+                            </div>
+                        </div>
+                    </div>
+                </div>
             </div>
-        </div>
 
-        <ValidationSummary />
-    </EditForm>
+            <!-- Additional Information -->
+            <div class="card mb-3">
+                <div class="card-header">
+                    <h5>Additional Information</h5>
+                </div>
+                <div class="card-body">
+                    <div class="row mb-3">
+                        <div class="col-md-3">
+                            <div class="form-check">
+                                <input type="checkbox" class="form-check-input" id="mssamember" @bind="entry.HandlerIsMSSAMember" />
+                                <label class="form-check-label" for="mssamember">
+                                    MSSA Member
+                                </label>
+                            </div>
+                        </div>
+                    </div>
+                    <div class="row">
+                        <div class="col-md-12">
+                            <label>Comments:</label>
+                            <textarea class="form-control" rows="3" @bind="entry.Comments"></textarea>
+                        </div>
+                    </div>
+                </div>
+            </div>
+
+            <!-- Action Buttons -->
+            <div class="row mb-3">
+                <div class="col">
+                    <button type="submit" class="btn btn-success btn-lg me-2">
+                        💾 Save Entry
+                    </button>
+                    <button type="button" class="btn btn-secondary btn-lg me-2" @onclick="ClearForm">
+                        🗑️ Clear Form
+                    </button>
+                    <button type="button" class="btn btn-info btn-lg" @onclick="ViewQueue">
+                        📋 View Queue (@queueCount)
+                    </button>
+                </div>
+            </div>
+
+            <ValidationSummary />
+        </EditForm>
+    }
 </div>
 
 @code {
@@ -253,6 +266,7 @@
     private int selectedTrialId = 0;
     private bool isOnline = false;
     private int queueCount = 0;
+    private bool loading = false;
     private string statusMessage;
     private string statusMessageType = "info";
     
@@ -271,35 +285,80 @@
 
     private async Task LoadData()
     {
-        // TODO: Load from API when online, or from cache when offline
-        // For now, load some test data
-        trials = new List<MSSA_Trial>
+        loading = true;
+        
+        try
         {
-            new MSSA_Trial { TrialId = 1, TrialName = "BWS Morning Trial", TrialDate = DateTime.Today, Stock = "Cattle" },
-            new MSSA_Trial { TrialId = 2, TrialName = "BWS Afternoon Trial", TrialDate = DateTime.Today, Stock = "Sheep" }
-        };
+            // Check if online
+            isOnline = await Sync.IsOnlineAsync();
 
-        handlers = new List<MSSA_Handler>
+            if (isOnline)
+            {
+                // Load from API
+                ShowMessage("Loading data from server...", "info");
+                Console.WriteLine("Starting to load trials...");
+
+                var trialsResponse = await Api.GetActiveTrialsAsync();
+                Console.WriteLine($"Trials loaded: {trialsResponse.Success}, Count: {trialsResponse.Data?.Count ?? 0}");
+                if (trialsResponse.Success)
+                {
+                    trials = trialsResponse.Data;
+                }
+
+                Console.WriteLine("Loading handlers...");
+                var handlersResponse = await Api.GetActiveHandlersAsync();
+                Console.WriteLine($"Handlers loaded: {handlersResponse.Success}, Count: {handlersResponse.Data?.Count ?? 0}");
+
+                if (handlersResponse.Success)
+                {
+                    handlers = handlersResponse.Data;
+                }
+
+                Console.WriteLine("Loading dogs...");
+                var dogsResponse = await Api.GetActiveDogsAsync();
+                Console.WriteLine($"Dogs loaded: {dogsResponse.Success}, Count: {dogsResponse.Data?.Count ?? 0}");
+
+                if (dogsResponse.Success)
+                {
+                    dogs = dogsResponse.Data;
+                    filteredDogs = dogs;
+                }
+
+                Console.WriteLine("Loading classes...");
+                var classesResponse = await Api.GetActiveClassesAsync();
+                Console.WriteLine($"Classes loaded: {classesResponse.Success}, Count: {classesResponse.Data?.Count ?? 0}");
+                if (classesResponse.Success)
+                {
+                    classes = classesResponse.Data;
+                }
+
+                // Cache data offline for future use
+                if (handlers.Any()) await Storage.CacheHandlersAsync(handlers);
+                if (dogs.Any()) await Storage.CacheDogsAsync(dogs);
+                if (classes.Any()) await Storage.CacheClassesAsync(classes);
+                // Note: Trials are loaded per-event, so we'll cache them as needed
+
+                ClearMessage();
+            }
+            else
+            {
+                // Load from cache
+                ShowMessage("⚠️ Offline - Using cached data", "warning");
+                
+                handlers = await Storage.GetCachedHandlersAsync();
+                dogs = await Storage.GetCachedDogsAsync();
+                filteredDogs = dogs;
+                classes = await Storage.GetCachedClassesAsync();
+            }
+        }
+        catch (Exception ex)
         {
-            new MSSA_Handler { HandlerId = 1, FirstName = "John", LastName = "Smith", FullName = "John Smith", HandlerLevel = "Open" },
-            new MSSA_Handler { HandlerId = 2, FirstName = "Jane", LastName = "Doe", FullName = "Jane Doe", HandlerLevel = "Started" }
-        };
-
-        dogs = new List<MSSA_Dog>
+            ShowMessage($"❌ Error loading data: {ex.Message}", "danger");
+        }
+        finally
         {
-            new MSSA_Dog { DogId = 1, Name = "Rex", Breed = "Border Collie" },
-            new MSSA_Dog { DogId = 2, Name = "Max", Breed = "Australian Shepherd" },
-            new MSSA_Dog { DogId = 3, Name = "Bella", Breed = "Kelpie" }
-        };
-
-        classes = new List<MSSA_Class>
-        {
-            new MSSA_Class { ClassId = 1, ClassName = "Open", SubClassName = "Horseback" },
-            new MSSA_Class { ClassId = 2, ClassName = "Started", SubClassName = "Afoot" },
-            new MSSA_Class { ClassId = 3, ClassName = "Intermediate", SubClassName = "Horseback" }
-        };
-
-        filteredDogs = dogs;
+            loading = false;
+        }
     }
 
     private async Task CheckStatus()
@@ -316,7 +375,7 @@
 
     private void OnHandlerChanged()
     {
-        // In the real app, this would filter dogs by handler
+        // In the future, filter dogs by handler
         // For now, just show all dogs
         filteredDogs = dogs;
     }
