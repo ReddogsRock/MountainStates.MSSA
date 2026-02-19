@@ -1,11 +1,8 @@
 using System;
 using System.Collections.Generic;
 
-namespace MountainStates.MSSA.Module.TrialSecretary.Models
+namespace MountainStates.MSSA.Module.BackOfficeEntry.Models
 {
-    /// <summary>
-    /// DTO for displaying recent events with their trials
-    /// </summary>
     public class RecentEventDto
     {
         public int EventId { get; set; }
@@ -15,9 +12,9 @@ namespace MountainStates.MSSA.Module.TrialSecretary.Models
         public DateTime? EndDate { get; set; }
         public string City { get; set; }
         public string StateCode { get; set; }
-        
+
         public List<TrialSummaryDto> Trials { get; set; } = new List<TrialSummaryDto>();
-        
+
         public string DateRange
         {
             get
