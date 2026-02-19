@@ -3,6 +3,7 @@ using System.Threading.Tasks;
 using MountainStates.MSSA.Module.TrialSecretary.Models;
 using MountainStates.MSSA.Module.MSSA_Handlers.Models;
 using MountainStates.MSSA.Module.MSSA_Dogs.Models;
+using MountainStates.MSSA.Module.BackOfficeEntry.Models;
 
 namespace MountainStates.MSSA.Module.TrialSecretary.Services
 {

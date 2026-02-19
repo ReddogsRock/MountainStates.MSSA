@@ -10,6 +10,7 @@ using System;
 using System.Collections.Generic;
 using System.Linq;
 using System.Threading.Tasks;
+using MountainStates.MSSA.Module.BackOfficeEntry.Models;
 
 namespace MountainStates.MSSA.Module.TrialSecretary.Repository
 {

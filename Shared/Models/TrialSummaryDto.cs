@@ -1,11 +1,8 @@
 using System;
 using System.Collections.Generic;
 
-namespace MountainStates.MSSA.Module.TrialSecretary.Models
+namespace MountainStates.MSSA.Module.BackOfficeEntry.Models
 {
-    /// <summary>
-    /// DTO for displaying trial information with available classes
-    /// </summary>
     public class TrialSummaryDto
     {
         public int TrialId { get; set; }
@@ -13,7 +10,7 @@ namespace MountainStates.MSSA.Module.TrialSecretary.Models
         public string TrialName { get; set; }
         public DateTime TrialDate { get; set; }
         public string Stock { get; set; }
-        
+
         public List<ClassOptionDto> AvailableClasses { get; set; } = new List<ClassOptionDto>();
     }
 }

@@ -5,6 +5,7 @@ using MountainStates.MSSA.Module.TrialSecretary.Repository;
 using MountainStates.MSSA.Module.MSSA_Handlers.Models;
 using MountainStates.MSSA.Module.MSSA_Dogs.Models;
 using Oqtane.Modules;
+using MountainStates.MSSA.Module.BackOfficeEntry.Models;
 
 namespace MountainStates.MSSA.Module.TrialSecretary.Manager
 {
