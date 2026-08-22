@@ -70,6 +70,11 @@ namespace MountainStates.MSSA.Module.MSSA_Dogs.Manager
             await _repository.DeleteFuturityParticipationAsync(participationId);
         }
 
+        public async Task<MSSA_DogFuturityParticipation> SaveFuturityDocumentAsync(int participationId, string fileName, string filePath, int moduleId)
+        {
+            return await _repository.SaveFuturityDocumentAsync(participationId, fileName, filePath);
+        }
+
         // Entries
         public async Task<IEnumerable<MSSA_DogEntry>> GetDogEntriesAsync(int dogId, int moduleId)
         {

@@ -40,9 +40,6 @@ namespace MountainStates.MSSA.Module.MSSA_Handlers.Repository
                 {
                     handler.StateName = states[handler.StateCode];
                 }
-
-                // Check for active membership
-                handler.HasActiveMembership = await HasActiveMembershipAsync(db, handler.HandlerId);
             }
 
             return handlers;
@@ -72,8 +69,6 @@ namespace MountainStates.MSSA.Module.MSSA_Handlers.Repository
                         .FirstOrDefaultAsync(h => h.HandlerId == handler.FamilyMemberHandlerId.Value);
                     handler.FamilyMemberName = familyMember?.FullName;
                 }
-
-                handler.HasActiveMembership = await HasActiveMembershipAsync(db, handlerId);
             }
 
             return handler;
@@ -121,8 +116,7 @@ namespace MountainStates.MSSA.Module.MSSA_Handlers.Repository
         public async Task<IEnumerable<MSSA_Handler>> SearchHandlersAsync(
             string searchTerm = null,
             string stateCode = null,
-            string handlerLevel = null,
-            bool? hasActiveMembership = null)
+            string handlerLevel = null)
         {
             using var db = await _dbContextFactory.CreateDbContextAsync();
 
@@ -155,21 +149,6 @@ namespace MountainStates.MSSA.Module.MSSA_Handlers.Repository
                 .ThenBy(h => h.FirstName)
                 .ToListAsync();
 
-            // Filter by membership status if specified
-            if (hasActiveMembership.HasValue)
-            {
-                var currentYear = DateTime.Now.Year;
-                var handlerIds = await db.MSSA_HandlerMemberships
-                    .Where(m => m.IsActive && m.StartYear <= currentYear && m.EndYear >= currentYear)
-                    .Select(m => m.HandlerId)
-                    .Distinct()
-                    .ToListAsync();
-
-                handlers = hasActiveMembership.Value
-                    ? handlers.Where(h => handlerIds.Contains(h.HandlerId)).ToList()
-                    : handlers.Where(h => !handlerIds.Contains(h.HandlerId)).ToList();
-            }
-
             // Populate state names
             var stateCodes = handlers.Select(h => h.StateCode).Distinct().ToList();
             var states = await db.MSSA_States
@@ -182,53 +161,9 @@ namespace MountainStates.MSSA.Module.MSSA_Handlers.Repository
                 {
                     handler.StateName = states[handler.StateCode];
                 }
-                handler.HasActiveMembership = await HasActiveMembershipAsync(db, handler.HandlerId);
             }
 
             return handlers;
-        }
-
-        // Memberships
-        public async Task<IEnumerable<MSSA_HandlerMembership>> GetHandlerMembershipsAsync(int handlerId)
-        {
-            using var db = await _dbContextFactory.CreateDbContextAsync();
-
-            return await db.MSSA_HandlerMemberships
-                .Where(m => m.HandlerId == handlerId && m.IsActive)
-                .OrderByDescending(m => m.StartYear)
-                .ToListAsync();
-        }
-
-        public async Task<MSSA_HandlerMembership> AddMembershipAsync(MSSA_HandlerMembership membership)
-        {
-            using var db = await _dbContextFactory.CreateDbContextAsync();
-
-            db.MSSA_HandlerMemberships.Add(membership);
-            await db.SaveChangesAsync();
-
-            return membership;
-        }
-
-        public async Task<MSSA_HandlerMembership> UpdateMembershipAsync(MSSA_HandlerMembership membership)
-        {
-            using var db = await _dbContextFactory.CreateDbContextAsync();
-
-            db.Entry(membership).State = EntityState.Modified;
-            await db.SaveChangesAsync();
-
-            return membership;
-        }
-
-        public async Task DeleteMembershipAsync(int membershipId)
-        {
-            using var db = await _dbContextFactory.CreateDbContextAsync();
-
-            var membership = await db.MSSA_HandlerMemberships.FindAsync(membershipId);
-            if (membership != null)
-            {
-                membership.IsActive = false;
-                await db.SaveChangesAsync();
-            }
         }
 
         // Entries
@@ -262,17 +197,6 @@ namespace MountainStates.MSSA.Module.MSSA_Handlers.Repository
 
             // Temporary: Return empty list until other tables are created
             //return await Task.FromResult(new List<MSSA_HandlerEntry>());
-        }
-
-        // Helper method
-        private async Task<bool> HasActiveMembershipAsync(MSSADbContext db, int handlerId)
-        {
-            var currentYear = DateTime.Now.Year;
-            return await db.MSSA_HandlerMemberships
-                .AnyAsync(m => m.HandlerId == handlerId &&
-                              m.IsActive &&
-                              m.StartYear <= currentYear &&
-                              m.EndYear >= currentYear);
         }
     }
 }

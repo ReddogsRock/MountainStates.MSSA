@@ -13,13 +13,10 @@
         <div class="col">
             <h2>Dogs</h2>
         </div>
-        @if (UserSecurity.IsAuthorized(PageState.User, RoleNames.Admin))
-        {
-            <div class="col-auto">
-                <ActionLink Action="Edit" Security="SecurityAccessLevel.Edit" Text="Add Dog"
-                            ResourceKey="AddDog" Class="btn btn-primary" />
-            </div>
-        }
+        <div class="col-auto">
+            <ActionLink Action="Edit" Security="SecurityAccessLevel.Anonymous" Text="Add Dog"
+                        ResourceKey="AddDog" Class="btn btn-primary" />
+        </div>
     </div>
 
     @* Search/Filter Section *@
@@ -64,7 +61,11 @@
     </div>
 
     @* Results Section *@
-    @if (dogs == null)
+    @if (!hasSearched)
+    {
+        <p><em>Enter search criteria above and click Search to find dogs.</em></p>
+    }
+    else if (dogs == null)
     {
         <p><em>Loading...</em></p>
     }
@@ -78,6 +79,7 @@
             <table class="table table-striped table-hover">
                 <thead>
                     <tr>
+                        <th>ID</th>
                         <th>Name</th>
                         <th>Breed</th>
                         <th>Age</th>
@@ -92,10 +94,10 @@
                     @foreach (var dog in dogs)
                     {
                         <tr>
+                            <td>@dog.DogId</td>
                             <td>
-                                <a href="@NavigateUrl(PageState.Page.Path, "id=" + dog.DogId)">
-                                    @dog.Name
-                                </a>
+                                <ActionLink Action="Detail" Parameters="@($"id={dog.DogId}")"
+                                            Text="@dog.Name" ResourceKey="ViewDogName" />
                             </td>
                             <td>@dog.Breed</td>
                             <td>@(dog.Age.HasValue ? $"{dog.Age} yrs" : "N/A")</td>
@@ -158,39 +160,22 @@
     private string selectedOwnerMember = "";
     private string selectedStatus = "";
 
-    protected override async Task OnInitializedAsync()
-    {
-        try
-        {
-            await LoadDogs();
+    private bool hasSearched = false;
 
-            // Get unique breeds for filter
-            if (dogs != null)
-            {
-                breeds = dogs
-                    .Where(d => !string.IsNullOrWhiteSpace(d.Breed))
-                    .Select(d => d.Breed)
-                    .Distinct()
-                    .OrderBy(b => b)
-                    .ToList();
-            }
-        }
-        catch (Exception ex)
-        {
-            await logger.LogError(ex, "Error loading dogs");
-            AddModuleMessage("Error loading dogs", MessageType.Error);
-        }
-    }
-
-    private async Task LoadDogs()
+    protected override Task OnInitializedAsync()
     {
-        dogs = await DogService.GetDogsAsync(ModuleState.ModuleId);
+        // Intentionally does not load dogs on page open.
+        // The list stays empty until the user searches, per module requirements.
+        return Task.CompletedTask;
     }
 
     private async Task SearchDogs()
     {
         try
         {
+            hasSearched = true;
+            dogs = null; // shows "Loading..." while the search is in flight
+
             bool? ownerMemberFilter = null;
             if (!string.IsNullOrEmpty(selectedOwnerMember))
             {
@@ -206,6 +191,21 @@
                 includeInactive,
                 ModuleState.ModuleId
             );
+
+            // Refresh breed filter options from whatever we've seen so far
+            if (dogs != null && dogs.Any())
+            {
+                var newBreeds = dogs
+                    .Where(d => !string.IsNullOrWhiteSpace(d.Breed))
+                    .Select(d => d.Breed)
+                    .ToList();
+
+                breeds = (breeds ?? new List<string>())
+                    .Union(newBreeds)
+                    .Distinct()
+                    .OrderBy(b => b)
+                    .ToList();
+            }
         }
         catch (Exception ex)
         {
@@ -214,12 +214,13 @@
         }
     }
 
-    private async Task ClearFilters()
+    private void ClearFilters()
     {
         searchTerm = "";
         selectedBreed = "";
         selectedOwnerMember = "";
         selectedStatus = "";
-        await LoadDogs();
+        dogs = null;
+        hasSearched = false;
     }
 }

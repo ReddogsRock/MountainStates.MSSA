@@ -2,6 +2,7 @@
 using MountainStates.MSSA.Module.MSSA_Handlers.Data;
 using MountainStates.MSSA.Module.MSSA_TopScores.Models;
 using Oqtane.Modules;
+using System;
 using System.Collections.Generic;
 using System.Linq;
 using System.Threading.Tasks;
@@ -65,6 +66,8 @@ namespace MountainStates.MSSA.Module.MSSA_TopScores.Repository
                     result.Rank = rank++;
                 }
 
+                await ApplyFuturityMarkerAsync(db, results, parameters.Year);
+
                 return results;
             }
             else
@@ -101,9 +104,51 @@ namespace MountainStates.MSSA.Module.MSSA_TopScores.Repository
                     result.Rank = rank++;
                 }
 
+                await ApplyFuturityMarkerAsync(db, results, parameters.Year);
+
                 return results;
             }
         }
+
+        // Appends "+" to DogName for any dog enrolled in Futurity for the given year -
+        // now applies across all classes, not just Nursery (policy change: previously
+        // gated to Nursery, now every entry by a nominated dog in their nomination year
+        // gets marked).
+        //
+        // NOTE: MSSA_Events.PointYear (which "year" here is ultimately sourced from) is
+        // stored inconsistently - some rows use 2-digit values (e.g. 24), others full
+        // 4-digit (e.g. 2024) - while MSSA_DogFuturityParticipation.Year is always 4-digit.
+        // Normalize before comparing so both conventions match correctly.
+        private static async Task ApplyFuturityMarkerAsync(MSSADbContext db, List<TopScoreResult> results, int year)
+        {
+            if (results.Count == 0)
+            {
+                return;
+            }
+
+            var normalizedYear = NormalizeYear(year);
+
+            var dogIds = results.Select(r => r.DogId).Distinct().ToList();
+
+            var futurityDogIds = await db.MSSA_DogFuturityParticipation
+                .Where(f => f.Year == normalizedYear && dogIds.Contains(f.DogId))
+                .Select(f => f.DogId)
+                .ToListAsync();
+
+            var futuritySet = new HashSet<int>(futurityDogIds);
+
+            foreach (var result in results)
+            {
+                if (futuritySet.Contains(result.DogId))
+                {
+                    result.DogName += "+";
+                }
+            }
+        }
+
+        // Converts a possibly-2-digit legacy year (e.g. 24) to full 4-digit form (2024).
+        // Leaves already-4-digit years untouched.
+        private static int NormalizeYear(int year) => year < 100 ? 2000 + year : year;
 
         public async Task<IEnumerable<int>> GetAvailableYearsAsync()
         {

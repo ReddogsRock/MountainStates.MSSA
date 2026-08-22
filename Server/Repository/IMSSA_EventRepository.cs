@@ -37,7 +37,12 @@ namespace MountainStates.MSSA.Module.MSSA_Events.Repository
         Task<MSSA_Trial> AddTrialAsync(MSSA_Trial trial);
         Task<MSSA_Trial> UpdateTrialAsync(MSSA_Trial trial);
         Task DeleteTrialAsync(int trialId);
-        
+
+        // Offerings (planned runs per Class/Stock/Venue) - replaces the old boolean
+        // planning flags on MSSA_Event.
+        Task<List<MSSA_EventClassOffering>> GetEventOfferingsAsync(int eventId);
+        Task<List<MSSA_EventClassOffering>> SaveEventOfferingsAsync(int eventId, List<MSSA_EventClassOffering> offerings);
+
         // Entries
         Task<List<EntryListItem>> GetTrialEntriesAsync(int trialId);
     }

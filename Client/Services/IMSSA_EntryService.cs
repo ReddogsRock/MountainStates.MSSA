@@ -1,4 +1,4 @@
-﻿using System.Collections.Generic;
+using System.Collections.Generic;
 using System.Threading.Tasks;
 using MountainStates.MSSA.Module.MSSA_Entries.Models;
 using MountainStates.MSSA.Module.MSSA_Events.Models;
@@ -14,7 +14,9 @@ namespace MountainStates.MSSA.Module.MSSA_Entries.Services
         Task<MSSA_Entry> UpdateEntryAsync(MSSA_Entry entry, int moduleId);
         Task DeleteEntryAsync(int entryId, int moduleId);
 
-        Task GenerateRunOrderAsync(int trialId, int classId, int moduleId);
+        Task<List<RunOrderEntry>> GetProposedRunOrderAsync(int trialId, int moduleId);
+        Task<List<RunOrderEntry>> SaveRunOrderAsync(List<RunOrderEntry> assignments, int moduleId);
+        Task<List<ScoreImportRow>> ImportScoresAsync(List<ScoreImportRow> rows, int moduleId);
 
         Task<List<MSSA_Class>> GetClassesAsync(int moduleId);
         Task<MSSA_Class> GetClassAsync(int classId, int moduleId);

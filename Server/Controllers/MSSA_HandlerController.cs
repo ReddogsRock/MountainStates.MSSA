@@ -63,7 +63,6 @@ namespace MountainStates.MSSA.Module.MSSA_Handlers.Controllers
             string searchTerm = null,
             string stateCode = null,
             string handlerLevel = null,
-            bool? hasActiveMembership = null,
             int moduleId = -1)
         {
             try
@@ -72,7 +71,6 @@ namespace MountainStates.MSSA.Module.MSSA_Handlers.Controllers
                     searchTerm,
                     stateCode,
                     handlerLevel,
-                    hasActiveMembership,
                     moduleId);
             }
             catch (System.Exception ex)
@@ -83,13 +81,17 @@ namespace MountainStates.MSSA.Module.MSSA_Handlers.Controllers
         }
 
         // POST: api/MSSA_Handler?moduleid=x
+        // Open to everyone (including anonymous visitors) per project decision:
+        // there is currently no link between an authenticated person and handler
+        // ownership, so gating "add" behind login wouldn't buy real protection -
+        // only editing existing records requires authentication (see Put below).
         [HttpPost]
-        [Authorize(Policy = PolicyNames.EditModule)]
+        [AllowAnonymous]
         public async Task<MSSA_Handler> Post([FromBody] MSSA_Handler handler, int moduleId)
         {
             try
             {
-                if (ModelState.IsValid && IsAuthorizedForRole(MSSARoles.Admin))
+                if (ModelState.IsValid)
                 {
                     handler = await _manager.AddHandlerAsync(handler, moduleId);
                     _logger.Log(LogLevel.Information, this, LogFunction.Create, "Handler added {Handler}", handler);
@@ -97,8 +99,7 @@ namespace MountainStates.MSSA.Module.MSSA_Handlers.Controllers
                 }
                 else
                 {
-                    _logger.Log(LogLevel.Error, this, LogFunction.Security, "Unauthorized handler post attempt");
-                    HttpContext.Response.StatusCode = (int)System.Net.HttpStatusCode.Forbidden;
+                    HttpContext.Response.StatusCode = (int)System.Net.HttpStatusCode.BadRequest;
                     return null;
                 }
             }
@@ -110,13 +111,15 @@ namespace MountainStates.MSSA.Module.MSSA_Handlers.Controllers
         }
 
         // PUT: api/MSSA_Handler/5?moduleid=x
+        // Requires the caller to be logged in (any authenticated user, not
+        // limited to Admin) since we can't yet verify ownership of the handler record.
         [HttpPut("{id}")]
-        [Authorize(Policy = PolicyNames.EditModule)]
+        [Authorize]
         public async Task<MSSA_Handler> Put(int id, [FromBody] MSSA_Handler handler, int moduleId)
         {
             try
             {
-                if (ModelState.IsValid && handler.HandlerId == id && IsAuthorizedForRole(MSSARoles.Admin))
+                if (ModelState.IsValid && handler.HandlerId == id)
                 {
                     handler = await _manager.UpdateHandlerAsync(handler, moduleId);
                     _logger.Log(LogLevel.Information, this, LogFunction.Update, "Handler updated {Handler}", handler);
@@ -124,8 +127,7 @@ namespace MountainStates.MSSA.Module.MSSA_Handlers.Controllers
                 }
                 else
                 {
-                    _logger.Log(LogLevel.Error, this, LogFunction.Security, "Unauthorized handler put attempt");
-                    HttpContext.Response.StatusCode = (int)System.Net.HttpStatusCode.Forbidden;
+                    HttpContext.Response.StatusCode = (int)System.Net.HttpStatusCode.BadRequest;
                     return null;
                 }
             }
@@ -137,6 +139,7 @@ namespace MountainStates.MSSA.Module.MSSA_Handlers.Controllers
         }
 
         // DELETE: api/MSSA_Handler/5?moduleid=x
+        // Left as Admin-only - not part of today's change.
         [HttpDelete("{id}")]
         [Authorize(Policy = PolicyNames.EditModule)]
         public async Task Delete(int id, int moduleId)

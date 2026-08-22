@@ -2,7 +2,9 @@
 @inherits ModuleBase
 @using Microsoft.AspNetCore.Components.Forms
 @using MountainStates.MSSA.Module.MSSA_Events.Models
+@using MountainStates.MSSA.Module.MSSA_Events.Services
 @inject HttpClient Http
+@inject IMSSA_EventService EventService
 @inject NavigationManager NavigationManager
 @inject IJSRuntime JSRuntime
 
@@ -447,8 +449,7 @@ else if (currentView == "importscores")
         loadingTrials = true;
         try
         {
-            var events = await Http.GetFromJsonAsync<List<MSSA_Event>>(
-                $"{PageState.Alias.BaseUrl}/api/MSSA_Event?moduleid={PageState.ModuleId}");
+            var events = await EventService.GetEventsAsync(PageState.ModuleId);
 
             var recentEvents = events?.Where(e =>
                 (e.StartDate.HasValue && e.StartDate.Value >= DateTime.Now.AddDays(-30)) ||
@@ -458,9 +459,8 @@ else if (currentView == "importscores")
             trials = new List<MSSA_Trial>();
             foreach (var evt in recentEvents)
             {
-                var eventTrials = await Http.GetFromJsonAsync<List<MSSA_Trial>>(
-                    $"{PageState.Alias.BaseUrl}/api/MSSA_Trial/event/{evt.EventId}?moduleid={PageState.ModuleId}");
-                
+                var eventTrials = await EventService.GetEventTrialsAsync(evt.EventId, PageState.ModuleId);
+
                 if (eventTrials != null)
                     trials.AddRange(eventTrials);
             }

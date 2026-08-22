@@ -14,13 +14,10 @@
         <div class="col">
             <h2>Handlers</h2>
         </div>
-        @if (UserSecurity.IsAuthorized(PageState.User, RoleNames.Admin))
-        {
-            <div class="col-auto">
-                <ActionLink Action="Edit" Security="SecurityAccessLevel.Edit" Text="Add Handler"
-                            ResourceKey="AddHandler" Class="btn btn-primary" />
-            </div>
-        }
+        <div class="col-auto">
+            <ActionLink Action="Edit" Security="SecurityAccessLevel.Anonymous" Text="Add Handler"
+                        ResourceKey="AddHandler" Class="btn btn-primary" />
+        </div>
     </div>
 
     @* Search/Filter Section *@
@@ -61,14 +58,6 @@
                 }
             </select>
         </div>
-        <div class="col-md-2">
-            <label for="membershipFilter" class="form-label">Membership</label>
-            <select id="membershipFilter" class="form-select" @bind="selectedMembership">
-                <option value="">All</option>
-                <option value="true">Active</option>
-                <option value="false">Inactive</option>
-            </select>
-        </div>
         <div class="col-md-3 d-flex align-items-end">
             <button class="btn btn-primary me-2" @onclick="SearchHandlers">Search</button>
             <button class="btn btn-secondary" @onclick="ClearFilters">Clear</button>
@@ -76,7 +65,11 @@
     </div>
 
     @* Results Section *@
-    @if (handlers == null)
+    @if (!hasSearched)
+    {
+        <p><em>Enter search criteria above and click Search to find handlers.</em></p>
+    }
+    else if (handlers == null)
     {
         <p><em>Loading...</em></p>
     }
@@ -94,7 +87,6 @@
                         <th>City</th>
                         <th>State</th>
                         <th>Level</th>
-                        <th>Membership</th>
                         <th>Email</th>
                         <th>Phone</th>
                         <th>Actions</th>
@@ -105,23 +97,12 @@
                     {
                         <tr>
                             <td>
-                                <a href="@NavigateUrl(PageState.Page.Path, "id=" + handler.HandlerId)">
-                                    @handler.FullName
-                                </a>
+                                <ActionLink Action="Detail" Parameters="@($"id={handler.HandlerId}")"
+                                            Text="@handler.FullName" ResourceKey="ViewHandlerName" />
                             </td>
                             <td>@handler.City</td>
                             <td>@handler.StateCode</td>
                             <td>@handler.HandlerLevel</td>
-                            <td>
-                                @if (handler.HasActiveMembership)
-                                {
-                                    <span class="badge bg-success">Active</span>
-                                }
-                                else
-                                {
-                                    <span class="badge bg-secondary">Inactive</span>
-                                }
-                            </td>
                             <td>@handler.Email</td>
                             <td>@handler.Phone</td>
                             <td>
@@ -147,18 +128,19 @@
 @code {
     private List<MSSA_Handler> handlers;
     private List<MSSA_State> states;
+    private bool hasSearched = false;
 
     private string searchTerm = "";
     private string selectedState = "";
     private string selectedLevel = "";
-    private string selectedMembership = "";
 
     protected override async Task OnInitializedAsync()
     {
         try
         {
             states = await StateService.GetStatesAsync(ModuleState.ModuleId);
-            await LoadHandlers();
+            // Intentionally does not load handlers on page open.
+            // The list stays empty until the user searches.
         }
         catch (Exception ex)
         {
@@ -167,26 +149,17 @@
         }
     }
 
-    private async Task LoadHandlers()
-    {
-        handlers = await HandlerService.GetHandlersAsync(ModuleState.ModuleId);
-    }
-
     private async Task SearchHandlers()
     {
         try
         {
-            bool? membershipFilter = null;
-            if (!string.IsNullOrEmpty(selectedMembership))
-            {
-                membershipFilter = selectedMembership == "true";
-            }
+            hasSearched = true;
+            handlers = null; // shows "Loading..." while the search is in flight
 
             handlers = await HandlerService.SearchHandlersAsync(
                 searchTerm,
                 selectedState,
                 selectedLevel,
-                membershipFilter,
                 ModuleState.ModuleId
             );
         }
@@ -197,12 +170,12 @@
         }
     }
 
-    private async Task ClearFilters()
+    private void ClearFilters()
     {
         searchTerm = "";
         selectedState = "";
         selectedLevel = "";
-        selectedMembership = "";
-        await LoadHandlers();
+        handlers = null;
+        hasSearched = false;
     }
 }

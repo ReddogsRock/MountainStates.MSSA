@@ -16,14 +16,7 @@ namespace MountainStates.MSSA.Module.MSSA_Handlers.Manager
             string searchTerm,
             string stateCode,
             string handlerLevel,
-            bool? hasActiveMembership,
             int moduleId);
-
-        // Memberships
-        Task<IEnumerable<MSSA_HandlerMembership>> GetHandlerMembershipsAsync(int handlerId, int moduleId);
-        Task<MSSA_HandlerMembership> AddMembershipAsync(MSSA_HandlerMembership membership, int moduleId);
-        Task<MSSA_HandlerMembership> UpdateMembershipAsync(MSSA_HandlerMembership membership, int moduleId);
-        Task DeleteMembershipAsync(int membershipId, int moduleId);
 
         // Entries
         Task<IEnumerable<MSSA_HandlerEntry>> GetHandlerEntriesAsync(int handlerId, int moduleId);

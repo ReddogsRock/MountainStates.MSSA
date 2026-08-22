@@ -61,11 +61,47 @@ else
                     </div>
                     <div class="col-md-6">
                         <dl class="row">
-                            <dt class="col-sm-4">Chairman:</dt>
+                            <dt class="col-sm-4">Trial Host:</dt>
                             <dd class="col-sm-8">@(evt.ChairmanName ?? "Not specified")</dd>
 
-                            <dt class="col-sm-4">Chairman Phone:</dt>
+                            <dt class="col-sm-4">Trial Host Phone:</dt>
                             <dd class="col-sm-8">@(evt.ChairmanPhone ?? "Not provided")</dd>
+
+                            <dt class="col-sm-4">Trial Host Email:</dt>
+                            <dd class="col-sm-8">
+                                @if (!string.IsNullOrEmpty(evt.ChairmanEmail))
+                                {
+                                    <a href="mailto:@evt.ChairmanEmail">@evt.ChairmanEmail</a>
+                                }
+                                else
+                                {
+                                    <em>Not provided</em>
+                                }
+                            </dd>
+
+                            <dt class="col-sm-4">Entry Link:</dt>
+                            <dd class="col-sm-8">
+                                @if (!string.IsNullOrEmpty(evt.EntryLink))
+                                {
+                                    <a href="@evt.EntryLink" target="_blank" rel="noopener">Enter This Event</a>
+                                }
+                                else
+                                {
+                                    <em>Not provided</em>
+                                }
+                            </dd>
+
+                            <dt class="col-sm-4">Flyer:</dt>
+                            <dd class="col-sm-8">
+                                @if (!string.IsNullOrEmpty(evt.FlyerFileName))
+                                {
+                                    <a href="@FlyerDownloadUrl" target="_blank" rel="noopener">@evt.FlyerFileName</a>
+                                }
+                                else
+                                {
+                                    <em>Not uploaded</em>
+                                }
+                            </dd>
 
                             <dt class="col-sm-4">MSSA Sanctioned:</dt>
                             <dd class="col-sm-8">
@@ -90,88 +126,34 @@ else
                 <h4>Planning Information</h4>
             </div>
             <div class="card-body">
-                <div class="row">
-                    <div class="col-md-3">
-                        <strong>Stock:</strong>
-                        <ul class="list-unstyled">
-                            @if (evt.Cattle)
+                @if (evt.Offerings == null || !evt.Offerings.Any())
+                {
+                    <p class="text-muted"><em>No run offerings have been planned for this event yet.</em></p>
+                }
+                else
+                {
+                    <table class="table table-sm">
+                        <thead>
+                            <tr>
+                                <th>Class</th>
+                                <th>Stock</th>
+                                <th>Venue</th>
+                                <th>Planned Runs</th>
+                            </tr>
+                        </thead>
+                        <tbody>
+                            @foreach (var offering in evt.Offerings)
                             {
-                                <li>✓ Cattle</li>
+                                <tr>
+                                    <td>@offering.ClassName @offering.SubClassName</td>
+                                    <td>@offering.Stock</td>
+                                    <td>@offering.Venue</td>
+                                    <td>@offering.PlannedRuns</td>
+                                </tr>
                             }
-                            @if (evt.Sheep)
-                            {
-                                <li>✓ Sheep</li>
-                            }
-                            @if (!evt.Cattle && !evt.Sheep)
-                            {
-                                <li class="text-muted">None specified</li>
-                            }
-                        </ul>
-                    </div>
-                    <div class="col-md-3">
-                        <strong>Venue:</strong>
-                        <ul class="list-unstyled">
-                            @if (evt.Arena)
-                            {
-                                <li>✓ Arena</li>
-                            }
-                            @if (evt.Field)
-                            {
-                                <li>✓ Field</li>
-                            }
-                            @if (!evt.Arena && !evt.Field)
-                            {
-                                <li class="text-muted">None specified</li>
-                            }
-                        </ul>
-                    </div>
-                    <div class="col-md-3">
-                        <strong>Style:</strong>
-                        <ul class="list-unstyled">
-                            @if (evt.OnFoot)
-                            {
-                                <li>✓ On Foot</li>
-                            }
-                            @if (evt.Horseback)
-                            {
-                                <li>✓ Horseback</li>
-                            }
-                            @if (!evt.OnFoot && !evt.Horseback)
-                            {
-                                <li class="text-muted">None specified</li>
-                            }
-                        </ul>
-                    </div>
-                    <div class="col-md-3">
-                        <strong>Classes:</strong>
-                        <ul class="list-unstyled">
-                            @if (evt.Open)
-                            {
-                                <li>✓ Open</li>
-                            }
-                            @if (evt.Nursery)
-                            {
-                                <li>✓ Nursery</li>
-                            }
-                            @if (evt.Intermediate)
-                            {
-                                <li>✓ Intermediate</li>
-                            }
-                            @if (evt.Novice)
-                            {
-                                <li>✓ Novice</li>
-                            }
-                            @if (evt.Junior)
-                            {
-                                <li>✓ Junior</li>
-                            }
-                            @if (!evt.Open && !evt.Nursery && !evt.Intermediate && !evt.Novice && !evt.Junior)
-                            {
-                                <li class="text-muted">None specified</li>
-                            }
-                        </ul>
-                    </div>
-                </div>
+                        </tbody>
+                    </table>
+                }
                 @if (evt.NumberOfRuns.HasValue)
                 {
                     <div class="row mt-2">
@@ -213,9 +195,11 @@ else
                             <span class="badge bg-secondary">No</span>
                         }
                     </dd>
-
+                    @if (UserSecurity.IsAuthorized(PageState.User, RoleNames.Admin))
+                    {
                     <dt class="col-sm-3">Sanction Fee:</dt>
                     <dd class="col-sm-9">@(evt.SanctionFee?.ToString("C") ?? "N/A")</dd>
+                    }
 
                     <dt class="col-sm-3">Fee Received:</dt>
                     <dd class="col-sm-9">@(evt.FeeReceivedDate?.ToString("MMM dd, yyyy") ?? "Not received")</dd>
@@ -391,6 +375,9 @@ else
     private List<string> _availableClasses = new();
     private string _selectedClass = "";
     private bool _loadingEntries = false;
+
+    private string FlyerDownloadUrl =>
+        $"{PageState.Alias.BaseUrl}/api/MSSA_Event/{evt.EventId}/flyer?moduleid={ModuleState.ModuleId}";
 
     protected override async Task OnInitializedAsync()
     {

@@ -1,4 +1,4 @@
-﻿using Microsoft.AspNetCore.Authorization;
+using Microsoft.AspNetCore.Authorization;
 using Microsoft.AspNetCore.Http;
 using Microsoft.AspNetCore.Mvc;
 using Oqtane.Controllers;
@@ -152,29 +152,70 @@ namespace MountainStates.MSSA.Module.MSSA_Entries.Controllers
             }
         }
 
-        // POST: api/MSSA_Entry/generaterunorder?trialId=5&classId=3&moduleid=x
-        [HttpPost("generaterunorder")]
-        [Authorize(Policy = PolicyNames.EditModule)]
-        public async Task<IActionResult> GenerateRunOrder(int trialId, int classId, int moduleId)
+        // GET: api/MSSA_Entry/runorder/proposal/5?moduleid=x
+        // Builds a proposed run order for the trial - does NOT persist anything.
+        [HttpGet("runorder/proposal/{trialId}")]
+        [Authorize(Policy = PolicyNames.ViewModule)]
+        public async Task<List<RunOrderEntry>> GetProposedRunOrder(int trialId, int moduleId)
         {
             try
             {
-                if (IsAuthorizedForRole(MSSARoles.Admin) || IsAuthorizedForRole(MSSARoles.Scorekeeper))
-                {
-                    await _manager.GenerateRunOrderAsync(trialId, classId, moduleId);
-                    _logger.Log(LogLevel.Information, this, LogFunction.Update, "Run order generated for trial {TrialId} class {ClassId}", trialId, classId);
-                    return Ok();
-                }
-                else
-                {
-                    _logger.Log(LogLevel.Error, this, LogFunction.Security, "Unauthorized run order generation attempt");
-                    HttpContext.Response.StatusCode = (int)System.Net.HttpStatusCode.Forbidden;
-                    return Forbid();
-                }
+                return await _manager.GetProposedRunOrderAsync(trialId, moduleId);
             }
             catch (System.Exception ex)
             {
-                _logger.Log(LogLevel.Error, this, LogFunction.Update, ex, "Error generating run order");
+                _logger.Log(LogLevel.Error, this, LogFunction.Read, ex, "Error building run order proposal for trial {TrialId}", trialId);
+                throw;
+            }
+        }
+
+        // POST: api/MSSA_Entry/runorder?moduleid=x
+        // Persists a (possibly user-edited) run order.
+        [HttpPost("runorder")]
+        [Authorize(Policy = PolicyNames.EditModule)]
+        public async Task<List<RunOrderEntry>> SaveRunOrder([FromBody] List<RunOrderEntry> assignments, int moduleId)
+        {
+            try
+            {
+                if (!IsAuthorizedForRole(MSSARoles.Admin) && !IsAuthorizedForRole(MSSARoles.Scorekeeper))
+                {
+                    _logger.Log(LogLevel.Error, this, LogFunction.Security, "Unauthorized run order save attempt");
+                    HttpContext.Response.StatusCode = (int)System.Net.HttpStatusCode.Forbidden;
+                    return null;
+                }
+
+                var saved = await _manager.SaveRunOrderAsync(assignments ?? new List<RunOrderEntry>(), moduleId);
+                _logger.Log(LogLevel.Information, this, LogFunction.Update, "Run order saved ({Count} entries)", saved.Count);
+                return saved;
+            }
+            catch (System.Exception ex)
+            {
+                _logger.Log(LogLevel.Error, this, LogFunction.Update, ex, "Error saving run order");
+                throw;
+            }
+        }
+
+        // POST: api/MSSA_Entry/scores/import?moduleid=x
+        [HttpPost("scores/import")]
+        [Authorize(Policy = PolicyNames.EditModule)]
+        public async Task<List<ScoreImportRow>> ImportScores([FromBody] List<ScoreImportRow> rows, int moduleId)
+        {
+            try
+            {
+                if (!IsAuthorizedForRole(MSSARoles.Admin) && !IsAuthorizedForRole(MSSARoles.Scorekeeper))
+                {
+                    _logger.Log(LogLevel.Error, this, LogFunction.Security, "Unauthorized score import attempt");
+                    HttpContext.Response.StatusCode = (int)System.Net.HttpStatusCode.Forbidden;
+                    return null;
+                }
+
+                var updatedRows = await _manager.ImportScoresAsync(rows ?? new List<ScoreImportRow>(), moduleId);
+                _logger.Log(LogLevel.Information, this, LogFunction.Update, "Scores imported ({Count} entries updated)", updatedRows.Count);
+                return updatedRows;
+            }
+            catch (System.Exception ex)
+            {
+                _logger.Log(LogLevel.Error, this, LogFunction.Update, ex, "Error importing scores");
                 throw;
             }
         }

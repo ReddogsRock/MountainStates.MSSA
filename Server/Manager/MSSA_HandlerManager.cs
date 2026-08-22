@@ -45,35 +45,12 @@ namespace MountainStates.MSSA.Module.MSSA_Handlers.Manager
             string searchTerm,
             string stateCode,
             string handlerLevel,
-            bool? hasActiveMembership,
             int moduleId)
         {
             return await _repository.SearchHandlersAsync(
                 searchTerm,
                 stateCode,
-                handlerLevel,
-                hasActiveMembership);
-        }
-
-        // Memberships
-        public async Task<IEnumerable<MSSA_HandlerMembership>> GetHandlerMembershipsAsync(int handlerId, int moduleId)
-        {
-            return await _repository.GetHandlerMembershipsAsync(handlerId);
-        }
-
-        public async Task<MSSA_HandlerMembership> AddMembershipAsync(MSSA_HandlerMembership membership, int moduleId)
-        {
-            return await _repository.AddMembershipAsync(membership);
-        }
-
-        public async Task<MSSA_HandlerMembership> UpdateMembershipAsync(MSSA_HandlerMembership membership, int moduleId)
-        {
-            return await _repository.UpdateMembershipAsync(membership);
-        }
-
-        public async Task DeleteMembershipAsync(int membershipId, int moduleId)
-        {
-            await _repository.DeleteMembershipAsync(membershipId);
+                handlerLevel);
         }
 
         // Entries

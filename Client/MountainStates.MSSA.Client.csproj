@@ -12,14 +12,29 @@
   </PropertyGroup>
 
   <ItemGroup>
-    <Compile Remove="Services\MSSA_ExcelServerStartup.cs" />
+    <Compile Remove="Modules\MountainStates.MSSA.Module.MSSA_BackOfficeEntry\**" />
+    <Compile Remove="Modules\MountainStates.MSSA.Module.MSSA_TrialSecretary\**" />
+    <Content Remove="Modules\MountainStates.MSSA.Module.MSSA_BackOfficeEntry\**" />
+    <Content Remove="Modules\MountainStates.MSSA.Module.MSSA_TrialSecretary\**" />
+    <EmbeddedResource Remove="Modules\MountainStates.MSSA.Module.MSSA_BackOfficeEntry\**" />
+    <EmbeddedResource Remove="Modules\MountainStates.MSSA.Module.MSSA_TrialSecretary\**" />
+    <None Remove="Modules\MountainStates.MSSA.Module.MSSA_BackOfficeEntry\**" />
+    <None Remove="Modules\MountainStates.MSSA.Module.MSSA_TrialSecretary\**" />
   </ItemGroup>
 
   <ItemGroup>
-    <PackageReference Include="Microsoft.AspNetCore.Components.WebAssembly" Version="10.0.1" />
-    <PackageReference Include="Microsoft.AspNetCore.Components.WebAssembly.Authentication" Version="10.0.1" />
-    <PackageReference Include="Microsoft.Extensions.Localization" Version="10.0.1" />
-    <PackageReference Include="Microsoft.Extensions.Http" Version="10.0.1" />
+    <Compile Remove="Services\BackOfficeEntryService.cs" />
+    <Compile Remove="Services\IBackOfficeEntryService.cs" />
+    <Compile Remove="Services\ITrialSecretaryService.cs" />
+    <Compile Remove="Services\MSSA_ExcelServerStartup.cs" />
+    <Compile Remove="Services\TrialSecretaryService.cs" />
+  </ItemGroup>
+
+  <ItemGroup>
+    <PackageReference Include="Microsoft.AspNetCore.Components.WebAssembly" Version="10.0.9" />
+    <PackageReference Include="Microsoft.AspNetCore.Components.WebAssembly.Authentication" Version="10.0.9" />
+    <PackageReference Include="Microsoft.Extensions.Localization" Version="10.0.9" />
+    <PackageReference Include="Microsoft.Extensions.Http" Version="10.0.9" />
   </ItemGroup>
 
   <ItemGroup>
@@ -27,7 +42,7 @@
   </ItemGroup>
 
   <ItemGroup>
-    <PackageReference Include="Oqtane.Client" Version="10.0.1" />
+    <PackageReference Include="Oqtane.Client" Version="10.2.1" />
   </ItemGroup>
 
 </Project>

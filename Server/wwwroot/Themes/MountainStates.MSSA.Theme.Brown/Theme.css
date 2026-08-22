@@ -294,6 +294,26 @@ a.btn.btn-sm.btn-info.me-1 {
         color: var(--mssa-white) !important;
     }
 
+/* Submenu items reuse .nav-link inside .dropdown-menu (e.g. moving a page to be
+   a subpage). .navbar-nav .nav-link.active sets a light tan color intended for
+   the dark brown navbar bar - that color inherits into any nested span (like
+   span.w-100) here too, giving poor contrast on the dropdown's white background.
+   Same specificity (3 classes) as that rule, placed after it, so this wins and
+   keeps dropdown text readable regardless of active/hover state. */
+.dropdown-menu .nav-link,
+.dropdown-menu .nav-link span,
+.dropdown-menu .nav-link.active,
+.dropdown-menu .nav-link.active span {
+    color: var(--mssa-black) !important;
+}
+
+    .dropdown-menu .nav-link:hover,
+    .dropdown-menu .nav-link:hover span,
+    .dropdown-menu .nav-link:focus,
+    .dropdown-menu .nav-link:focus span {
+        color: var(--mssa-brown-dark) !important;
+    }
+
 /* Footer Styling */
 /* Make the page layout fill the viewport */
 html, body {

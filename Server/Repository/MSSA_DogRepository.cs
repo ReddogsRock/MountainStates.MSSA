@@ -150,6 +150,25 @@ namespace MountainStates.MSSA.Module.MSSA_Dogs.Repository
             }
         }
 
+        public async Task<MSSA_DogFuturityParticipation> SaveFuturityDocumentAsync(int participationId, string fileName, string filePath)
+        {
+            using var db = await _dbContextFactory.CreateDbContextAsync();
+
+            var participation = await db.MSSA_DogFuturityParticipation.FindAsync(participationId);
+            if (participation == null)
+            {
+                return null;
+            }
+
+            participation.DocumentFileName = fileName;
+            participation.DocumentPath = filePath;
+            participation.DocumentUploadedDate = DateTime.UtcNow;
+
+            await db.SaveChangesAsync();
+
+            return participation;
+        }
+
         // Entries
         public async Task<IEnumerable<MSSA_DogEntry>> GetDogEntriesAsync(int dogId)
         {

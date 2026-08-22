@@ -16,7 +16,10 @@ else
     <div class="container-fluid">
         <div class="row mb-3">
             <div class="col">
-                <h2>@dog.Name</h2>
+                <h2>
+                    @dog.Name
+                    <span class="badge bg-secondary ms-2">ID: @dog.DogId</span>
+                </h2>
             </div>
             <div class="col-auto">
                 <ActionLink Action="Index" Text="Back to List" ResourceKey="BackToList" Class="btn btn-secondary me-2" />
@@ -136,6 +139,7 @@ else
                         <thead>
                             <tr>
                                 <th>Year</th>
+                                <th>Documentation</th>
                             </tr>
                         </thead>
                         <tbody>
@@ -143,6 +147,16 @@ else
                             {
                                 <tr>
                                     <td>@participation.Year</td>
+                                    <td>
+                                        @if (!string.IsNullOrEmpty(participation.DocumentPath))
+                                        {
+                                            <span class="badge bg-success">Uploaded</span>
+                                        }
+                                        else
+                                        {
+                                            <span class="badge bg-secondary">Not on file</span>
+                                        }
+                                    </td>
                                 </tr>
                             }
                         </tbody>

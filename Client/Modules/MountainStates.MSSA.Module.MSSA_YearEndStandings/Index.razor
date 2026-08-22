@@ -1,0 +1,344 @@
+@namespace MountainStates.MSSA.Module.MSSA_YearEndStandings
+@inherits ModuleBase
+@using MountainStates.MSSA.Module.MSSA_YearEndStandings.Services
+@using MountainStates.MSSA.Module.MSSA_YearEndStandings.Models
+@using MountainStates.MSSA.Module.MSSA_Events.Enums
+@inject IMSSA_YearEndStandingsService StandingsService
+
+<div class="container-fluid">
+    <div class="row mb-3">
+        <div class="col">
+            <h2>Year End Standings</h2>
+        </div>
+    </div>
+
+    @* Filters *@
+    <div class="card mb-3">
+        <div class="card-body">
+            <div class="row g-2">
+                <div class="col-md-3">
+                    <label for="yearSelect" class="form-label">Year</label>
+                    <select id="yearSelect" class="form-select" @bind="selectedYearOption" @bind:after="LoadStandings">
+                        <option value="">-- Select Year --</option>
+                        @if (years != null)
+                        {
+                            @foreach (var y in years)
+                            {
+                                <option value="@y">@y</option>
+                            }
+                        }
+                        <option value="Lifetime">Lifetime</option>
+                    </select>
+                </div>
+                <div class="col-md-3">
+                    <label for="levelSelect" class="form-label">Level</label>
+                    <select id="levelSelect" class="form-select" @bind="selectedLevel" @bind:after="OnLevelChanged">
+                        <option value="">-- Select Level --</option>
+                        @if (levels != null)
+                        {
+                            @foreach (var l in OrderedLevelOptions())
+                            {
+                                <option value="@l">@l</option>
+                            }
+                        }
+                    </select>
+                </div>
+                <div class="col-md-3">
+                    <label for="speciesSelect" class="form-label">Species</label>
+                    <select id="speciesSelect" class="form-select" @bind="selectedSpecies" @bind:after="LoadStandings"
+                            disabled="@IsFuturitySelected">
+                        <option value="">-- Select Species --</option>
+                        @foreach (var stock in StockType.All)
+                        {
+                            <option value="@stock">@stock</option>
+                        }
+                        <option value="All">All</option>
+                    </select>
+                    @if (IsFuturitySelected)
+                    {
+                        <small class="form-text text-muted">Futurity is Cattle only.</small>
+                    }
+                </div>
+                <div class="col-md-3">
+                    <label for="dogSearch" class="form-label">Search Dog (name or ID)</label>
+                    <input id="dogSearch" class="form-control" @bind="dogSearchTerm" @bind:event="oninput" />
+                </div>
+            </div>
+        </div>
+    </div>
+
+    @* Results *@
+    @if (!ReadyToShow)
+    {
+        <p class="text-muted"><em>Select a Year, Level, and Species to see standings.</em></p>
+    }
+    else if (standings == null)
+    {
+        <p><em>Loading...</em></p>
+    }
+    else if (!standings.Any())
+    {
+        <p class="text-muted"><em>No results found for this Year/Level/Species.</em></p>
+    }
+    else if (!FilteredStandings.Any())
+    {
+        <p class="text-muted"><em>No results match "@dogSearchTerm".</em></p>
+    }
+    else
+    {
+        <div class="table-responsive">
+            <table class="table table-striped table-hover">
+                <thead>
+                    <tr>
+                        <th>Rank</th>
+                        <th>Dog</th>
+                        <th>Dog ID</th>
+                        <th>Handler</th>
+                        <th>Handler ID</th>
+                        <th>Total Points</th>
+                        <th></th>
+                    </tr>
+                </thead>
+                <tbody>
+                    @foreach (var s in FilteredStandings)
+                    {
+                        <tr>
+                            <td>@s.Rank</td>
+                            <td>@s.DogName</td>
+                            <td>@s.DogId</td>
+                            <td>@(s.HandlerName ?? "-")</td>
+                            <td>@(s.HandlerId?.ToString() ?? "-")</td>
+                            <td>@s.TotalPoints</td>
+                            <td>
+                                <button type="button" class="btn btn-sm btn-primary" @onclick="() => ShowDetails(s)">
+                                    Details
+                                </button>
+                            </td>
+                        </tr>
+                    }
+                </tbody>
+            </table>
+        </div>
+    }
+
+    @* Details Modal *@
+    @if (showDetailsModal)
+    {
+        <div class="modal fade show d-block" tabindex="-1" style="background-color: rgba(0,0,0,0.5);">
+            <div class="modal-dialog modal-lg">
+                <div class="modal-content">
+                    <div class="modal-header">
+                        <h5 class="modal-title">
+                            Standing Details - @selectedStanding?.DogName
+                            @if (!string.IsNullOrEmpty(selectedStanding?.HandlerName))
+                            {
+                                <span> (@selectedStanding.HandlerName)</span>
+                            }
+                        </h5>
+                        <button type="button" class="btn-close" @onclick="CloseDetails"></button>
+                    </div>
+                    <div class="modal-body">
+                        @if (detailsResults == null)
+                        {
+                            <p><em>Loading...</em></p>
+                        }
+                        else if (!detailsResults.Any())
+                        {
+                            <p class="text-muted"><em>No trial results found.</em></p>
+                        }
+                        else
+                        {
+                            <table class="table table-sm">
+                                <thead>
+                                    <tr>
+                                        @if (selectedStandingYear == null)
+                                        {
+                                            <th>Year</th>
+                                        }
+                                        <th>Event</th>
+                                        <th>Trial</th>
+                                        <th>Date</th>
+                                        <th>Stock</th>
+                                        <th>Handler</th>
+                                        <th>Points</th>
+                                    </tr>
+                                </thead>
+                                <tbody>
+                                    @foreach (var detail in detailsResults)
+                                    {
+                                        <tr>
+                                            @if (selectedStandingYear == null)
+                                            {
+                                                <td>@detail.PointYear</td>
+                                            }
+                                            <td>@detail.EventName</td>
+                                            <td>@detail.TrialName</td>
+                                            <td>@detail.TrialDate.ToString("MMM dd, yyyy")</td>
+                                            <td>@detail.Stock</td>
+                                            <td>@detail.HandlerName</td>
+                                            <td>@detail.Points</td>
+                                        </tr>
+                                    }
+                                </tbody>
+                                <tfoot>
+                                    <tr class="fw-bold">
+                                        <td colspan="@(selectedStandingYear == null ? 6 : 5)">Total:</td>
+                                        <td>@detailsResults.Sum(d => d.Points)</td>
+                                    </tr>
+                                </tfoot>
+                            </table>
+                        }
+                    </div>
+                    <div class="modal-footer">
+                        <button type="button" class="btn btn-secondary" @onclick="CloseDetails">Close</button>
+                    </div>
+                </div>
+            </div>
+        </div>
+    }
+</div>
+
+@code {
+    private List<int> years;
+    private List<string> levels;
+
+    private string selectedYearOption = "";
+    private string selectedLevel = "";
+    private string selectedSpecies = "";
+    private string dogSearchTerm = "";
+
+    private List<MSSA_YearEndStanding> standings;
+
+    // Details modal
+    private bool showDetailsModal = false;
+    private MSSA_YearEndStanding selectedStanding;
+    private int? selectedStandingYear;
+    private List<YearEndStandingDetail> detailsResults;
+
+    private bool ReadyToShow => !string.IsNullOrEmpty(selectedYearOption) && !string.IsNullOrEmpty(selectedLevel) && !string.IsNullOrEmpty(selectedSpecies);
+
+    private bool IsFuturitySelected => string.Equals(selectedLevel, "Futurity", StringComparison.OrdinalIgnoreCase);
+
+    private async Task OnLevelChanged()
+    {
+        if (IsFuturitySelected)
+        {
+            // Futurity is Nursery/Cattle only - lock Species so the dropdown can't show
+            // a selection that doesn't actually apply (backend enforces this too).
+            selectedSpecies = "Cattle";
+        }
+
+        await LoadStandings();
+    }
+
+    // Fixed display order for the Level dropdown; "Futurity" is synthetic (not a real
+    // class - see MSSA_YearEndStandingsRepository) and is inserted at this specific spot
+    // rather than appended at the end.
+    private static readonly string[] LevelOrder = { "Open", "Nursery", "Futurity", "Intermediate", "Novice" };
+
+    private List<string> OrderedLevelOptions()
+    {
+        var result = new List<string>();
+        var remaining = new List<string>(levels ?? new List<string>());
+
+        foreach (var name in LevelOrder)
+        {
+            if (string.Equals(name, "Futurity", StringComparison.OrdinalIgnoreCase))
+            {
+                result.Add("Futurity");
+                continue;
+            }
+
+            var match = remaining.FirstOrDefault(l => string.Equals(l, name, StringComparison.OrdinalIgnoreCase));
+            if (match != null)
+            {
+                result.Add(match);
+                remaining.Remove(match);
+            }
+        }
+
+        // Anything not explicitly ordered above (e.g. Junior, if it exists) still shows,
+        // just appended after - alphabetically, as before - rather than silently hidden.
+        result.AddRange(remaining.OrderBy(l => l));
+
+        return result;
+    }
+
+    private IEnumerable<MSSA_YearEndStanding> FilteredStandings
+    {
+        get
+        {
+            if (standings == null) return Enumerable.Empty<MSSA_YearEndStanding>();
+            if (string.IsNullOrWhiteSpace(dogSearchTerm)) return standings;
+
+            var term = dogSearchTerm.Trim();
+            return standings.Where(s =>
+                (s.DogName != null && s.DogName.Contains(term, StringComparison.OrdinalIgnoreCase)) ||
+                s.DogId.ToString().Contains(term));
+        }
+    }
+
+    protected override async Task OnInitializedAsync()
+    {
+        try
+        {
+            years = await StandingsService.GetAvailableYearsAsync(ModuleState.ModuleId);
+            levels = await StandingsService.GetLevelsAsync(ModuleState.ModuleId);
+        }
+        catch (Exception ex)
+        {
+            await logger.LogError(ex, "Error loading year end standings filters");
+            AddModuleMessage("Error loading page", MessageType.Error);
+        }
+    }
+
+    private async Task LoadStandings()
+    {
+        if (!ReadyToShow)
+        {
+            standings = null;
+            return;
+        }
+
+        try
+        {
+            standings = null; // shows "Loading..." while in flight
+
+            int? year = selectedYearOption == "Lifetime" ? null : int.Parse(selectedYearOption);
+
+            standings = await StandingsService.GetStandingsAsync(year, selectedLevel, selectedSpecies, ModuleState.ModuleId);
+        }
+        catch (Exception ex)
+        {
+            await logger.LogError(ex, "Error loading year end standings");
+            AddModuleMessage("Error loading standings", MessageType.Error);
+        }
+    }
+
+    private async Task ShowDetails(MSSA_YearEndStanding s)
+    {
+        try
+        {
+            selectedStanding = s;
+            selectedStandingYear = selectedYearOption == "Lifetime" ? null : int.Parse(selectedYearOption);
+            detailsResults = null; // shows "Loading..." while in flight
+            showDetailsModal = true;
+
+            detailsResults = await StandingsService.GetStandingDetailsAsync(
+                s.DogId, s.HandlerId, selectedStandingYear, selectedLevel, selectedSpecies, ModuleState.ModuleId);
+        }
+        catch (Exception ex)
+        {
+            await logger.LogError(ex, "Error loading standing details");
+            AddModuleMessage("Error loading details", MessageType.Error);
+        }
+    }
+
+    private void CloseDetails()
+    {
+        showDetailsModal = false;
+        selectedStanding = null;
+        selectedStandingYear = null;
+        detailsResults = null;
+    }
+}

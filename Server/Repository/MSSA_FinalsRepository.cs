@@ -2,6 +2,7 @@ using Microsoft.EntityFrameworkCore;
 using MountainStates.MSSA.Module.MSSA_Finals.Models;
 using MountainStates.MSSA.Module.MSSA_Handlers.Data;
 using Oqtane.Modules;
+using System;
 using System.Collections.Generic;
 using System.Linq;
 using System.Threading.Tasks;
@@ -22,12 +23,16 @@ namespace MountainStates.MSSA.Module.MSSA_Finals.Repository
             using var db = await _dbContextFactory.CreateDbContextAsync();
 
             // Query the view
-            return await db.vw_AllFinalsResults
+            var results = await db.vw_AllFinalsResults
                 .OrderByDescending(r => r.Year)
                 .ThenBy(r => r.Level)
                 .ThenBy(r => r.Stock)
                 .ThenBy(r => r.Place)
                 .ToListAsync();
+
+            await ApplyFuturityMarkerAsync(db, results);
+
+            return results;
         }
 
         public async Task<IEnumerable<MSSA_FinalsResult>> SearchFinalsResultsAsync(
@@ -68,12 +73,60 @@ namespace MountainStates.MSSA.Module.MSSA_Finals.Repository
                 query = query.Where(r => r.Place == place.Value);
             }
 
-            return await query
+            var results = await query
                 .OrderBy(r => r.Place)
                 .ThenByDescending(r => r.TotalPoints)
                 .ThenBy(r => r.TotalTimeSeconds)
                 .ToListAsync();
+
+            await ApplyFuturityMarkerAsync(db, results);
+
+            return results;
         }
+
+        // Appends "+" to DogName for any result where the dog was enrolled in Futurity
+        // for that result's year - applies across all Levels, not just Nursery (policy
+        // change: previously gated to Nursery, now every entry by a nominated dog in
+        // their nomination year gets marked). Team is a read-only computed property
+        // ($"{HandlerName} & {DogName}"), so we mark DogName directly and Team reflects
+        // it automatically - confirmed against MSSA_FinalsResult.cs.
+        //
+        // NOTE: r.Year (sourced from MSSA_Events.PointYear) is stored inconsistently -
+        // some rows 2-digit (e.g. 24), others full 4-digit (e.g. 2024) - while
+        // MSSA_DogFuturityParticipation.Year is always 4-digit. Normalize before comparing.
+        private static async Task ApplyFuturityMarkerAsync(MSSADbContext db, List<MSSA_FinalsResult> results)
+        {
+            var eligibleResults = results
+                .Where(r => r.DogId.HasValue)
+                .ToList();
+
+            if (!eligibleResults.Any())
+            {
+                return;
+            }
+
+            var years = eligibleResults.Select(r => NormalizeYear(r.Year)).Distinct().ToList();
+            var dogIds = eligibleResults.Select(r => r.DogId.Value).Distinct().ToList();
+
+            var futurityPairs = await db.MSSA_DogFuturityParticipation
+                .Where(f => years.Contains(f.Year) && dogIds.Contains(f.DogId))
+                .Select(f => new { f.DogId, f.Year })
+                .ToListAsync();
+
+            var futuritySet = new HashSet<(int DogId, int Year)>(futurityPairs.Select(f => (f.DogId, f.Year)));
+
+            foreach (var result in eligibleResults)
+            {
+                if (futuritySet.Contains((result.DogId.Value, NormalizeYear(result.Year))))
+                {
+                    result.DogName += "+";
+                }
+            }
+        }
+
+        // Converts a possibly-2-digit legacy year (e.g. 24) to full 4-digit form (2024).
+        // Leaves already-4-digit years untouched.
+        private static int NormalizeYear(int year) => year < 100 ? 2000 + year : year;
 
         public async Task<IEnumerable<int>> GetAvailableYearsAsync()
         {

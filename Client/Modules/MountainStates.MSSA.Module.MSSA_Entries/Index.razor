@@ -4,12 +4,26 @@
 @using MountainStates.MSSA.Module.MSSA_Events.Models
 @using MountainStates.MSSA.Module.MSSA_Handlers.Enums
 @using Oqtane.Modules.Controls
+@using Microsoft.AspNetCore.Components.Forms
+@using System.IO
+@using System.Text
 
 @namespace MountainStates.MSSA.Module.MSSA_Entries
 @inherits ModuleBase
 @inject IMSSA_EntryService EntryService
 @inject IMSSA_EventService EventService
 @inject NavigationManager NavigationManager
+
+<script suppress-error="BL9992">
+    window.mssaDownloadFile = (fileName, contentType, base64Content) => {
+        const link = document.createElement('a');
+        link.href = `data:${contentType};base64,${base64Content}`;
+        link.download = fileName;
+        document.body.appendChild(link);
+        link.click();
+        document.body.removeChild(link);
+    };
+</script>
 
 <div class="container-fluid">
     <div class="row mb-3">
@@ -68,35 +82,126 @@
                     UserSecurity.IsAuthorized(PageState.User, MSSARoles.Scorekeeper))
             {
                 <div class="col-auto">
-                    <button class="btn btn-secondary btn-sm" @onclick="ShowRunOrderGenerator">
+                    <button class="btn btn-secondary btn-sm me-2" @onclick="GenerateProposal" disabled="@(entries == null || !entries.Any())">
                         <span class="oi oi-random"></span> Generate Run Order
+                    </button>
+                    <button class="btn btn-outline-secondary btn-sm me-2" @onclick="ExportForScoring" disabled="@(entries == null || !entries.Any())">
+                        Export for Scoring
+                    </button>
+                    <InputFile OnChange="ImportScoresFile" style="display:none" id="scoresFileInput" />
+                    <button class="btn btn-outline-secondary btn-sm" onclick="document.getElementById('scoresFileInput').click()">
+                        Import Scores
                     </button>
                 </div>
             }
         </div>
 
-        @if (showRunOrderForm)
+        @if (showRunOrderPreview && proposedRunOrder != null)
         {
-            <div class="alert alert-info">
-                <h5>Generate Run Order</h5>
-                <div class="row">
-                    <div class="col-md-6">
-                        <label class="form-label">Select Class</label>
-                        <select class="form-select" @bind="runOrderClassId">
-                            <option value="">-- Select Class --</option>
-                            @if (classes != null)
+            <div class="card mb-3 border-primary">
+                <div class="card-header bg-primary text-white">
+                    <h5 class="mb-0">Review Run Order</h5>
+                </div>
+                <div class="card-body">
+                    <p class="text-muted">
+                        Classes run in order: Open, Nursery, Intermediate, Novice, Junior. Dogs are shuffled
+                        randomly within each class. Use the arrows to adjust the order within a class before finalizing.
+                    </p>
+                    <table class="table table-sm">
+                        <thead>
+                            <tr>
+                                <th style="width:80px">Run #</th>
+                                <th>Class</th>
+                                <th>Handler</th>
+                                <th>Dog</th>
+                                <th style="width:100px"></th>
+                            </tr>
+                        </thead>
+                        <tbody>
+                            @for (int i = 0; i < proposedRunOrder.Count; i++)
                             {
-                                @foreach (var cls in classes)
-                                {
-                                    <option value="@cls.ClassId">@cls.ClassName @cls.SubClassName</option>
-                                }
+                                var index = i;
+                                var item = proposedRunOrder[index];
+                                var canMoveUp = index > 0 && proposedRunOrder[index - 1].ClassName == item.ClassName;
+                                var canMoveDown = index < proposedRunOrder.Count - 1 && proposedRunOrder[index + 1].ClassName == item.ClassName;
+
+                                <tr>
+                                    <td>@item.RunOrder</td>
+                                    <td>@item.ClassName @item.SubClassName</td>
+                                    <td>@item.HandlerName</td>
+                                    <td>@item.DogName</td>
+                                    <td>
+                                        <button type="button" class="btn btn-sm btn-outline-secondary" title="Move up"
+                                                disabled="@(!canMoveUp)" @onclick="() => MoveProposalRow(index, -1)">
+                                            <span class="oi oi-arrow-top"></span>
+                                        </button>
+                                        <button type="button" class="btn btn-sm btn-outline-secondary" title="Move down"
+                                                disabled="@(!canMoveDown)" @onclick="() => MoveProposalRow(index, 1)">
+                                            <span class="oi oi-arrow-bottom"></span>
+                                        </button>
+                                    </td>
+                                </tr>
                             }
-                        </select>
-                    </div>
-                    <div class="col-md-6 d-flex align-items-end">
-                        <button class="btn btn-success me-2" @onclick="GenerateRunOrder">Generate</button>
-                        <button class="btn btn-secondary" @onclick="CancelRunOrder">Cancel</button>
-                    </div>
+                        </tbody>
+                    </table>
+                    <button type="button" class="btn btn-success me-2" @onclick="FinalizeRunOrder">Finalize</button>
+                    <button type="button" class="btn btn-outline-secondary me-2" @onclick="GenerateProposal">Re-roll</button>
+                    <button type="button" class="btn btn-secondary" @onclick="CancelRunOrderPreview">Cancel</button>
+                </div>
+            </div>
+        }
+
+        @if (showImportPreview)
+        {
+            <div class="card mb-3 border-warning">
+                <div class="card-header bg-warning">
+                    <h5 class="mb-0">Review Score Import</h5>
+                </div>
+                <div class="card-body">
+                    @if (unmatchedRowCount > 0)
+                    {
+                        <div class="alert alert-warning">
+                            @unmatchedRowCount row(s) in the file didn't match any entry in this trial and will be
+                            skipped. If that number looks wrong, double-check you uploaded the right file.
+                        </div>
+                    }
+                    @if (importPreview == null || !importPreview.Any())
+                    {
+                        <p class="text-muted"><em>No changes detected in the matched rows - nothing to import.</em></p>
+                    }
+                    else
+                    {
+                        <table class="table table-sm">
+                            <thead>
+                                <tr>
+                                    <th>Dog</th>
+                                    <th>Handler</th>
+                                    <th>Changes</th>
+                                </tr>
+                            </thead>
+                            <tbody>
+                                @foreach (var diff in importPreview)
+                                {
+                                    <tr>
+                                        <td>@diff.DogName</td>
+                                        <td>@diff.HandlerName</td>
+                                        <td>
+                                            @foreach (var change in diff.Changes)
+                                            {
+                                                <span class="badge bg-light text-dark border me-1 mb-1">
+                                                    @change.Field: @change.Old &rarr; @change.New
+                                                </span>
+                                            }
+                                        </td>
+                                    </tr>
+                                }
+                            </tbody>
+                        </table>
+                        <button type="button" class="btn btn-success me-2" @onclick="ConfirmImport">
+                            Confirm Import (@importPreview.Count)
+                        </button>
+                    }
+                    <button type="button" class="btn btn-secondary" @onclick="CancelImportPreview">Cancel</button>
                 </div>
             </div>
         }
@@ -194,8 +299,24 @@
     private int selectedEventId = 0;
     private int selectedTrialId = 0;
 
-    private bool showRunOrderForm = false;
-    private int runOrderClassId = 0;
+    private bool showRunOrderPreview = false;
+    private List<RunOrderEntry> proposedRunOrder;
+
+    private bool showImportPreview = false;
+    private List<ImportDiffRow> importPreview;
+    private int unmatchedRowCount = 0;
+
+    // Local to this page - just a display/staging shape for the review-before-commit
+    // step, pairing a parsed row with the field-level differences against what's
+    // currently on the entry, plus the entry's name/handler for the review table.
+    private class ImportDiffRow
+    {
+        public int EntryId { get; set; }
+        public string DogName { get; set; }
+        public string HandlerName { get; set; }
+        public List<(string Field, string Old, string New)> Changes { get; set; } = new();
+        public ScoreImportRow Row { get; set; }
+    }
 
     protected override async Task OnInitializedAsync()
     {
@@ -261,36 +382,385 @@
         }
     }
 
-    private void ShowRunOrderGenerator()
-    {
-        showRunOrderForm = true;
-    }
-
-    private async Task GenerateRunOrder()
+    private async Task GenerateProposal()
     {
         try
         {
-            if (runOrderClassId == 0)
+            bool hasExistingRunOrder = entries != null && entries.Any(e => e.RunOrder.HasValue);
+            bool hasExistingScores = entries != null && entries.Any(e =>
+                e.Placing.HasValue || e.TrialPoints.HasValue ||
+                e.ObstacleScore1.HasValue || e.ObstacleScore2.HasValue || e.ObstacleScore3.HasValue ||
+                e.ObstacleScore4.HasValue || e.ObstacleScore5.HasValue || e.ObstacleScore6.HasValue ||
+                e.ObstacleScore7.HasValue || e.ObstacleScore8.HasValue || e.ObstacleScore9.HasValue);
+
+            if (hasExistingScores)
             {
-                AddModuleMessage("Please select a class", MessageType.Warning);
-                return;
+                var confirmed = await JSRuntime.InvokeAsync<bool>("confirm",
+                    "This trial already has scores entered. A new run order won't match what was actually run - continue anyway?");
+                if (!confirmed) return;
+            }
+            else if (hasExistingRunOrder)
+            {
+                var confirmed = await JSRuntime.InvokeAsync<bool>("confirm",
+                    "A run order has already been generated for this trial. Generating a new one will replace it once finalized - continue?");
+                if (!confirmed) return;
             }
 
-            await EntryService.GenerateRunOrderAsync(selectedTrialId, runOrderClassId, ModuleState.ModuleId);
-            await LoadTrialEntries();
-            CancelRunOrder();
-            AddModuleMessage("Run order generated successfully", MessageType.Success);
+            proposedRunOrder = await EntryService.GetProposedRunOrderAsync(selectedTrialId, ModuleState.ModuleId);
+            showRunOrderPreview = true;
         }
         catch (Exception ex)
         {
-            await logger.LogError(ex, "Error generating run order");
+            await logger.LogError(ex, "Error generating run order proposal");
             AddModuleMessage("Error generating run order", MessageType.Error);
         }
     }
 
-    private void CancelRunOrder()
+    // Swaps an item with its neighbor and renumbers 1..N. The caller only enables the
+    // arrow buttons when the swap stays within the same class block, so this never
+    // needs to re-check that itself.
+    private void MoveProposalRow(int index, int direction)
     {
-        showRunOrderForm = false;
-        runOrderClassId = 0;
+        var targetIndex = index + direction;
+        if (targetIndex < 0 || targetIndex >= proposedRunOrder.Count)
+        {
+            return;
+        }
+
+        (proposedRunOrder[index], proposedRunOrder[targetIndex]) = (proposedRunOrder[targetIndex], proposedRunOrder[index]);
+
+        for (int i = 0; i < proposedRunOrder.Count; i++)
+        {
+            proposedRunOrder[i].RunOrder = i + 1;
+        }
+    }
+
+    private async Task FinalizeRunOrder()
+    {
+        try
+        {
+            await EntryService.SaveRunOrderAsync(proposedRunOrder, ModuleState.ModuleId);
+            CancelRunOrderPreview();
+            await LoadTrialEntries();
+            AddModuleMessage("Run order finalized successfully", MessageType.Success);
+        }
+        catch (Exception ex)
+        {
+            await logger.LogError(ex, "Error finalizing run order");
+            AddModuleMessage("Error finalizing run order", MessageType.Error);
+        }
+    }
+
+    private void CancelRunOrderPreview()
+    {
+        showRunOrderPreview = false;
+        proposedRunOrder = null;
+    }
+
+    private async Task ExportForScoring()
+    {
+        if (entries == null || !entries.Any())
+        {
+            return;
+        }
+
+        var sb = new StringBuilder();
+        sb.AppendLine("EntryId,RunOrder,Class,Handler,Dog,Obstacle1,Obstacle2,Obstacle3,Obstacle4,Obstacle5,Obstacle6,Obstacle7,Obstacle8,Obstacle9,Penalty,RunTime,TieBreakerTime,Placing,Points,Comments");
+
+        var ordered = entries.OrderBy(e => e.RunOrder ?? int.MaxValue);
+
+        foreach (var e in ordered)
+        {
+            sb.AppendLine(string.Join(",",
+                e.EntryId,
+                e.RunOrder?.ToString() ?? "",
+                CsvEscape($"{e.ClassName} {e.SubClassName}"),
+                CsvEscape(e.HandlerName),
+                CsvEscape(e.DogName),
+                e.ObstacleScore1?.ToString() ?? "",
+                e.ObstacleScore2?.ToString() ?? "",
+                e.ObstacleScore3?.ToString() ?? "",
+                e.ObstacleScore4?.ToString() ?? "",
+                e.ObstacleScore5?.ToString() ?? "",
+                e.ObstacleScore6?.ToString() ?? "",
+                e.ObstacleScore7?.ToString() ?? "",
+                e.ObstacleScore8?.ToString() ?? "",
+                e.ObstacleScore9?.ToString() ?? "",
+                e.Penalty?.ToString() ?? "",
+                FormatTime(e.RunTime),
+                FormatTime(e.TieBreakerTime),
+                e.Placing?.ToString() ?? "",
+                e.TrialPoints?.ToString() ?? "",
+                CsvEscape(e.Comments)));
+        }
+
+        var bytes = Encoding.UTF8.GetBytes(sb.ToString());
+        var base64 = Convert.ToBase64String(bytes);
+        var fileName = $"Scoring_Trial{selectedTrialId}_{DateTime.Now:yyyyMMdd}.csv";
+
+        await JSRuntime.InvokeVoidAsync("mssaDownloadFile", fileName, "text/csv", base64);
+    }
+
+    private static string FormatTime(TimeSpan? ts)
+    {
+        if (!ts.HasValue) return "";
+        return $"{(int)ts.Value.TotalMinutes}:{ts.Value.Seconds:D2}";
+    }
+
+    private static string CsvEscape(string value)
+    {
+        if (string.IsNullOrEmpty(value)) return "";
+        if (value.Contains(',') || value.Contains('"') || value.Contains('\n'))
+        {
+            return "\"" + value.Replace("\"", "\"\"") + "\"";
+        }
+        return value;
+    }
+
+    private async Task ImportScoresFile(InputFileChangeEventArgs e)
+    {
+        try
+        {
+            const long maxFileSize = 5 * 1024 * 1024; // 5 MB
+            await using var stream = e.File.OpenReadStream(maxFileSize);
+            using var reader = new StreamReader(stream);
+            var content = await reader.ReadToEndAsync();
+
+            var rows = ParseScoresCsv(content);
+            if (!rows.Any())
+            {
+                AddModuleMessage("No score rows found in that file", MessageType.Warning);
+                return;
+            }
+
+            // Build a review diff against what's currently on each entry, rather than
+            // importing immediately - lets the trial host catch a wrong file, a garbled
+            // row, or an obviously-wrong number before anything is actually written.
+            var entryLookup = (entries ?? new List<EntryListItem>()).ToDictionary(x => x.EntryId);
+
+            importPreview = new List<ImportDiffRow>();
+            unmatchedRowCount = 0;
+
+            foreach (var row in rows)
+            {
+                if (!entryLookup.TryGetValue(row.EntryId, out var current))
+                {
+                    unmatchedRowCount++;
+                    continue;
+                }
+
+                var changes = ComputeChanges(row, current);
+                if (changes.Any())
+                {
+                    importPreview.Add(new ImportDiffRow
+                    {
+                        EntryId = row.EntryId,
+                        DogName = current.DogName,
+                        HandlerName = current.HandlerName,
+                        Changes = changes,
+                        Row = row
+                    });
+                }
+            }
+
+            if (!importPreview.Any() && unmatchedRowCount == 0)
+            {
+                AddModuleMessage("No changes detected - nothing to import.", MessageType.Info);
+                return;
+            }
+
+            showImportPreview = true;
+        }
+        catch (Exception ex)
+        {
+            await logger.LogError(ex, "Error reading scores file");
+            AddModuleMessage("Error reading that file. Please check it and try again.", MessageType.Error);
+        }
+    }
+
+    // Field-by-field comparison between the uploaded row and what's currently on the
+    // entry. Only differences are returned - unchanged fields are left out of the
+    // review table entirely so it stays focused on what will actually change.
+    private static List<(string Field, string Old, string New)> ComputeChanges(ScoreImportRow row, EntryListItem current)
+    {
+        var changes = new List<(string, string, string)>();
+
+        void CompareDecimal(string field, decimal? oldVal, decimal? newVal)
+        {
+            if (oldVal != newVal)
+            {
+                changes.Add((field, oldVal?.ToString() ?? "-", newVal?.ToString() ?? "-"));
+            }
+        }
+
+        void CompareInt(string field, int? oldVal, int? newVal)
+        {
+            if (oldVal != newVal)
+            {
+                changes.Add((field, oldVal?.ToString() ?? "-", newVal?.ToString() ?? "-"));
+            }
+        }
+
+        void CompareText(string field, string oldVal, string newVal)
+        {
+            var o = (oldVal ?? "").Trim();
+            var n = (newVal ?? "").Trim();
+            if (!string.Equals(o, n, StringComparison.Ordinal))
+            {
+                changes.Add((field, string.IsNullOrEmpty(o) ? "-" : o, string.IsNullOrEmpty(n) ? "-" : n));
+            }
+        }
+
+        CompareDecimal("Obstacle 1", current.ObstacleScore1, row.ObstacleScore1);
+        CompareDecimal("Obstacle 2", current.ObstacleScore2, row.ObstacleScore2);
+        CompareDecimal("Obstacle 3", current.ObstacleScore3, row.ObstacleScore3);
+        CompareDecimal("Obstacle 4", current.ObstacleScore4, row.ObstacleScore4);
+        CompareDecimal("Obstacle 5", current.ObstacleScore5, row.ObstacleScore5);
+        CompareDecimal("Obstacle 6", current.ObstacleScore6, row.ObstacleScore6);
+        CompareDecimal("Obstacle 7", current.ObstacleScore7, row.ObstacleScore7);
+        CompareDecimal("Obstacle 8", current.ObstacleScore8, row.ObstacleScore8);
+        CompareDecimal("Obstacle 9", current.ObstacleScore9, row.ObstacleScore9);
+        CompareDecimal("Penalty", current.Penalty, row.Penalty);
+        CompareText("Run Time", FormatTime(current.RunTime), row.RunTime);
+        CompareText("Tie-Breaker Time", FormatTime(current.TieBreakerTime), row.TieBreakerTime);
+        CompareInt("Placing", current.Placing, row.Placing);
+        CompareInt("Points", current.TrialPoints, row.TrialPoints);
+        CompareText("Comments", current.Comments, row.Comments);
+
+        return changes;
+    }
+
+    private async Task ConfirmImport()
+    {
+        try
+        {
+            var rowsToImport = importPreview.Select(p => p.Row).ToList();
+            var updated = await EntryService.ImportScoresAsync(rowsToImport, ModuleState.ModuleId);
+            await LoadTrialEntries();
+            CancelImportPreview();
+            AddModuleMessage($"Imported scores for {updated.Count} entries successfully", MessageType.Success);
+        }
+        catch (Exception ex)
+        {
+            await logger.LogError(ex, "Error importing scores");
+            AddModuleMessage("Error importing scores. Please try again.", MessageType.Error);
+        }
+    }
+
+    private void CancelImportPreview()
+    {
+        showImportPreview = false;
+        importPreview = null;
+        unmatchedRowCount = 0;
+    }
+
+    // Parses by header name (not fixed column position), so the file still imports
+    // correctly even if the scorekeeper reordered or deleted columns in Excel - only
+    // EntryId is required; the rest are matched by name if present.
+    private static List<ScoreImportRow> ParseScoresCsv(string content)
+    {
+        var lines = content.Replace("\r\n", "\n").Split('\n').Where(l => !string.IsNullOrWhiteSpace(l)).ToList();
+        if (lines.Count < 2) return new List<ScoreImportRow>();
+
+        var headers = ParseCsvLine(lines[0]);
+        var headerIndex = new Dictionary<string, int>(StringComparer.OrdinalIgnoreCase);
+        for (int i = 0; i < headers.Count; i++)
+        {
+            headerIndex[headers[i].Trim()] = i;
+        }
+
+        int IndexOf(string name) => headerIndex.TryGetValue(name, out var idx) ? idx : -1;
+        string ValueAt(List<string> fields, int idx) => (idx >= 0 && idx < fields.Count) ? fields[idx] : "";
+
+        decimal? ParseDecimal(string s) => decimal.TryParse(s, out var d) ? d : (decimal?)null;
+        int? ParseInt(string s) => int.TryParse(s, out var i) ? i : (int?)null;
+
+        var entryIdIdx = IndexOf("EntryId");
+        var rows = new List<ScoreImportRow>();
+
+        for (int i = 1; i < lines.Count; i++)
+        {
+            var fields = ParseCsvLine(lines[i]);
+            var entryIdStr = ValueAt(fields, entryIdIdx);
+            if (!int.TryParse(entryIdStr, out var entryId))
+            {
+                continue; // skip rows without a valid EntryId
+            }
+
+            rows.Add(new ScoreImportRow
+            {
+                EntryId = entryId,
+                ObstacleScore1 = ParseDecimal(ValueAt(fields, IndexOf("Obstacle1"))),
+                ObstacleScore2 = ParseDecimal(ValueAt(fields, IndexOf("Obstacle2"))),
+                ObstacleScore3 = ParseDecimal(ValueAt(fields, IndexOf("Obstacle3"))),
+                ObstacleScore4 = ParseDecimal(ValueAt(fields, IndexOf("Obstacle4"))),
+                ObstacleScore5 = ParseDecimal(ValueAt(fields, IndexOf("Obstacle5"))),
+                ObstacleScore6 = ParseDecimal(ValueAt(fields, IndexOf("Obstacle6"))),
+                ObstacleScore7 = ParseDecimal(ValueAt(fields, IndexOf("Obstacle7"))),
+                ObstacleScore8 = ParseDecimal(ValueAt(fields, IndexOf("Obstacle8"))),
+                ObstacleScore9 = ParseDecimal(ValueAt(fields, IndexOf("Obstacle9"))),
+                Penalty = ParseDecimal(ValueAt(fields, IndexOf("Penalty"))),
+                RunTime = ValueAt(fields, IndexOf("RunTime")),
+                TieBreakerTime = ValueAt(fields, IndexOf("TieBreakerTime")),
+                Placing = ParseInt(ValueAt(fields, IndexOf("Placing"))),
+                TrialPoints = ParseInt(ValueAt(fields, IndexOf("Points"))),
+                Comments = ValueAt(fields, IndexOf("Comments"))
+            });
+        }
+
+        return rows;
+    }
+
+    // Minimal CSV line parser handling quoted fields with embedded commas/quotes,
+    // matching what CsvEscape produces on export.
+    private static List<string> ParseCsvLine(string line)
+    {
+        var fields = new List<string>();
+        var current = new StringBuilder();
+        bool inQuotes = false;
+
+        for (int i = 0; i < line.Length; i++)
+        {
+            char c = line[i];
+
+            if (inQuotes)
+            {
+                if (c == '"')
+                {
+                    if (i + 1 < line.Length && line[i + 1] == '"')
+                    {
+                        current.Append('"');
+                        i++;
+                    }
+                    else
+                    {
+                        inQuotes = false;
+                    }
+                }
+                else
+                {
+                    current.Append(c);
+                }
+            }
+            else
+            {
+                if (c == '"')
+                {
+                    inQuotes = true;
+                }
+                else if (c == ',')
+                {
+                    fields.Add(current.ToString());
+                    current.Clear();
+                }
+                else
+                {
+                    current.Append(c);
+                }
+            }
+        }
+        fields.Add(current.ToString());
+
+        return fields;
     }
 }

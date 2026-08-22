@@ -37,7 +37,11 @@ namespace MountainStates.MSSA.Module.MSSA_Events.Manager
         Task<MSSA_Trial> AddTrialAsync(MSSA_Trial trial, int moduleId);
         Task<MSSA_Trial> UpdateTrialAsync(MSSA_Trial trial, int moduleId);
         Task DeleteTrialAsync(int trialId, int moduleId);
-        
+
+        // Offerings (planned runs per Class/Stock/Venue)
+        Task<List<MSSA_EventClassOffering>> GetEventOfferingsAsync(int eventId, int moduleId);
+        Task<List<MSSA_EventClassOffering>> SaveEventOfferingsAsync(int eventId, List<MSSA_EventClassOffering> offerings, int moduleId);
+
         // Entries
         Task<List<EntryListItem>> GetTrialEntriesAsync(int trialId, int moduleId);
     }

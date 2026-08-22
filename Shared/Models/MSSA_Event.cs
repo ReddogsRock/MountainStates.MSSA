@@ -1,4 +1,5 @@
 ﻿using System;
+using System.Collections.Generic;
 using System.ComponentModel.DataAnnotations;
 using System.ComponentModel.DataAnnotations.Schema;
 
@@ -36,6 +37,18 @@ namespace MountainStates.MSSA.Module.MSSA_Events.Models
         [StringLength(20)]
         public string ChairmanPhone { get; set; }
 
+        [StringLength(255)]
+        public string ChairmanEmail { get; set; }
+
+        [StringLength(500)]
+        public string EntryLink { get; set; }
+
+        [StringLength(500)]
+        public string FlyerFileName { get; set; }
+
+        [StringLength(500)]
+        public string FlyerPath { get; set; }
+
         // Sanctioning
         public bool IsMSSASanctioned { get; set; } = false;
 
@@ -45,19 +58,8 @@ namespace MountainStates.MSSA.Module.MSSA_Events.Models
         public decimal? SanctionFee { get; set; }
         public DateTime? FeeReceivedDate { get; set; }
 
-        // Planning flags
+        // Planning
         public int? NumberOfRuns { get; set; }
-        public bool Cattle { get; set; } = false;
-        public bool Sheep { get; set; } = false;
-        public bool Arena { get; set; } = false;
-        public bool Field { get; set; } = false;
-        public bool OnFoot { get; set; } = false;
-        public bool Horseback { get; set; } = false;
-        public bool Open { get; set; } = false;
-        public bool Nursery { get; set; } = false;
-        public bool Intermediate { get; set; } = false;
-        public bool Novice { get; set; } = false;
-        public bool Junior { get; set; } = false;
         public string Notes { get; set; }
 
         // Audit Fields
@@ -71,6 +73,22 @@ namespace MountainStates.MSSA.Module.MSSA_Events.Models
 
         [NotMapped]
         public int TrialCount { get; set; }
+
+        // Planned runs per Class/Stock/Venue - replaces the old boolean flags.
+        // Populated by the repository alongside the event; "does this event
+        // offer Cattle/Open/Arena etc." is now derived by checking this list
+        // rather than reading a dedicated boolean column.
+        [NotMapped]
+        public List<MSSA_EventClassOffering> Offerings { get; set; } = new();
+
+        // Transient carriers used only for the flyer upload round-trip (not persisted).
+        // Same pattern as MSSA_DogFuturityParticipation's upload fields - lets the client
+        // post and receive the same type T through ServiceBase's PostJsonAsync<T>.
+        [NotMapped]
+        public string UploadFlyerFileName { get; set; }
+
+        [NotMapped]
+        public string UploadFlyerContentBase64 { get; set; }
 
         [NotMapped]
         public string DateRange

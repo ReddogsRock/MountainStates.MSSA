@@ -1,4 +1,4 @@
-﻿using System;
+using System;
 using System.ComponentModel.DataAnnotations;
 using System.ComponentModel.DataAnnotations.Schema;
 
@@ -28,11 +28,27 @@ namespace MountainStates.MSSA.Module.MSSA_Dogs.Models
         [StringLength(255)]
         public string OwnerName { get; set; }
 
+        // No longer editable via the UI (checkbox removed from Edit.razor per request),
+        // but left on the model since Search/Repository/Manager/Service/Controller and
+        // the Index/Detail pages still reference it - removing the property outright
+        // would require touching all of those. Existing data and search-by-member
+        // capability stay intact; the field just can't be set from this page anymore.
         public bool OwnerIsMSSAMember { get; set; } = false;
 
         // Status Flags
         public bool IsDeceased { get; set; } = false;
         public bool IsSold { get; set; } = false;
+
+        // Nursery age-eligibility documentation. Unlike Futurity, there's no
+        // per-year nomination record for Nursery - just one document attached
+        // directly to the dog, uploadable/replaceable any time (Add or Edit).
+        [StringLength(500)]
+        public string NurseryDocumentFileName { get; set; }
+
+        [StringLength(500)]
+        public string NurseryDocumentPath { get; set; }
+
+        public DateTime? NurseryDocumentUploadedDate { get; set; }
 
         // Audit Fields
         public DateTime CreatedDate { get; set; }
@@ -64,5 +80,14 @@ namespace MountainStates.MSSA.Module.MSSA_Dogs.Models
                 return "Active";
             }
         }
+
+        // Transient carriers used only for the Nursery document upload round-trip (not
+        // persisted). Same pattern as the Futurity document/Event flyer uploads - lets
+        // the client post and receive the same type T through ServiceBase's PostJsonAsync<T>.
+        [NotMapped]
+        public string UploadNurseryDocFileName { get; set; }
+
+        [NotMapped]
+        public string UploadNurseryDocContentBase64 { get; set; }
     }
 }

@@ -359,11 +359,39 @@ namespace MountainStates.MSSA.Module.BackOfficeEntry.Repository
                 .Where(d => dogIds.Contains(d.DogId))
                 .ToDictionaryAsync(d => d.DogId, d => d.Name);
 
+            // Futurity "+" marker: only applies to Nursery-class scores, and only for
+            // dogs enrolled in Futurity for the competition year this trial falls in.
+            //
+            // NOTE: MSSA_Events.PointYear is stored inconsistently - some rows 2-digit
+            // (e.g. 24), others full 4-digit (e.g. 2024) - while
+            // MSSA_DogFuturityParticipation.Year is always 4-digit. Normalize before comparing.
+            var classInfo = await db.MSSA_Classes.FirstOrDefaultAsync(c => c.ClassId == classId);
+            var isNursery = string.Equals(classInfo?.ClassName, "Nursery", StringComparison.OrdinalIgnoreCase);
+
+            var futurityDogIds = new HashSet<int>();
+            if (isNursery)
+            {
+                var trial = await db.MSSA_Trials.FirstOrDefaultAsync(t => t.TrialId == trialId);
+                var evt = trial != null
+                    ? await db.MSSA_Events.FirstOrDefaultAsync(e => e.EventId == trial.EventId)
+                    : null;
+                var year = evt?.PointYear ?? trial?.TrialDate.Year ?? DateTime.Today.Year;
+                year = NormalizeYear(year);
+
+                var enrolled = await db.MSSA_DogFuturityParticipation
+                    .Where(f => f.Year == year && dogIds.Contains(f.DogId))
+                    .Select(f => f.DogId)
+                    .ToListAsync();
+
+                futurityDogIds = enrolled.ToHashSet();
+            }
+
             return entries.Select(e => new ResultEntryListItem
             {
                 EntryId              = e.EntryId,
                 HandlerName          = handlers.TryGetValue(e.HandlerId, out var hn) ? hn : "Unknown",
-                DogName              = dogs.TryGetValue(e.DogId, out var dn) ? dn : "Unknown",
+                DogName              = (dogs.TryGetValue(e.DogId, out var dn) ? dn : "Unknown")
+                                       + (futurityDogIds.Contains(e.DogId) ? "+" : ""),
                 HandlerIsMSSAMember  = e.HandlerIsMSSAMember,
                 RunTimeDisplay       = FormatTimeSpanDisplay(e.RunTime),
                 TieBreakerTimeDisplay = FormatTimeSpanDisplay(e.TieBreakerTime),
@@ -506,5 +534,10 @@ namespace MountainStates.MSSA.Module.BackOfficeEntry.Repository
             int seconds = ts.Value.Seconds;
             return $"{totalMinutes}:{seconds:D2}";
         }
+
+        // Converts a possibly-2-digit legacy year (e.g. 24) to full 4-digit form (2024).
+        // Leaves already-4-digit years untouched. MSSA_Events.PointYear is stored
+        // inconsistently across the two conventions.
+        private static int NormalizeYear(int year) => year < 100 ? 2000 + year : year;
     }
 }

@@ -102,6 +102,17 @@ namespace MountainStates.MSSA.Module.MSSA_Events.Manager
             await _repository.DeleteTrialAsync(trialId);
         }
 
+        // Offerings
+        public async Task<List<MSSA_EventClassOffering>> GetEventOfferingsAsync(int eventId, int moduleId)
+        {
+            return await _repository.GetEventOfferingsAsync(eventId);
+        }
+
+        public async Task<List<MSSA_EventClassOffering>> SaveEventOfferingsAsync(int eventId, List<MSSA_EventClassOffering> offerings, int moduleId)
+        {
+            return await _repository.SaveEventOfferingsAsync(eventId, offerings);
+        }
+
         // Entries
         public async Task<List<EntryListItem>> GetTrialEntriesAsync(int trialId, int moduleId)
         {

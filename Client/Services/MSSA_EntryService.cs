@@ -1,4 +1,4 @@
-﻿using System.Collections.Generic;
+using System.Collections.Generic;
 using System.Linq;
 using System.Net.Http;
 using System.Threading.Tasks;
@@ -47,9 +47,22 @@ namespace MountainStates.MSSA.Module.MSSA_Entries.Services
             await DeleteAsync(CreateAuthorizationPolicyUrl($"{ApiUrl}/{entryId}?moduleid={moduleId}", EntityNames.Module, moduleId));
         }
 
-        public async Task GenerateRunOrderAsync(int trialId, int classId, int moduleId)
+        public async Task<List<RunOrderEntry>> GetProposedRunOrderAsync(int trialId, int moduleId)
         {
-            await PostJsonAsync<object>(CreateAuthorizationPolicyUrl($"{ApiUrl}/generaterunorder?trialId={trialId}&classId={classId}&moduleid={moduleId}", EntityNames.Module, moduleId), null);
+            return await GetJsonAsync<List<RunOrderEntry>>(
+                CreateAuthorizationPolicyUrl($"{ApiUrl}/runorder/proposal/{trialId}?moduleid={moduleId}", EntityNames.Module, moduleId));
+        }
+
+        public async Task<List<RunOrderEntry>> SaveRunOrderAsync(List<RunOrderEntry> assignments, int moduleId)
+        {
+            return await PostJsonAsync<List<RunOrderEntry>>(
+                CreateAuthorizationPolicyUrl($"{ApiUrl}/runorder?moduleid={moduleId}", EntityNames.Module, moduleId), assignments);
+        }
+
+        public async Task<List<ScoreImportRow>> ImportScoresAsync(List<ScoreImportRow> rows, int moduleId)
+        {
+            return await PostJsonAsync<List<ScoreImportRow>>(
+                CreateAuthorizationPolicyUrl($"{ApiUrl}/scores/import?moduleid={moduleId}", EntityNames.Module, moduleId), rows);
         }
 
         public async Task<List<MSSA_Class>> GetClassesAsync(int moduleId)

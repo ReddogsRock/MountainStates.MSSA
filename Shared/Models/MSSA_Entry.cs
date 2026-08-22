@@ -76,6 +76,11 @@ namespace MountainStates.MSSA.Module.MSSA_Entries.Models
         [NotMapped]
         public DateTime TrialDate { get; set; }
 
+        // Competition year (Event.PointYear, falling back to TrialDate.Year) - used
+        // to check Futurity enrollment for the "+" marker on Nursery-class entries.
+        [NotMapped]
+        public int Year { get; set; }
+
         [NotMapped]
         public decimal? TotalScore
         {

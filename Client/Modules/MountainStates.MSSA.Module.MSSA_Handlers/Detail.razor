@@ -95,18 +95,6 @@ else
                     <dt class="col-sm-3">Level Move-Up Date:</dt>
                     <dd class="col-sm-9">@(handler.LevelMoveUpDate?.ToString("MMM dd, yyyy") ?? "N/A")</dd>
 
-                    <dt class="col-sm-3">Membership Status:</dt>
-                    <dd class="col-sm-9">
-                        @if (handler.HasActiveMembership)
-                        {
-                            <span class="badge bg-success">Active</span>
-                        }
-                        else
-                        {
-                            <span class="badge bg-secondary">Inactive</span>
-                        }
-                    </dd>
-
                     <dt class="col-sm-3">Photo Release:</dt>
                     <dd class="col-sm-9">
                         @if (handler.PhotoReleaseConsent)
@@ -125,47 +113,6 @@ else
                         <dd class="col-sm-9">@handler.FamilyMemberName</dd>
                     }
                 </dl>
-            </div>
-        </div>
-
-        @* Memberships *@
-        <div class="card mb-3">
-            <div class="card-header">
-                <h4>Membership History</h4>
-            </div>
-            <div class="card-body">
-                @if (memberships == null)
-                {
-                    <p><em>Loading memberships...</em></p>
-                }
-                else if (!memberships.Any())
-                {
-                    <p><em>No membership records found.</em></p>
-                }
-                else
-                {
-                    <table class="table table-sm">
-                        <thead>
-                            <tr>
-                                <th>Year Range</th>
-                                <th>Amount</th>
-                                <th>Paid By</th>
-                                <th>Date Received</th>
-                            </tr>
-                        </thead>
-                        <tbody>
-                            @foreach (var membership in memberships)
-                            {
-                                <tr>
-                                    <td>@membership.StartYear - @membership.EndYear</td>
-                                    <td>@(membership.Amount?.ToString("C") ?? "N/A")</td>
-                                    <td>@membership.PaidBy</td>
-                                    <td>@(membership.DateReceived?.ToString("MMM dd, yyyy") ?? "N/A")</td>
-                                </tr>
-                            }
-                        </tbody>
-                    </table>
-                }
             </div>
         </div>
 
@@ -294,7 +241,6 @@ else
 
 @code {
     private MSSA_Handler handler;
-    private List<MSSA_HandlerMembership> memberships;
     private List<MSSA_HandlerEntry> entries;
     private IEnumerable<MSSA_HandlerEntry> filteredEntries = new List<MSSA_HandlerEntry>();
 
@@ -311,7 +257,6 @@ else
         {
             int handlerId = int.Parse(PageState.QueryString["id"]);
             handler = await HandlerService.GetHandlerAsync(handlerId, ModuleState.ModuleId);
-            memberships = await HandlerService.GetHandlerMembershipsAsync(handlerId, ModuleState.ModuleId);
             entries = await HandlerService.GetHandlerEntriesAsync(handlerId, ModuleState.ModuleId);
 
             filteredEntries = entries;

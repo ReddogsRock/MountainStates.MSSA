@@ -168,9 +168,8 @@
                     {
                         <tr>
                             <td>
-                                <a href="@NavigateUrl(PageState.Page.Path, "id=" + evt.EventId)">
-                                    @evt.EventName
-                                </a>
+                                <ActionLink Action="Detail" Parameters="@($"id={evt.EventId}")"
+                                            Text="@evt.EventName" ResourceKey="ViewEventName" />
                                 <br />
                                 <small class="text-muted">@evt.EventIdentifier</small>
                             </td>

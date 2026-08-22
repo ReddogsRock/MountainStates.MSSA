@@ -45,7 +45,6 @@ namespace MountainStates.MSSA.Module.MSSA_Handlers.Services
             string searchTerm,
             string stateCode,
             string handlerLevel,
-            bool? hasActiveMembership,
             int moduleId)
         {
             var queryParams = new List<string> { $"moduleid={moduleId}" };
@@ -56,39 +55,9 @@ namespace MountainStates.MSSA.Module.MSSA_Handlers.Services
                 queryParams.Add($"stateCode={stateCode}");
             if (!string.IsNullOrWhiteSpace(handlerLevel))
                 queryParams.Add($"handlerLevel={System.Uri.EscapeDataString(handlerLevel)}");
-            if (hasActiveMembership.HasValue)
-                queryParams.Add($"hasActiveMembership={hasActiveMembership.Value}");
 
             var url = $"{ApiUrl}/search?{string.Join("&", queryParams)}";
             return await GetJsonAsync<List<MSSA_Handler>>(CreateAuthorizationPolicyUrl(url, EntityNames.Module, moduleId));
-        }
-
-        // Memberships
-        public async Task<List<MSSA_HandlerMembership>> GetHandlerMembershipsAsync(int handlerId, int moduleId)
-        {
-            var url = CreateApiUrl("MSSA_HandlerMembership");
-            return await GetJsonAsync<List<MSSA_HandlerMembership>>(
-                CreateAuthorizationPolicyUrl($"{url}/handler/{handlerId}?moduleid={moduleId}", EntityNames.Module, moduleId));
-        }
-
-        public async Task<MSSA_HandlerMembership> AddMembershipAsync(MSSA_HandlerMembership membership, int moduleId)
-        {
-            var url = CreateApiUrl("MSSA_HandlerMembership");
-            return await PostJsonAsync<MSSA_HandlerMembership>(
-                CreateAuthorizationPolicyUrl($"{url}?moduleid={moduleId}", EntityNames.Module, moduleId), membership);
-        }
-
-        public async Task<MSSA_HandlerMembership> UpdateMembershipAsync(MSSA_HandlerMembership membership, int moduleId)
-        {
-            var url = CreateApiUrl("MSSA_HandlerMembership");
-            return await PutJsonAsync<MSSA_HandlerMembership>(
-                CreateAuthorizationPolicyUrl($"{url}/{membership.MembershipId}?moduleid={moduleId}", EntityNames.Module, moduleId), membership);
-        }
-
-        public async Task DeleteMembershipAsync(int membershipId, int moduleId)
-        {
-            var url = CreateApiUrl("MSSA_HandlerMembership");
-            await DeleteAsync(CreateAuthorizationPolicyUrl($"{url}/{membershipId}?moduleid={moduleId}", EntityNames.Module, moduleId));
         }
 
         // Entries

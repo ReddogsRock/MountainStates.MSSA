@@ -40,6 +40,9 @@ namespace MountainStates.MSSA.Module.MSSA_Events.Repository
                 .Select(g => new { EventId = g.Key, Count = g.Count() })
                 .ToDictionaryAsync(x => x.EventId, x => x.Count);
 
+            var eventIds = events.Select(e => e.EventId).ToList();
+            var offeringsByEvent = await LoadOfferingsForEventsAsync(db, eventIds);
+
             foreach (var evt in events)
             {
                 if (!string.IsNullOrEmpty(evt.StateCode) && states.ContainsKey(evt.StateCode))
@@ -47,6 +50,7 @@ namespace MountainStates.MSSA.Module.MSSA_Events.Repository
                     evt.StateName = states[evt.StateCode];
                 }
                 evt.TrialCount = trialCounts.ContainsKey(evt.EventId) ? trialCounts[evt.EventId] : 0;
+                evt.Offerings = offeringsByEvent.TryGetValue(evt.EventId, out var offerings) ? offerings : new List<MSSA_EventClassOffering>();
             }
 
             return events;
@@ -72,6 +76,9 @@ namespace MountainStates.MSSA.Module.MSSA_Events.Repository
                 // Get trial count
                 evt.TrialCount = await db.MSSA_Trials
                     .CountAsync(t => t.EventId == eventId);
+
+                // Get planned run offerings
+                evt.Offerings = await GetEventOfferingsAsync(eventId);
             }
 
             return evt;
@@ -84,8 +91,26 @@ namespace MountainStates.MSSA.Module.MSSA_Events.Repository
             evt.CreatedDate = DateTime.UtcNow;
             evt.ModifiedDate = DateTime.UtcNow;
 
+            var offerings = evt.Offerings;
+            evt.Offerings = new List<MSSA_EventClassOffering>(); // not mapped - keep EF from touching it
+
             db.MSSA_Events.Add(evt);
             await db.SaveChangesAsync();
+
+            if (offerings != null && offerings.Any())
+            {
+                foreach (var offering in offerings)
+                {
+                    offering.OfferingId = 0;
+                    offering.EventId = evt.EventId;
+                    db.MSSA_EventClassOfferings.Add(offering);
+                }
+                await db.SaveChangesAsync();
+
+                await EnsureTrialsForOfferingsAsync(db, evt, offerings);
+            }
+
+            evt.Offerings = await LoadOfferingsAsync(db, evt.EventId);
 
             return evt;
         }
@@ -96,10 +121,83 @@ namespace MountainStates.MSSA.Module.MSSA_Events.Repository
 
             evt.ModifiedDate = DateTime.UtcNow;
 
+            var offerings = evt.Offerings;
+            evt.Offerings = new List<MSSA_EventClassOffering>(); // not mapped - keep EF from touching it
+
             db.Entry(evt).State = EntityState.Modified;
             await db.SaveChangesAsync();
 
+            if (offerings != null)
+            {
+                var existing = await db.MSSA_EventClassOfferings.Where(o => o.EventId == evt.EventId).ToListAsync();
+                db.MSSA_EventClassOfferings.RemoveRange(existing);
+
+                foreach (var offering in offerings)
+                {
+                    offering.OfferingId = 0;
+                    offering.EventId = evt.EventId;
+                    db.MSSA_EventClassOfferings.Add(offering);
+                }
+                await db.SaveChangesAsync();
+
+                if (offerings.Any())
+                {
+                    await EnsureTrialsForOfferingsAsync(db, evt, offerings);
+                }
+            }
+
+            evt.Offerings = await LoadOfferingsAsync(db, evt.EventId);
+
             return evt;
+        }
+
+        // Auto-creates Trials to match the event's planning, grouped by Stock+Venue so
+        // each Trial comes pre-filled - trial hosts shouldn't have to know to set
+        // Stock/Venue by hand on every Trial. Within each Stock+Venue group, the target
+        // count is the highest PlannedRuns among that group's offerings (not a sum, since
+        // one Trial session can host runs for multiple classes that share the same
+        // Stock+Venue).
+        //
+        // Safe to call on both create and edit: only ADDS trials to catch up to a higher
+        // planned-run count. Never removes or renumbers existing trials, so nothing
+        // already scheduled/scored gets disturbed if a count goes down or stays the same.
+        private static async Task EnsureTrialsForOfferingsAsync(MSSADbContext db, MSSA_Event evt, List<MSSA_EventClassOffering> offerings)
+        {
+            var baseDate = evt.StartDate ?? DateTime.Today;
+
+            var groups = offerings.GroupBy(o => new { o.Stock, o.Venue });
+            foreach (var group in groups)
+            {
+                var targetCount = group.Max(o => o.PlannedRuns);
+                var stock = group.Key.Stock;
+                var venue = group.Key.Venue;
+
+                var existingCount = await db.MSSA_Trials
+                    .CountAsync(t => t.EventId == evt.EventId && t.Stock == stock && t.Venue == venue);
+
+                for (int i = existingCount + 1; i <= targetCount; i++)
+                {
+                    var suffix = $"-{stock}-{venue}-T{i}";
+                    var prefixBudget = Math.Max(0, 50 - suffix.Length);
+                    var prefix = evt.EventIdentifier.Length > prefixBudget
+                        ? evt.EventIdentifier.Substring(0, prefixBudget)
+                        : evt.EventIdentifier;
+
+                    db.MSSA_Trials.Add(new MSSA_Trial
+                    {
+                        EventId = evt.EventId,
+                        TrialIdentifier = $"{prefix}{suffix}",
+                        TrialName = $"{stock} {venue} - Trial {i}",
+                        TrialDate = baseDate,
+                        Stock = stock,
+                        Venue = venue,
+                        CreatedDate = DateTime.UtcNow,
+                        ModifiedDate = DateTime.UtcNow
+                    });
+                }
+            }
+
+            await db.SaveChangesAsync();
         }
 
         public async Task DeleteEventAsync(int eventId)
@@ -159,29 +257,50 @@ namespace MountainStates.MSSA.Module.MSSA_Events.Repository
                     (e.StartDate.HasValue && e.StartDate.Value.Year == year.Value));
             }
 
-            // Filter by planning flags
-            if (cattle.HasValue && cattle.Value)
-                query = query.Where(e => e.Cattle);
-            if (sheep.HasValue && sheep.Value)
-                query = query.Where(e => e.Sheep);
-            if (arena.HasValue && arena.Value)
-                query = query.Where(e => e.Arena);
-            if (field.HasValue && field.Value)
-                query = query.Where(e => e.Field);
-            if (onFoot.HasValue && onFoot.Value)
-                query = query.Where(e => e.OnFoot);
-            if (horseback.HasValue && horseback.Value)
-                query = query.Where(e => e.Horseback);
-            if (open.HasValue && open.Value)
-                query = query.Where(e => e.Open);
-            if (nursery.HasValue && nursery.Value)
-                query = query.Where(e => e.Nursery);
-            if (intermediate.HasValue && intermediate.Value)
-                query = query.Where(e => e.Intermediate);
-            if (novice.HasValue && novice.Value)
-                query = query.Where(e => e.Novice);
-            if (junior.HasValue && junior.Value)
-                query = query.Where(e => e.Junior);
+            // Filter by offerings (replaces the old boolean planning flags).
+            // Stock and Venue are columns on the Offering row itself; Class filters
+            // match against MSSA_Class.ClassName via the Offering's ClassId.
+            if (cattle == true)
+            {
+                var ids = db.MSSA_EventClassOfferings.Where(o => o.Stock == "Cattle").Select(o => o.EventId);
+                query = query.Where(e => ids.Contains(e.EventId));
+            }
+            if (sheep == true)
+            {
+                var ids = db.MSSA_EventClassOfferings.Where(o => o.Stock == "Sheep").Select(o => o.EventId);
+                query = query.Where(e => ids.Contains(e.EventId));
+            }
+            if (arena == true)
+            {
+                var ids = db.MSSA_EventClassOfferings.Where(o => o.Venue == "Arena").Select(o => o.EventId);
+                query = query.Where(e => ids.Contains(e.EventId));
+            }
+            if (field == true)
+            {
+                var ids = db.MSSA_EventClassOfferings.Where(o => o.Venue == "Field").Select(o => o.EventId);
+                query = query.Where(e => ids.Contains(e.EventId));
+            }
+            if (onFoot == true)
+            {
+                var ids = from o in db.MSSA_EventClassOfferings
+                          join c in db.MSSA_Classes on o.ClassId equals c.ClassId
+                          where c.SubClassName == "On-foot"
+                          select o.EventId;
+                query = query.Where(e => ids.Contains(e.EventId));
+            }
+            if (horseback == true)
+            {
+                var ids = from o in db.MSSA_EventClassOfferings
+                          join c in db.MSSA_Classes on o.ClassId equals c.ClassId
+                          where c.SubClassName == "Horseback"
+                          select o.EventId;
+                query = query.Where(e => ids.Contains(e.EventId));
+            }
+            if (open == true) query = WhereOffersClass(db, query, "Open");
+            if (nursery == true) query = WhereOffersClass(db, query, "Nursery");
+            if (intermediate == true) query = WhereOffersClass(db, query, "Intermediate");
+            if (novice == true) query = WhereOffersClass(db, query, "Novice");
+            if (junior == true) query = WhereOffersClass(db, query, "JR Handler");
 
             var events = await query
                 .OrderByDescending(e => e.StartDate)
@@ -199,6 +318,9 @@ namespace MountainStates.MSSA.Module.MSSA_Events.Repository
                 .Select(g => new { EventId = g.Key, Count = g.Count() })
                 .ToDictionaryAsync(x => x.EventId, x => x.Count);
 
+            var eventIds = events.Select(e => e.EventId).ToList();
+            var offeringsByEvent = await LoadOfferingsForEventsAsync(db, eventIds);
+
             foreach (var evt in events)
             {
                 if (!string.IsNullOrEmpty(evt.StateCode) && states.ContainsKey(evt.StateCode))
@@ -206,9 +328,93 @@ namespace MountainStates.MSSA.Module.MSSA_Events.Repository
                     evt.StateName = states[evt.StateCode];
                 }
                 evt.TrialCount = trialCounts.ContainsKey(evt.EventId) ? trialCounts[evt.EventId] : 0;
+                evt.Offerings = offeringsByEvent.TryGetValue(evt.EventId, out var offerings) ? offerings : new List<MSSA_EventClassOffering>();
             }
 
             return events;
+        }
+
+        private static IQueryable<MSSA_Event> WhereOffersClass(MSSADbContext db, IQueryable<MSSA_Event> query, string className)
+        {
+            var ids = from o in db.MSSA_EventClassOfferings
+                      join c in db.MSSA_Classes on o.ClassId equals c.ClassId
+                      where c.ClassName == className
+                      select o.EventId;
+            return query.Where(e => ids.Contains(e.EventId));
+        }
+
+        // Offerings (planned runs per Class/Stock/Venue)
+        public async Task<List<MSSA_EventClassOffering>> GetEventOfferingsAsync(int eventId)
+        {
+            using var db = await _dbContextFactory.CreateDbContextAsync();
+
+            return await LoadOfferingsAsync(db, eventId);
+        }
+
+        // Replaces the full set of offerings for an event in one operation - simpler
+        // and safer than granular add/update/delete for a repeatable-rows form where
+        // the whole list is edited together and saved with the parent Event.
+        public async Task<List<MSSA_EventClassOffering>> SaveEventOfferingsAsync(int eventId, List<MSSA_EventClassOffering> offerings)
+        {
+            using var db = await _dbContextFactory.CreateDbContextAsync();
+
+            var existing = await db.MSSA_EventClassOfferings.Where(o => o.EventId == eventId).ToListAsync();
+            db.MSSA_EventClassOfferings.RemoveRange(existing);
+
+            foreach (var offering in offerings)
+            {
+                offering.OfferingId = 0;
+                offering.EventId = eventId;
+                db.MSSA_EventClassOfferings.Add(offering);
+            }
+
+            await db.SaveChangesAsync();
+
+            return await LoadOfferingsAsync(db, eventId);
+        }
+
+        private static async Task<List<MSSA_EventClassOffering>> LoadOfferingsAsync(MSSADbContext db, int eventId)
+        {
+            var offerings = await (from o in db.MSSA_EventClassOfferings
+                                   join c in db.MSSA_Classes on o.ClassId equals c.ClassId
+                                   where o.EventId == eventId
+                                   orderby c.PrintOrder, o.Stock, o.Venue
+                                   select new MSSA_EventClassOffering
+                                   {
+                                       OfferingId = o.OfferingId,
+                                       EventId = o.EventId,
+                                       ClassId = o.ClassId,
+                                       Stock = o.Stock,
+                                       Venue = o.Venue,
+                                       PlannedRuns = o.PlannedRuns,
+                                       ClassName = c.ClassName,
+                                       SubClassName = c.SubClassName
+                                   })
+                                  .ToListAsync();
+
+            return offerings;
+        }
+
+        private static async Task<Dictionary<int, List<MSSA_EventClassOffering>>> LoadOfferingsForEventsAsync(MSSADbContext db, List<int> eventIds)
+        {
+            var offerings = await (from o in db.MSSA_EventClassOfferings
+                                   join c in db.MSSA_Classes on o.ClassId equals c.ClassId
+                                   where eventIds.Contains(o.EventId)
+                                   orderby c.PrintOrder, o.Stock, o.Venue
+                                   select new MSSA_EventClassOffering
+                                   {
+                                       OfferingId = o.OfferingId,
+                                       EventId = o.EventId,
+                                       ClassId = o.ClassId,
+                                       Stock = o.Stock,
+                                       Venue = o.Venue,
+                                       PlannedRuns = o.PlannedRuns,
+                                       ClassName = c.ClassName,
+                                       SubClassName = c.SubClassName
+                                   })
+                                  .ToListAsync();
+
+            return offerings.GroupBy(o => o.EventId).ToDictionary(g => g.Key, g => g.ToList());
         }
 
         // Trials
@@ -277,11 +483,15 @@ namespace MountainStates.MSSA.Module.MSSA_Events.Repository
                                  join h in db.MSSA_Handlers on e.HandlerId equals h.HandlerId
                                  join d in db.MSSA_Dogs on e.DogId equals d.DogId
                                  join c in db.MSSA_Classes on e.ClassId equals c.ClassId
+                                 join t in db.MSSA_Trials on e.TrialId equals t.TrialId
+                                 join ev in db.MSSA_Events on t.EventId equals ev.EventId
                                  where e.TrialId == trialId
                                  select new EntryListItem
                                  {
                                      EntryId = e.EntryId,
                                      TrialId = e.TrialId,
+                                     DogId = e.DogId,
+                                     HandlerId = e.HandlerId,
                                      HandlerName = h.FullName,
                                      DogName = d.Name,
                                      ClassName = c.ClassName,
@@ -295,11 +505,53 @@ namespace MountainStates.MSSA.Module.MSSA_Events.Repository
                                                      (e.ObstacleScore5 ?? 0) + (e.ObstacleScore6 ?? 0) +
                                                      (e.ObstacleScore7 ?? 0) + (e.ObstacleScore8 ?? 0) +
                                                      (e.ObstacleScore9 ?? 0),
-                                     TrialPoints = e.TrialPoints
+                                     TrialPoints = e.TrialPoints,
+                                     Year = ev.PointYear ?? t.TrialDate.Year
                                  })
                                 .ToListAsync();
 
+            await ApplyFuturityMarkerAsync(db, entries);
+
             return entries;
         }
+
+        // Appends "+" to DogName for any entry where the dog was enrolled in Futurity
+        // for that entry's year - applies across all classes, not just Nursery (policy
+        // change: previously gated to Nursery, now every entry by a nominated dog in
+        // their nomination year gets marked).
+        //
+        // NOTE: Year here is sourced from MSSA_Events.PointYear (falling back to
+        // TrialDate.Year), and PointYear is stored inconsistently - some rows 2-digit
+        // (e.g. 24), others full 4-digit (e.g. 2024) - while
+        // MSSA_DogFuturityParticipation.Year is always 4-digit. Normalize before comparing.
+        private static async Task ApplyFuturityMarkerAsync(MSSADbContext db, List<EntryListItem> entries)
+        {
+            if (!entries.Any())
+            {
+                return;
+            }
+
+            var years = entries.Select(e => NormalizeYear(e.Year)).Distinct().ToList();
+            var dogIds = entries.Select(e => e.DogId).Distinct().ToList();
+
+            var futurityPairs = await db.MSSA_DogFuturityParticipation
+                .Where(f => years.Contains(f.Year) && dogIds.Contains(f.DogId))
+                .Select(f => new { f.DogId, f.Year })
+                .ToListAsync();
+
+            var futuritySet = new HashSet<(int DogId, int Year)>(futurityPairs.Select(f => (f.DogId, f.Year)));
+
+            foreach (var entry in entries)
+            {
+                if (futuritySet.Contains((entry.DogId, NormalizeYear(entry.Year))))
+                {
+                    entry.DogName += "+";
+                }
+            }
+        }
+
+        // Converts a possibly-2-digit legacy year (e.g. 24) to full 4-digit form (2024).
+        // Leaves already-4-digit years untouched.
+        private static int NormalizeYear(int year) => year < 100 ? 2000 + year : year;
     }
 }

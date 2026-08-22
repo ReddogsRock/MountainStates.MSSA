@@ -1,11 +1,14 @@
-﻿using Microsoft.AspNetCore.Authorization;
+using Microsoft.AspNetCore.Authorization;
+using Microsoft.AspNetCore.Hosting;
 using Microsoft.AspNetCore.Http;
 using Microsoft.AspNetCore.Mvc;
 using Oqtane.Controllers;
 using Oqtane.Enums;
 using Oqtane.Infrastructure;
 using Oqtane.Shared;
+using System;
 using System.Collections.Generic;
+using System.IO;
 using System.Threading.Tasks;
 using MountainStates.MSSA.Module.MSSA_Dogs.Manager;
 using MountainStates.MSSA.Module.MSSA_Dogs.Models;
@@ -17,11 +20,13 @@ namespace MountainStates.MSSA.Module.MSSA_Dogs.Controllers
     public class MSSA_DogController : ModuleControllerBase
     {
         private readonly IMSSA_DogManager _manager;
+        private readonly IWebHostEnvironment _hostEnvironment;
 
-        public MSSA_DogController(IMSSA_DogManager manager, ILogManager logger, IHttpContextAccessor httpContextAccessor)
+        public MSSA_DogController(IMSSA_DogManager manager, IWebHostEnvironment hostEnvironment, ILogManager logger, IHttpContextAccessor httpContextAccessor)
             : base(logger, httpContextAccessor)
         {
             _manager = manager;
+            _hostEnvironment = hostEnvironment;
         }
 
         // GET: api/MSSA_Dog?moduleid=x
@@ -83,22 +88,26 @@ namespace MountainStates.MSSA.Module.MSSA_Dogs.Controllers
         }
 
         // POST: api/MSSA_Dog?moduleid=x
+        // Open to everyone (including anonymous visitors) per project decision:
+        // there is currently no link between an authenticated person and dog
+        // ownership, so gating "add" behind login wouldn't buy real protection -
+        // only editing existing records requires authentication (see Put below).
         [HttpPost]
-        [Authorize(Policy = PolicyNames.EditModule)]
+        [AllowAnonymous]
         public async Task<MSSA_Dog> Post([FromBody] MSSA_Dog dog, int moduleId)
         {
             try
             {
-                if (ModelState.IsValid && IsAuthorizedForRole(MSSARoles.Admin))
+                if (ModelState.IsValid)
                 {
+                    SaveNurseryDocumentIfPresent(dog);
                     dog = await _manager.AddDogAsync(dog, moduleId);
                     _logger.Log(LogLevel.Information, this, LogFunction.Create, "Dog added {Dog}", dog);
                     return dog;
                 }
                 else
                 {
-                    _logger.Log(LogLevel.Error, this, LogFunction.Security, "Unauthorized dog post attempt");
-                    HttpContext.Response.StatusCode = (int)System.Net.HttpStatusCode.Forbidden;
+                    HttpContext.Response.StatusCode = (int)System.Net.HttpStatusCode.BadRequest;
                     return null;
                 }
             }
@@ -110,22 +119,24 @@ namespace MountainStates.MSSA.Module.MSSA_Dogs.Controllers
         }
 
         // PUT: api/MSSA_Dog/5?moduleid=x
+        // Requires the caller to be logged in (any authenticated user, not
+        // limited to Admin) since we can't yet verify ownership of the dog.
         [HttpPut("{id}")]
-        [Authorize(Policy = PolicyNames.EditModule)]
+        [Authorize]
         public async Task<MSSA_Dog> Put(int id, [FromBody] MSSA_Dog dog, int moduleId)
         {
             try
             {
-                if (ModelState.IsValid && dog.DogId == id && IsAuthorizedForRole(MSSARoles.Admin))
+                if (ModelState.IsValid && dog.DogId == id)
                 {
+                    SaveNurseryDocumentIfPresent(dog);
                     dog = await _manager.UpdateDogAsync(dog, moduleId);
                     _logger.Log(LogLevel.Information, this, LogFunction.Update, "Dog updated {Dog}", dog);
                     return dog;
                 }
                 else
                 {
-                    _logger.Log(LogLevel.Error, this, LogFunction.Security, "Unauthorized dog put attempt");
-                    HttpContext.Response.StatusCode = (int)System.Net.HttpStatusCode.Forbidden;
+                    HttpContext.Response.StatusCode = (int)System.Net.HttpStatusCode.BadRequest;
                     return null;
                 }
             }
@@ -137,6 +148,7 @@ namespace MountainStates.MSSA.Module.MSSA_Dogs.Controllers
         }
 
         // DELETE: api/MSSA_Dog/5?moduleid=x
+        // Left as Admin-only - not part of today's change.
         [HttpDelete("{id}")]
         [Authorize(Policy = PolicyNames.EditModule)]
         public async Task Delete(int id, int moduleId)
@@ -159,6 +171,34 @@ namespace MountainStates.MSSA.Module.MSSA_Dogs.Controllers
                 _logger.Log(LogLevel.Error, this, LogFunction.Delete, ex, "Error deleting dog {DogId}", id);
                 throw;
             }
+        }
+
+        // Writes an uploaded Nursery age-eligibility document to disk and sets
+        // NurseryDocumentFileName/Path on the dog. PDF-only is enforced client-side via
+        // the file picker's accept filter, but re-checked here too since a client-side
+        // filter can always be bypassed.
+        private void SaveNurseryDocumentIfPresent(MSSA_Dog dog)
+        {
+            if (string.IsNullOrEmpty(dog.UploadNurseryDocContentBase64))
+            {
+                return;
+            }
+
+            if (!string.Equals(Path.GetExtension(dog.UploadNurseryDocFileName), ".pdf", StringComparison.OrdinalIgnoreCase))
+            {
+                throw new InvalidOperationException("Nursery documentation must be a PDF file.");
+            }
+
+            var bytes = Convert.FromBase64String(dog.UploadNurseryDocContentBase64);
+            var safeFileName = $"{Guid.NewGuid()}_{Path.GetFileName(dog.UploadNurseryDocFileName)}";
+            var folder = Path.Combine(_hostEnvironment.ContentRootPath, "Content", "MSSA_NurseryDocs");
+            Directory.CreateDirectory(folder);
+            var fullPath = Path.Combine(folder, safeFileName);
+            System.IO.File.WriteAllBytes(fullPath, bytes);
+
+            dog.NurseryDocumentFileName = dog.UploadNurseryDocFileName;
+            dog.NurseryDocumentPath = fullPath;
+            dog.NurseryDocumentUploadedDate = DateTime.UtcNow;
         }
 
         private bool IsAuthorizedForRole(string role)

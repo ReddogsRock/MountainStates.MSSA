@@ -3,12 +3,17 @@
 @using MountainStates.MSSA.Module.MSSA_Events.Enums
 @using MountainStates.MSSA.Module.MSSA_Handlers.Services
 @using MountainStates.MSSA.Module.MSSA_Handlers.Models
+@using MountainStates.MSSA.Module.MSSA_Entries.Services
+@using MountainStates.MSSA.Module.MSSA_Entries.Models
 @using Oqtane.Modules.Controls
+@using Microsoft.AspNetCore.Components.Forms
+@using System.IO
 
 @namespace MountainStates.MSSA.Module.MSSA_Events
 @inherits ModuleBase
 @inject IMSSA_EventService EventService
 @inject IMSSA_StateService StateService
+@inject IMSSA_EntryService EntryService
 @inject NavigationManager NavigationManager
 
 <form @onsubmit="SaveEvent">
@@ -33,15 +38,9 @@
             </div>
             <div class="card-body">
                 <div class="row mb-3">
-                    <div class="col-md-6">
+                    <div class="col-md-12">
                         <label for="eventName" class="form-label">Event Name <span class="text-danger">*</span></label>
                         <input id="eventName" class="form-control" @bind="evt.EventName" required maxlength="255" />
-                    </div>
-                    <div class="col-md-6">
-                        <label for="eventId" class="form-label">Event Identifier <span class="text-danger">*</span></label>
-                        <input id="eventId" class="form-control" @bind="evt.EventIdentifier" required maxlength="50"
-                               placeholder="e.g., 2024-CO-Boulder" />
-                        <small class="form-text text-muted">Unique identifier for this event</small>
                     </div>
                 </div>
             </div>
@@ -58,7 +57,7 @@
                         <label for="startDate" class="form-label">Start Date</label>
                         <input id="startDate" type="date" class="form-control"
                                value="@(evt.StartDate?.ToString("yyyy-MM-dd"))"
-                               @onchange="@(e => evt.StartDate = string.IsNullOrEmpty(e.Value?.ToString()) ? null : DateTime.Parse(e.Value.ToString()))" />
+                               @onchange="@(e => OnStartDateChanged(e.Value?.ToString()))" />
                     </div>
                     <div class="col-md-4">
                         <label for="endDate" class="form-label">End Date</label>
@@ -67,9 +66,10 @@
                                @onchange="@(e => evt.EndDate = string.IsNullOrEmpty(e.Value?.ToString()) ? null : DateTime.Parse(e.Value.ToString()))" />
                     </div>
                     <div class="col-md-4">
-                        <label for="pointYear" class="form-label">Point Year</label>
-                        <input id="pointYear" type="number" class="form-control" @bind="evt.PointYear"
-                               min="2000" max="2100" />
+                        <label class="form-label">Point Year</label>
+                        <input class="form-control" readonly disabled
+                               value="@(evt.PointYear.HasValue ? evt.PointYear.ToString() : "Set Start Date to calculate")" />
+                        <small class="form-text text-muted">Season runs May 1 - Apr 30; calculated from Start Date.</small>
                     </div>
                 </div>
 
@@ -85,13 +85,13 @@
                             @if (states != null)
                             {
                                 <optgroup label="US States">
-                                    @foreach (var state in states.Where(s => s.Country == "US"))
+                                    @foreach (var state in states.Where(s => string.Equals(s.Country?.Trim(), "US", StringComparison.OrdinalIgnoreCase)))
                                     {
                                         <option value="@state.StateCode">@state.StateName</option>
                                     }
                                 </optgroup>
                                 <optgroup label="Canadian Provinces">
-                                    @foreach (var state in states.Where(s => s.Country == "CA"))
+                                    @foreach (var state in states.Where(s => string.Equals(s.Country?.Trim(), "CA", StringComparison.OrdinalIgnoreCase)))
                                     {
                                         <option value="@state.StateCode">@state.StateName</option>
                                     }
@@ -111,12 +111,38 @@
             <div class="card-body">
                 <div class="row mb-3">
                     <div class="col-md-6">
-                        <label for="chairman" class="form-label">Chairman Name</label>
+                        <label for="chairman" class="form-label">Trial Host Name</label>
                         <input id="chairman" class="form-control" @bind="evt.ChairmanName" maxlength="255" />
                     </div>
                     <div class="col-md-6">
-                        <label for="chairmanPhone" class="form-label">Chairman Phone</label>
+                        <label for="chairmanPhone" class="form-label">Trial Host Phone</label>
                         <input id="chairmanPhone" type="tel" class="form-control" @bind="evt.ChairmanPhone" maxlength="20" />
+                    </div>
+                </div>
+                <div class="row mb-3">
+                    <div class="col-md-6">
+                        <label for="chairmanEmail" class="form-label">Trial Host Email</label>
+                        <input id="chairmanEmail" type="email" class="form-control" @bind="evt.ChairmanEmail" maxlength="255" />
+                    </div>
+                    <div class="col-md-6">
+                        <label for="entryLink" class="form-label">Entry Link</label>
+                        <input id="entryLink" type="url" class="form-control" @bind="evt.EntryLink" maxlength="500"
+                               placeholder="https://..." />
+                        <small class="form-text text-muted">Link to the online entry form/system for this event.</small>
+                    </div>
+                </div>
+                <div class="row mb-3">
+                    <div class="col-md-6">
+                        <label for="flyer" class="form-label">Event Flyer</label>
+                        <InputFile id="flyer" class="form-control" OnChange="OnFlyerSelected" />
+                        @if (selectedFlyer != null)
+                        {
+                            <small class="form-text text-muted">Selected: @selectedFlyer.Name</small>
+                        }
+                        else if (!string.IsNullOrEmpty(evt.FlyerFileName))
+                        {
+                            <small class="form-text text-muted">Current: @evt.FlyerFileName</small>
+                        }
                     </div>
                 </div>
             </div>
@@ -129,68 +155,71 @@
             </div>
             <div class="card-body">
                 <div class="row mb-3">
-                    <div class="col-md-3">
-                        <label class="form-label"><strong>Stock</strong></label>
-                        <div class="form-check">
-                            <input type="checkbox" class="form-check-input" id="cattle" @bind="evt.Cattle" />
-                            <label class="form-check-label" for="cattle">Cattle</label>
-                        </div>
-                        <div class="form-check">
-                            <input type="checkbox" class="form-check-input" id="sheep" @bind="evt.Sheep" />
-                            <label class="form-check-label" for="sheep">Sheep</label>
-                        </div>
-                    </div>
-                    <div class="col-md-3">
-                        <label class="form-label"><strong>Venue</strong></label>
-                        <div class="form-check">
-                            <input type="checkbox" class="form-check-input" id="arena" @bind="evt.Arena" />
-                            <label class="form-check-label" for="arena">Arena</label>
-                        </div>
-                        <div class="form-check">
-                            <input type="checkbox" class="form-check-input" id="field" @bind="evt.Field" />
-                            <label class="form-check-label" for="field">Field</label>
-                        </div>
-                    </div>
-                    <div class="col-md-3">
-                        <label class="form-label"><strong>Style</strong></label>
-                        <div class="form-check">
-                            <input type="checkbox" class="form-check-input" id="onFoot" @bind="evt.OnFoot" />
-                            <label class="form-check-label" for="onFoot">On Foot</label>
-                        </div>
-                        <div class="form-check">
-                            <input type="checkbox" class="form-check-input" id="horseback" @bind="evt.Horseback" />
-                            <label class="form-check-label" for="horseback">Horseback</label>
-                        </div>
-                    </div>
-                    <div class="col-md-3">
-                        <label class="form-label"><strong>Classes</strong></label>
-                        <div class="form-check">
-                            <input type="checkbox" class="form-check-input" id="open" @bind="evt.Open" />
-                            <label class="form-check-label" for="open">Open</label>
-                        </div>
-                        <div class="form-check">
-                            <input type="checkbox" class="form-check-input" id="nursery" @bind="evt.Nursery" />
-                            <label class="form-check-label" for="nursery">Nursery</label>
-                        </div>
-                        <div class="form-check">
-                            <input type="checkbox" class="form-check-input" id="intermediate" @bind="evt.Intermediate" />
-                            <label class="form-check-label" for="intermediate">Intermediate</label>
-                        </div>
-                        <div class="form-check">
-                            <input type="checkbox" class="form-check-input" id="novice" @bind="evt.Novice" />
-                            <label class="form-check-label" for="novice">Novice</label>
-                        </div>
-                        <div class="form-check">
-                            <input type="checkbox" class="form-check-input" id="junior" @bind="evt.Junior" />
-                            <label class="form-check-label" for="junior">Junior</label>
-                        </div>
-                    </div>
-                </div>
-
-                <div class="row mb-3">
-                    <div class="col-md-6">
-                        <label for="numberOfRuns" class="form-label">Number of Runs</label>
-                        <input id="numberOfRuns" type="number" class="form-control" @bind="evt.NumberOfRuns" min="1" />
+                    <div class="col-md-12">
+                        <label class="form-label"><strong>Planned Run Offerings</strong></label>
+                        <p class="text-muted small mb-2">
+                            Add one row per Class / Stock / Venue combination this event will offer,
+                            with how many runs it gets. This replaces separately checking "offers
+                            Cattle" and "offers Open" - each row here says exactly what's offered
+                            and how many times.
+                        </p>
+                        <table class="table table-sm align-middle">
+                            <thead>
+                                <tr>
+                                    <th>Class</th>
+                                    <th>Stock</th>
+                                    <th>Venue</th>
+                                    <th style="width:120px">Planned Runs</th>
+                                    <th></th>
+                                </tr>
+                            </thead>
+                            <tbody>
+                                @if (evt.Offerings != null)
+                                {
+                                    @foreach (var offering in evt.Offerings)
+                                    {
+                                        <tr>
+                                            <td>
+                                                <select class="form-select form-select-sm" @bind="offering.ClassId">
+                                                    @if (classes != null)
+                                                    {
+                                                        @foreach (var c in classes)
+                                                        {
+                                                            <option value="@c.ClassId">@c.ClassName @c.SubClassName</option>
+                                                        }
+                                                    }
+                                                </select>
+                                            </td>
+                                            <td>
+                                                <select class="form-select form-select-sm" @bind="offering.Stock">
+                                                    <option value="Cattle">Cattle</option>
+                                                    <option value="Sheep">Sheep</option>
+                                                </select>
+                                            </td>
+                                            <td>
+                                                <select class="form-select form-select-sm" @bind="offering.Venue">
+                                                    <option value="Arena">Arena</option>
+                                                    <option value="Field">Field</option>
+                                                </select>
+                                            </td>
+                                            <td>
+                                                <input type="number" class="form-control form-control-sm"
+                                                       @bind="offering.PlannedRuns" min="1" max="100" />
+                                            </td>
+                                            <td>
+                                                <button type="button" class="btn btn-sm btn-danger"
+                                                        @onclick="() => RemoveOffering(offering)">
+                                                    Remove
+                                                </button>
+                                            </td>
+                                        </tr>
+                                    }
+                                }
+                            </tbody>
+                        </table>
+                        <button type="button" class="btn btn-sm btn-primary" @onclick="AddOffering">
+                            Add Offering
+                        </button>
                     </div>
                 </div>
 
@@ -210,12 +239,6 @@
             </div>
             <div class="card-body">
                 <div class="row mb-3">
-                    <div class="col-md-4">
-                        <div class="form-check">
-                            <input type="checkbox" class="form-check-input" id="sanctioned" @bind="evt.IsMSSASanctioned" />
-                            <label class="form-check-label" for="sanctioned">MSSA Sanctioned</label>
-                        </div>
-                    </div>
                     <div class="col-md-4">
                         <label for="sanctionFee" class="form-label">Sanction Fee</label>
                         <input id="sanctionFee" type="number" step="0.01" class="form-control" @bind="evt.SanctionFee" />
@@ -289,6 +312,14 @@
                                         }
                                     </select>
                                 </div>
+                                <div class="col-md-4">
+                                    <label class="form-label">Venue</label>
+                                    <select class="form-select" @bind="currentTrial.Venue">
+                                        <option value="">Select...</option>
+                                        <option value="Arena">Arena</option>
+                                        <option value="Field">Field</option>
+                                    </select>
+                                </div>
                             </div>
                             <div class="mt-2">
                                 <button type="button" class="btn btn-sm btn-success me-2" @onclick="SaveTrial">Save</button>
@@ -314,6 +345,7 @@
                                     <th>Trial Name</th>
                                     <th>Identifier</th>
                                     <th>Stock</th>
+                                    <th>Venue</th>
                                     <th>Actions</th>
                                 </tr>
                             </thead>
@@ -325,6 +357,7 @@
                                         <td>@trial.TrialName</td>
                                         <td><small class="text-muted">@trial.TrialIdentifier</small></td>
                                         <td>@trial.Stock</td>
+                                        <td>@trial.Venue</td>
                                         <td>
                                             <button type="button" class="btn btn-sm btn-primary me-1"
                                                     @onclick="() => EditTrial(trial)">
@@ -382,6 +415,7 @@
     private int eventId = -1;
     private MSSA_Event evt = new();
     private List<MSSA_State> states;
+    private List<MSSA_Class> classes;
     private List<MSSA_Trial> trials;
     private string errorMessage = "";
 
@@ -390,16 +424,20 @@
     private int editingTrialId = -1;
     private MSSA_Trial currentTrial = new();
 
+    private IBrowserFile selectedFlyer;
+
     protected override async Task OnInitializedAsync()
     {
         try
         {
             states = await StateService.GetStatesAsync(ModuleState.ModuleId);
+            classes = await EntryService.GetClassesAsync(ModuleState.ModuleId);
 
             if (PageState.QueryString.ContainsKey("id"))
             {
                 eventId = int.Parse(PageState.QueryString["id"]);
                 evt = await EventService.GetEventAsync(eventId, ModuleState.ModuleId);
+                evt.Offerings ??= new List<MSSA_EventClassOffering>();
                 trials = await EventService.GetEventTrialsAsync(eventId, ModuleState.ModuleId);
             }
             else
@@ -407,8 +445,9 @@
                 evt = new MSSA_Event
                 {
                     IsActive = true,
-                    IsMSSASanctioned = false,
-                    ResultsUploaded = false
+                    IsMSSASanctioned = true,
+                    ResultsUploaded = false,
+                    Offerings = new List<MSSA_EventClassOffering>()
                 };
                 trials = new List<MSSA_Trial>();
             }
@@ -420,15 +459,31 @@
         }
     }
 
+    private void AddOffering()
+    {
+        evt.Offerings.Add(new MSSA_EventClassOffering
+        {
+            ClassId = classes?.FirstOrDefault()?.ClassId ?? 0,
+            Stock = "Cattle",
+            Venue = "Arena",
+            PlannedRuns = 1
+        });
+    }
+
+    private void RemoveOffering(MSSA_EventClassOffering offering)
+    {
+        evt.Offerings.Remove(offering);
+    }
+
     private async Task SaveEvent()
     {
         try
         {
             errorMessage = "";
 
-            if (string.IsNullOrWhiteSpace(evt.EventName) || string.IsNullOrWhiteSpace(evt.EventIdentifier))
+            if (string.IsNullOrWhiteSpace(evt.EventName))
             {
-                errorMessage = "Event Name and Event Identifier are required.";
+                errorMessage = "Event Name is required.";
                 return;
             }
 
@@ -436,6 +491,24 @@
             {
                 errorMessage = "End Date cannot be before Start Date.";
                 return;
+            }
+
+            // Event Identifier is derived, not entered: <year>+<EventName with spaces removed>.
+            // Uses the Start Date's year so the identifier reflects when the event actually
+            // happens, not whenever it was created/edited. Falls back to today's year if no
+            // Start Date has been set yet.
+            var identifierYear = evt.StartDate?.Year ?? DateTime.Now.Year;
+            evt.EventIdentifier = $"{identifierYear}{evt.EventName.Replace(" ", "")}";
+
+            // Point Year is calculated from Start Date (season runs May 1 - Apr 30), not entered.
+            evt.PointYear = CalculatePointYear(evt.StartDate);
+
+            // This app only ever tracks the MSSA's own events, so every event is sanctioned.
+            evt.IsMSSASanctioned = true;
+
+            if (selectedFlyer != null)
+            {
+                await AttachFlyerAsync();
             }
 
             if (eventId == -1)
@@ -456,6 +529,36 @@
             await logger.LogError(ex, "Error saving event");
             errorMessage = "Error saving event. Please try again.";
         }
+    }
+
+    // Competition/Point Year runs May 1 - Apr 30, named for the year it ends in.
+    // E.g. a trial in Aug 2026 falls in the season ending Apr 2027, so it's Point Year 2027.
+    private static int? CalculatePointYear(DateTime? startDate)
+    {
+        if (!startDate.HasValue) return null;
+        return startDate.Value.Month >= 5 ? startDate.Value.Year + 1 : startDate.Value.Year;
+    }
+
+    private void OnStartDateChanged(string value)
+    {
+        evt.StartDate = string.IsNullOrEmpty(value) ? null : DateTime.Parse(value);
+        evt.PointYear = CalculatePointYear(evt.StartDate);
+    }
+
+    private void OnFlyerSelected(InputFileChangeEventArgs e)
+    {
+        selectedFlyer = e.File;
+    }
+
+    private async Task AttachFlyerAsync()
+    {
+        const long maxFileSize = 20 * 1024 * 1024; // 20 MB
+        await using var stream = selectedFlyer.OpenReadStream(maxFileSize);
+        using var memoryStream = new MemoryStream();
+        await stream.CopyToAsync(memoryStream);
+
+        evt.UploadFlyerFileName = selectedFlyer.Name;
+        evt.UploadFlyerContentBase64 = Convert.ToBase64String(memoryStream.ToArray());
     }
 
     private async Task DeleteEvent()
@@ -498,7 +601,8 @@
             TrialIdentifier = trial.TrialIdentifier,
             TrialName = trial.TrialName,
             TrialDate = trial.TrialDate,
-            Stock = trial.Stock
+            Stock = trial.Stock,
+            Venue = trial.Venue
         };
         editingTrialId = trial.TrialId;
         showTrialForm = true;

@@ -24,6 +24,9 @@ namespace MountainStates.MSSA.Module.MSSA_Events.Models
         [StringLength(20)]
         public string Stock { get; set; } // Cattle, Sheep, Ducks
 
+        [StringLength(20)]
+        public string Venue { get; set; } // Arena, Field
+
         // Audit Fields
         public DateTime CreatedDate { get; set; }
         public DateTime ModifiedDate { get; set; }

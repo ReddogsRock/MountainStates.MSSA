@@ -33,11 +33,26 @@
     <EmbeddedResource Remove="wwwroot\Themes\Templates\**" />
   </ItemGroup>
 
+	<ItemGroup>
+	  <Compile Remove="Controllers\BackOfficeEntryController.cs" />
+	  <Compile Remove="Controllers\TrialSecretaryController.cs" />
+	  <Compile Remove="Manager\BackOfficeEntryManager.cs" />
+	  <Compile Remove="Manager\IBackOfficeEntryManager.cs" />
+	  <Compile Remove="Manager\ITrialSecretaryManager.cs" />
+	  <Compile Remove="Manager\TrialSecretaryManager.cs" />
+	  <Compile Remove="Repository\BackOfficeEntryRepository.cs" />
+	  <Compile Remove="Repository\IBackOfficeEntryRepository.cs" />
+	  <Compile Remove="Repository\ITrialSecretaryRepository.cs" />
+	  <Compile Remove="Repository\TrialSecretaryRepository.cs" />
+	  <Compile Remove="Startup\BackOfficeEntryServerStartup.cs" />
+	  <Compile Remove="Startup\TrialSecretaryServerStartup.cs" />
+	</ItemGroup>
+
   <ItemGroup>
-    <PackageReference Include="EPPlus" Version="7.3.2" />
-    <PackageReference Include="Microsoft.AspNetCore.Components.WebAssembly.Server" Version="10.0.1" />
-    <PackageReference Include="Microsoft.AspNetCore.Identity.EntityFrameworkCore" Version="10.0.1" />
-    <PackageReference Include="Microsoft.EntityFrameworkCore" Version="10.0.1" />
+    <PackageReference Include="EPPlus" Version="8.6.1" />
+    <PackageReference Include="Microsoft.AspNetCore.Components.WebAssembly.Server" Version="10.0.9" />
+    <PackageReference Include="Microsoft.AspNetCore.Identity.EntityFrameworkCore" Version="10.0.9" />
+    <PackageReference Include="Microsoft.EntityFrameworkCore" Version="10.0.9" />
   </ItemGroup>
 
   <ItemGroup>
@@ -46,7 +61,7 @@
   </ItemGroup>
 
   <ItemGroup>
-    <PackageReference Include="Oqtane.Server" Version="10.0.1" />
+    <PackageReference Include="Oqtane.Server" Version="10.2.1" />
   </ItemGroup>
 	
 </Project>

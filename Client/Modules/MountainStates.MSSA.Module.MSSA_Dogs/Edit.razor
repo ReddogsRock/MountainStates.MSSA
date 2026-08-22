@@ -1,6 +1,8 @@
 ﻿@using MountainStates.MSSA.Module.MSSA_Dogs.Services
 @using MountainStates.MSSA.Module.MSSA_Dogs.Models
 @using Oqtane.Modules.Controls
+@using Microsoft.AspNetCore.Components.Forms
+@using System.IO
 
 @namespace MountainStates.MSSA.Module.MSSA_Dogs
 @inherits ModuleBase
@@ -12,7 +14,13 @@
     <div class="container-fluid">
         <div class="row mb-3">
             <div class="col">
-                <h2>@(dogId == -1 ? "Add Dog" : "Edit Dog")</h2>
+                <h2>
+                    @(dogId == -1 ? "Add Dog" : "Edit Dog")
+                    @if (dogId != -1)
+                    {
+                        <span class="badge bg-secondary ms-2">ID: @dogId</span>
+                    }
+                </h2>
             </div>
         </div>
 
@@ -76,17 +84,11 @@
                         <label for="owner" class="form-label">Owner Name</label>
                         <input id="owner" class="form-control" @bind="dog.OwnerName" maxlength="255" />
                     </div>
-                    <div class="col-md-4 d-flex align-items-end">
-                        <div class="form-check">
-                            <input id="ownerMember" type="checkbox" class="form-check-input" @bind="dog.OwnerIsMSSAMember" />
-                            <label for="ownerMember" class="form-check-label">Owner is MSSA Member</label>
-                        </div>
-                    </div>
                 </div>
             </div>
         </div>
 
-        @* Futurity Participation (only for existing dogs) *@
+        @* Futurity Participation (existing dogs get full history management) *@
         @if (dogId != -1)
         {
             <div class="card mb-3">
@@ -151,6 +153,57 @@
                 </div>
             </div>
         }
+        else
+        {
+            <div class="card mb-3">
+                <div class="card-header">
+                    <h4>Futurity</h4>
+                </div>
+                <div class="card-body">
+                    <div class="form-check mb-3">
+                        <input id="enrollFuturity" type="checkbox" class="form-check-input" @bind="enrollInFuturity" />
+                        <label for="enrollFuturity" class="form-check-label">
+                            Enroll in Futurity (@CurrentCompetitionYear season)
+                        </label>
+                    </div>
+
+                    @if (enrollInFuturity)
+                    {
+                        <div class="mb-2">
+                            <label for="futurityDoc" class="form-label">
+                                Age Documentation <small class="text-muted">(optional &mdash; can be uploaded later instead; PDF only)</small>
+                            </label>
+                            <InputFile id="futurityDoc" class="form-control" accept=".pdf" OnChange="OnFuturityDocumentSelected" />
+                            @if (futurityDocument != null)
+                            {
+                                <small class="form-text text-muted">Selected: @futurityDocument.Name</small>
+                            }
+                        </div>
+                    }
+                </div>
+            </div>
+        }
+
+        @* Nursery (age-eligibility documentation only - no nomination/enrollment step) *@
+        <div class="card mb-3">
+            <div class="card-header">
+                <h4>Nursery</h4>
+            </div>
+            <div class="card-body">
+                <label for="nurseryDoc" class="form-label">
+                    Age Documentation <small class="text-muted">(PDF only)</small>
+                </label>
+                <InputFile id="nurseryDoc" class="form-control" accept=".pdf" OnChange="OnNurseryDocumentSelected" />
+                @if (selectedNurseryDocument != null)
+                {
+                    <small class="form-text text-muted">Selected: @selectedNurseryDocument.Name</small>
+                }
+                else if (!string.IsNullOrEmpty(dog.NurseryDocumentFileName))
+                {
+                    <small class="form-text text-muted">Current: @dog.NurseryDocumentFileName</small>
+                }
+            </div>
+        </div>
 
         @* Status *@
         <div class="card mb-3">
@@ -210,9 +263,19 @@
     private List<MSSA_DogFuturityParticipation> futurityParticipation;
     private string errorMessage = "";
 
-    // Futurity form state
+    // Futurity form state (edit mode - existing dogs)
     private bool showFuturityForm = false;
     private int currentFuturityYear = DateTime.Now.Year;
+
+    // Futurity enrollment state (add mode - new dogs)
+    private bool enrollInFuturity = false;
+    private IBrowserFile futurityDocument;
+    private IBrowserFile selectedNurseryDocument;
+
+    // Competition year runs May 1 - Apr 30, named for the year it ends in.
+    // E.g. Aug 2026 falls in the season that ends Apr 2027, so it's "2027".
+    private int CurrentCompetitionYear =>
+        DateTime.Now.Month >= 5 ? DateTime.Now.Year + 1 : DateTime.Now.Year;
 
     protected override async Task OnInitializedAsync()
     {
@@ -229,7 +292,6 @@
                 dog = new MSSA_Dog
                 {
                     IsActive = true,
-                    OwnerIsMSSAMember = false,
                     IsDeceased = false,
                     IsSold = false
                 };
@@ -255,11 +317,35 @@
                 return;
             }
 
+            if (selectedNurseryDocument != null)
+            {
+                await AttachNurseryDocumentAsync();
+            }
+
             if (dogId == -1)
             {
                 dog = await DogService.AddDogAsync(dog, ModuleState.ModuleId);
                 await logger.LogInformation("Dog added successfully");
-                NavigationManager.NavigateTo(NavigateUrl(PageState.Page.Path, "id=" + dog.DogId));
+
+                if (enrollInFuturity)
+                {
+                    var participation = new MSSA_DogFuturityParticipation
+                    {
+                        DogId = dog.DogId,
+                        Year = CurrentCompetitionYear
+                    };
+
+                    participation = await DogService.AddFuturityParticipationAsync(participation, ModuleState.ModuleId);
+                    await logger.LogInformation("Futurity participation added for new dog {DogId}", dog.DogId);
+
+                    if (futurityDocument != null)
+                    {
+                        await UploadFuturityDocument(participation.ParticipationId);
+                    }
+                }
+
+                // Land on the view page for the dog just added, not another edit form.
+                NavigationManager.NavigateTo(EditUrl("Detail", $"id={dog.DogId}"));
             }
             else
             {
@@ -272,6 +358,63 @@
         {
             await logger.LogError(ex, "Error saving dog");
             errorMessage = "Error saving dog. Please try again.";
+        }
+    }
+
+    private void OnFuturityDocumentSelected(InputFileChangeEventArgs e)
+    {
+        futurityDocument = e.File;
+    }
+
+    private void OnNurseryDocumentSelected(InputFileChangeEventArgs e)
+    {
+        if (!e.File.Name.EndsWith(".pdf", StringComparison.OrdinalIgnoreCase))
+        {
+            errorMessage = "Nursery documentation must be a PDF file.";
+            selectedNurseryDocument = null;
+            return;
+        }
+
+        errorMessage = "";
+        selectedNurseryDocument = e.File;
+    }
+
+    private async Task AttachNurseryDocumentAsync()
+    {
+        const long maxFileSize = 10 * 1024 * 1024; // 10 MB
+        await using var stream = selectedNurseryDocument.OpenReadStream(maxFileSize);
+        using var memoryStream = new MemoryStream();
+        await stream.CopyToAsync(memoryStream);
+
+        dog.UploadNurseryDocFileName = selectedNurseryDocument.Name;
+        dog.UploadNurseryDocContentBase64 = Convert.ToBase64String(memoryStream.ToArray());
+    }
+
+    private async Task UploadFuturityDocument(int participationId)
+    {
+        try
+        {
+            const long maxFileSize = 10 * 1024 * 1024; // 10 MB
+            await using var stream = futurityDocument.OpenReadStream(maxFileSize);
+            using var memoryStream = new MemoryStream();
+            await stream.CopyToAsync(memoryStream);
+
+            var payload = new MSSA_DogFuturityParticipation
+            {
+                ParticipationId = participationId,
+                UploadFileName = futurityDocument.Name,
+                UploadContentBase64 = Convert.ToBase64String(memoryStream.ToArray())
+            };
+
+            await DogService.UploadFuturityDocumentAsync(payload, ModuleState.ModuleId);
+            await logger.LogInformation("Futurity documentation uploaded for participation {ParticipationId}", participationId);
+        }
+        catch (Exception ex)
+        {
+            await logger.LogError(ex, "Error uploading futurity documentation for participation {ParticipationId}", participationId);
+            // The dog and futurity enrollment already saved successfully - don't fail
+            // the whole operation, just let the user know they'll need to add it later.
+            AddModuleMessage("Dog saved, but the documentation upload failed. You can add it later from the dog's Futurity record.", MessageType.Warning);
         }
     }
 

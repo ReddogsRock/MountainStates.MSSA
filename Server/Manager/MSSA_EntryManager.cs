@@ -1,4 +1,4 @@
-﻿using System.Collections.Generic;
+using System.Collections.Generic;
 using System.Threading.Tasks;
 using Oqtane.Modules;
 using MountainStates.MSSA.Module.MSSA_Entries.Repository;
@@ -46,9 +46,19 @@ namespace MountainStates.MSSA.Module.MSSA_Entries.Manager
             await _repository.DeleteEntryAsync(entryId);
         }
 
-        public async Task GenerateRunOrderAsync(int trialId, int classId, int moduleId)
+        public async Task<List<RunOrderEntry>> GetProposedRunOrderAsync(int trialId, int moduleId)
         {
-            await _repository.GenerateRunOrderAsync(trialId, classId);
+            return await _repository.GetProposedRunOrderAsync(trialId);
+        }
+
+        public async Task<List<RunOrderEntry>> SaveRunOrderAsync(List<RunOrderEntry> assignments, int moduleId)
+        {
+            return await _repository.SaveRunOrderAsync(assignments);
+        }
+
+        public async Task<List<ScoreImportRow>> ImportScoresAsync(List<ScoreImportRow> rows, int moduleId)
+        {
+            return await _repository.ImportScoresAsync(rows);
         }
 
         public async Task<IEnumerable<MSSA_Class>> GetClassesAsync(int moduleId)

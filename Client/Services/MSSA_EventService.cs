@@ -130,6 +130,19 @@ namespace MountainStates.MSSA.Module.MSSA_Events.Services
             await DeleteAsync(CreateAuthorizationPolicyUrl($"{url}/{trialId}?moduleid={moduleId}", EntityNames.Module, moduleId));
         }
 
+        // Offerings
+        public async Task<List<MSSA_EventClassOffering>> GetEventOfferingsAsync(int eventId, int moduleId)
+        {
+            return await GetJsonAsync<List<MSSA_EventClassOffering>>(
+                CreateAuthorizationPolicyUrl($"{ApiUrl}/{eventId}/offerings?moduleid={moduleId}", EntityNames.Module, moduleId));
+        }
+
+        public async Task<List<MSSA_EventClassOffering>> SaveEventOfferingsAsync(int eventId, List<MSSA_EventClassOffering> offerings, int moduleId)
+        {
+            return await PostJsonAsync<List<MSSA_EventClassOffering>>(
+                CreateAuthorizationPolicyUrl($"{ApiUrl}/{eventId}/offerings?moduleid={moduleId}", EntityNames.Module, moduleId), offerings);
+        }
+
         // Entries
         public async Task<List<EntryListItem>> GetTrialEntriesAsync(int trialId, int moduleId)
         {

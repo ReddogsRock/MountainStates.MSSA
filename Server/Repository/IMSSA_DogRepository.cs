@@ -23,6 +23,7 @@ namespace MountainStates.MSSA.Module.MSSA_Dogs.Repository
         Task<IEnumerable<MSSA_DogFuturityParticipation>> GetDogFuturityParticipationAsync(int dogId);
         Task<MSSA_DogFuturityParticipation> AddFuturityParticipationAsync(MSSA_DogFuturityParticipation participation);
         Task DeleteFuturityParticipationAsync(int participationId);
+        Task<MSSA_DogFuturityParticipation> SaveFuturityDocumentAsync(int participationId, string fileName, string filePath);
 
         // Entries for detail view
         Task<IEnumerable<MSSA_DogEntry>> GetDogEntriesAsync(int dogId);

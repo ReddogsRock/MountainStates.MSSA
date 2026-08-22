@@ -157,105 +157,6 @@
             </div>
         </div>
 
-        @* Membership Management (only for existing handlers) *@
-        @if (handlerId != -1)
-        {
-            <div class="card mb-3">
-                <div class="card-header d-flex justify-content-between align-items-center">
-                    <h4>Membership History</h4>
-                    <button type="button" class="btn btn-sm btn-primary" @onclick="ShowAddMembership">
-                        Add Membership
-                    </button>
-                </div>
-                <div class="card-body">
-                    @if (showMembershipForm)
-                    {
-                        <div class="border p-3 mb-3 bg-light">
-                            <h5>@(editingMembershipId == -1 ? "Add New Membership" : "Edit Membership")</h5>
-                            <div class="row mb-2">
-                                <div class="col-md-3">
-                                    <label class="form-label">Start Year <span class="text-danger">*</span></label>
-                                    <input type="number" class="form-control" @bind="currentMembership.StartYear" 
-                                           min="2000" max="2100" required />
-                                </div>
-                                <div class="col-md-3">
-                                    <label class="form-label">End Year <span class="text-danger">*</span></label>
-                                    <input type="number" class="form-control" @bind="currentMembership.EndYear" 
-                                           min="2000" max="2100" required />
-                                </div>
-                                <div class="col-md-3">
-                                    <label class="form-label">Amount</label>
-                                    <input type="number" step="0.01" class="form-control" @bind="currentMembership.Amount" />
-                                </div>
-                                <div class="col-md-3">
-                                    <label class="form-label">Paid By</label>
-                                    <select class="form-select" @bind="currentMembership.PaidBy">
-                                        <option value="">Select...</option>
-                                        <option value="Cash">Cash</option>
-                                        <option value="Check">Check</option>
-                                        <option value="PayPal">PayPal</option>
-                                        <option value="Credit Card">Credit Card</option>
-                                    </select>
-                                </div>
-                            </div>
-                            <div class="row mb-2">
-                                <div class="col-md-4">
-                                    <label class="form-label">Date Received</label>
-                                    <input type="date" class="form-control" 
-                                           value="@(currentMembership.DateReceived?.ToString("yyyy-MM-dd"))"
-                                           @onchange="@(e => currentMembership.DateReceived = string.IsNullOrEmpty(e.Value?.ToString()) ? null : DateTime.Parse(e.Value.ToString()))" />
-                                </div>
-                            </div>
-                            <div class="mt-2">
-                                <button type="button" class="btn btn-sm btn-success me-2" @onclick="SaveMembership">Save</button>
-                                <button type="button" class="btn btn-sm btn-secondary" @onclick="CancelMembership">Cancel</button>
-                            </div>
-                        </div>
-                    }
-
-                    @if (memberships == null)
-                    {
-                        <p><em>Loading...</em></p>
-                    }
-                    else if (!memberships.Any())
-                    {
-                        <p><em>No membership records.</em></p>
-                    }
-                    else
-                    {
-                        <table class="table table-sm">
-                            <thead>
-                                <tr>
-                                    <th>Year Range</th>
-                                    <th>Amount</th>
-                                    <th>Paid By</th>
-                                    <th>Date Received</th>
-                                    <th>Actions</th>
-                                </tr>
-                            </thead>
-                            <tbody>
-                                @foreach (var membership in memberships)
-                                {
-                                    <tr>
-                                        <td>@membership.StartYear - @membership.EndYear</td>
-                                        <td>@(membership.Amount?.ToString("C") ?? "N/A")</td>
-                                        <td>@membership.PaidBy</td>
-                                        <td>@(membership.DateReceived?.ToString("MMM dd, yyyy") ?? "N/A")</td>
-                                        <td>
-                                            <button type="button" class="btn btn-sm btn-primary me-1" 
-                                                    @onclick="() => EditMembership(membership)">Edit</button>
-                                            <button type="button" class="btn btn-sm btn-danger" 
-                                                    @onclick="() => DeleteMembership(membership.MembershipId)">Delete</button>
-                                        </td>
-                                    </tr>
-                                }
-                            </tbody>
-                        </table>
-                    }
-                </div>
-            </div>
-        }
-
         @* Status *@
         <div class="card mb-3">
             <div class="card-header">
@@ -295,13 +196,7 @@
     private MSSA_Handler handler = new();
     private List<MSSA_State> states;
     private List<MSSA_Handler> allHandlers;
-    private List<MSSA_HandlerMembership> memberships;
     private string errorMessage = "";
-
-    // Membership form state
-    private bool showMembershipForm = false;
-    private int editingMembershipId = -1;
-    private MSSA_HandlerMembership currentMembership = new();
 
     protected override async Task OnInitializedAsync()
     {
@@ -314,7 +209,6 @@
             {
                 handlerId = int.Parse(PageState.QueryString["id"]);
                 handler = await HandlerService.GetHandlerAsync(handlerId, ModuleState.ModuleId);
-                memberships = await HandlerService.GetHandlerMembershipsAsync(handlerId, ModuleState.ModuleId);
             }
             else
             {
@@ -323,7 +217,6 @@
                     IsActive = true,
                     PhotoReleaseConsent = false
                 };
-                memberships = new List<MSSA_HandlerMembership>();
             }
         }
         catch (Exception ex)
@@ -383,90 +276,4 @@
         }
     }
 
-    // Membership management
-    private void ShowAddMembership()
-    {
-        currentMembership = new MSSA_HandlerMembership
-        {
-            HandlerId = handlerId,
-            StartYear = DateTime.Now.Year,
-            EndYear = DateTime.Now.Year,
-            IsActive = true
-        };
-        editingMembershipId = -1;
-        showMembershipForm = true;
-    }
-
-    private void EditMembership(MSSA_HandlerMembership membership)
-    {
-        currentMembership = new MSSA_HandlerMembership
-        {
-            MembershipId = membership.MembershipId,
-            HandlerId = membership.HandlerId,
-            StartYear = membership.StartYear,
-            EndYear = membership.EndYear,
-            Amount = membership.Amount,
-            PaidBy = membership.PaidBy,
-            DateReceived = membership.DateReceived,
-            IsActive = membership.IsActive
-        };
-        editingMembershipId = membership.MembershipId;
-        showMembershipForm = true;
-    }
-
-    private async Task SaveMembership()
-    {
-        try
-        {
-            if (currentMembership.StartYear > currentMembership.EndYear)
-            {
-                errorMessage = "Start Year cannot be after End Year.";
-                return;
-            }
-
-            if (editingMembershipId == -1)
-            {
-                await HandlerService.AddMembershipAsync(currentMembership, ModuleState.ModuleId);
-            }
-            else
-            {
-                await HandlerService.UpdateMembershipAsync(currentMembership, ModuleState.ModuleId);
-            }
-
-            memberships = await HandlerService.GetHandlerMembershipsAsync(handlerId, ModuleState.ModuleId);
-            CancelMembership();
-            AddModuleMessage("Membership saved successfully", MessageType.Success);
-        }
-        catch (Exception ex)
-        {
-            await logger.LogError(ex, "Error saving membership");
-            errorMessage = "Error saving membership. Please try again.";
-        }
-    }
-
-    private async Task DeleteMembership(int membershipId)
-    {
-        try
-        {
-            if (await JSRuntime.InvokeAsync<bool>("confirm", "Are you sure you want to delete this membership?"))
-            {
-                await HandlerService.DeleteMembershipAsync(membershipId, ModuleState.ModuleId);
-                memberships = await HandlerService.GetHandlerMembershipsAsync(handlerId, ModuleState.ModuleId);
-                AddModuleMessage("Membership deleted successfully", MessageType.Success);
-            }
-        }
-        catch (Exception ex)
-        {
-            await logger.LogError(ex, "Error deleting membership");
-            errorMessage = "Error deleting membership. Please try again.";
-        }
-    }
-
-    private void CancelMembership()
-    {
-        showMembershipForm = false;
-        editingMembershipId = -1;
-        currentMembership = new();
-        errorMessage = "";
-    }
 }
