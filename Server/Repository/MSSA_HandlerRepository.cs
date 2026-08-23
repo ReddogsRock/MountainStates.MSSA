@@ -336,7 +336,16 @@ namespace MountainStates.MSSA.Module.MSSA_Handlers.Repository
                     // No DateReceived on file yet - the natural "awaiting payment" signal,
                     // since every other membership field already gets filled in at
                     // creation time (see AddMembershipAsync).
-                    query = query.Where(m => m.DateReceived == null);
+                    //
+                    // Excludes the migration's Pass 2 historical placeholder rows
+                    // (built from M2016-M2029 flags with no known payment details) -
+                    // those aren't people who currently owe money, they're old years
+                    // with no record captured. Matched by their exact construction
+                    // signature from MigrateMemberships.sql: MembershipType='Unknown',
+                    // Amount and PaidBy both null, and StartYear == EndYear (always a
+                    // single placeholder year, never a real multi-year purchase).
+                    query = query.Where(m => m.DateReceived == null &&
+                        !(m.MembershipType == "Unknown" && m.Amount == null && m.PaidBy == null && m.StartYear == m.EndYear));
                     break;
                 // null or "All": no filter.
             }
