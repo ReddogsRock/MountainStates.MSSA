@@ -62,13 +62,7 @@ namespace MountainStates.MSSA.Module.MSSA_Handlers.Repository
                     handler.StateName = state?.StateName;
                 }
 
-                // Populate family member name
-                if (handler.FamilyMemberHandlerId.HasValue)
-                {
-                    var familyMember = await db.MSSA_Handlers
-                        .FirstOrDefaultAsync(h => h.HandlerId == handler.FamilyMemberHandlerId.Value);
-                    handler.FamilyMemberName = familyMember?.FullName;
-                }
+                handler.Memberships = await LoadHandlerMembershipsAsync(db, handlerId);
             }
 
             return handler;
@@ -193,10 +187,227 @@ namespace MountainStates.MSSA.Module.MSSA_Handlers.Repository
                                 .OrderByDescending(e => e.TrialDate)
                                 .ToListAsync();
 
-            return entries; 
+            return entries;
+        }
 
-            // Temporary: Return empty list until other tables are created
-            //return await Task.FromResult(new List<MSSA_HandlerEntry>());
+        // Memberships
+
+        // All membership periods this handler has ever been linked to (current and
+        // historical), newest first, each with its full member list populated.
+        public async Task<List<MSSA_Membership>> GetHandlerMembershipsAsync(int handlerId)
+        {
+            using var db = await _dbContextFactory.CreateDbContextAsync();
+
+            return await LoadHandlerMembershipsAsync(db, handlerId);
+        }
+
+        // Creates a new membership period and links it to every handler in
+        // membership.MemberHandlerIds (the primary purchaser plus however many family
+        // members - can be zero additional for Individual, any number for Family).
+        // EndYear is computed from MembershipType + StartYear rather than trusting a
+        // client-supplied value.
+        public async Task<MSSA_Membership> AddMembershipAsync(MSSA_Membership membership)
+        {
+            using var db = await _dbContextFactory.CreateDbContextAsync();
+
+            var handlerIds = membership.MemberHandlerIds ?? new List<int>();
+            var primaryHandlerId = membership.PrimaryHandlerId;
+
+            membership.EndYear = ComputeEndYear(membership.MembershipType, membership.StartYear);
+            membership.CreatedDate = DateTime.UtcNow;
+            membership.ModifiedDate = DateTime.UtcNow;
+            membership.MemberHandlerIds = new List<int>(); // not mapped - keep EF from touching it
+
+            db.MSSA_Memberships.Add(membership);
+            await db.SaveChangesAsync();
+
+            foreach (var handlerId in handlerIds.Distinct())
+            {
+                db.MSSA_MembershipHandlers.Add(new MSSA_MembershipHandler
+                {
+                    MembershipId = membership.MembershipId,
+                    HandlerId = handlerId,
+                    IsPrimary = handlerId == primaryHandlerId
+                });
+            }
+            await db.SaveChangesAsync();
+
+            membership.Members = await LoadMembersAsync(db, membership.MembershipId);
+            return membership;
+        }
+
+        // Updates the purchase details (type/years/amount/etc) of an existing
+        // membership - not its member list, which is managed separately via
+        // AddMemberToMembershipAsync/RemoveMemberFromMembershipAsync.
+        public async Task<MSSA_Membership> UpdateMembershipAsync(MSSA_Membership membership)
+        {
+            using var db = await _dbContextFactory.CreateDbContextAsync();
+
+            membership.EndYear = ComputeEndYear(membership.MembershipType, membership.StartYear);
+            membership.ModifiedDate = DateTime.UtcNow;
+
+            db.Entry(membership).State = EntityState.Modified;
+            await db.SaveChangesAsync();
+
+            membership.Members = await LoadMembersAsync(db, membership.MembershipId);
+            return membership;
+        }
+
+        public async Task DeleteMembershipAsync(int membershipId)
+        {
+            using var db = await _dbContextFactory.CreateDbContextAsync();
+
+            var links = await db.MSSA_MembershipHandlers
+                .Where(mh => mh.MembershipId == membershipId)
+                .ToListAsync();
+            db.MSSA_MembershipHandlers.RemoveRange(links);
+
+            var membership = await db.MSSA_Memberships.FindAsync(membershipId);
+            if (membership != null)
+            {
+                db.MSSA_Memberships.Remove(membership);
+            }
+
+            await db.SaveChangesAsync();
+        }
+
+        // Adds one more family member to an existing membership - supports adding
+        // children to a Family membership incrementally, any time, not just when the
+        // membership was first purchased.
+        public async Task<List<MembershipMemberInfo>> AddMemberToMembershipAsync(int membershipId, int handlerId)
+        {
+            using var db = await _dbContextFactory.CreateDbContextAsync();
+
+            var alreadyLinked = await db.MSSA_MembershipHandlers
+                .AnyAsync(mh => mh.MembershipId == membershipId && mh.HandlerId == handlerId);
+
+            if (!alreadyLinked)
+            {
+                db.MSSA_MembershipHandlers.Add(new MSSA_MembershipHandler
+                {
+                    MembershipId = membershipId,
+                    HandlerId = handlerId,
+                    IsPrimary = false
+                });
+                await db.SaveChangesAsync();
+            }
+
+            return await LoadMembersAsync(db, membershipId);
+        }
+
+        public async Task<List<MembershipMemberInfo>> RemoveMemberFromMembershipAsync(int membershipId, int handlerId)
+        {
+            using var db = await _dbContextFactory.CreateDbContextAsync();
+
+            var link = await db.MSSA_MembershipHandlers
+                .FirstOrDefaultAsync(mh => mh.MembershipId == membershipId && mh.HandlerId == handlerId);
+
+            if (link != null)
+            {
+                db.MSSA_MembershipHandlers.Remove(link);
+                await db.SaveChangesAsync();
+            }
+
+            return await LoadMembersAsync(db, membershipId);
+        }
+
+        // Cross-handler membership search for the Membership admin module - unlike
+        // GetHandlerMembershipsAsync, this isn't scoped to one handler. filter is one
+        // of "ExpiringThisYear", "Expired", "PendingPayment", or null/"All" for no
+        // filter. searchTerm matches against any covered handler's name.
+        public async Task<List<MSSA_Membership>> SearchMembershipsAsync(string filter, string searchTerm)
+        {
+            using var db = await _dbContextFactory.CreateDbContextAsync();
+
+            var currentYear = DateTime.Today.Year;
+            var query = db.MSSA_Memberships.AsQueryable();
+
+            switch (filter)
+            {
+                case "ExpiringThisYear":
+                    // Still active, but this is the last year it covers.
+                    query = query.Where(m => m.EndYear == currentYear);
+                    break;
+                case "Expired":
+                    // Coverage ended in a prior year and was never renewed since.
+                    query = query.Where(m => m.EndYear != null && m.EndYear < currentYear);
+                    break;
+                case "PendingPayment":
+                    // No DateReceived on file yet - the natural "awaiting payment" signal,
+                    // since every other membership field already gets filled in at
+                    // creation time (see AddMembershipAsync).
+                    query = query.Where(m => m.DateReceived == null);
+                    break;
+                // null or "All": no filter.
+            }
+
+            var memberships = await query
+                .OrderBy(m => m.EndYear ?? int.MaxValue) // Lifetime (null) sorts last
+                .ThenBy(m => m.StartYear)
+                .ToListAsync();
+
+            foreach (var membership in memberships)
+            {
+                membership.Members = await LoadMembersAsync(db, membership.MembershipId);
+            }
+
+            if (!string.IsNullOrWhiteSpace(searchTerm))
+            {
+                var term = searchTerm.Trim().ToLower();
+                memberships = memberships
+                    .Where(m => m.Members.Any(x => x.HandlerName != null && x.HandlerName.ToLower().Contains(term)))
+                    .ToList();
+            }
+
+            return memberships;
+        }
+
+        // AI/AF = 1 year, 3I/3F = 3 years, Lifetime = never expires (null EndYear).
+        private static int? ComputeEndYear(string membershipType, int startYear)
+        {
+            return membershipType switch
+            {
+                "AI" or "AF" => startYear,
+                "3I" or "3F" => startYear + 2,
+                "Lifetime" => null,
+                _ => startYear
+            };
+        }
+
+        private static async Task<List<MSSA_Membership>> LoadHandlerMembershipsAsync(MSSADbContext db, int handlerId)
+        {
+            var membershipIds = await db.MSSA_MembershipHandlers
+                .Where(mh => mh.HandlerId == handlerId)
+                .Select(mh => mh.MembershipId)
+                .ToListAsync();
+
+            var memberships = await db.MSSA_Memberships
+                .Where(m => membershipIds.Contains(m.MembershipId))
+                .OrderByDescending(m => m.StartYear)
+                .ToListAsync();
+
+            foreach (var membership in memberships)
+            {
+                membership.Members = await LoadMembersAsync(db, membership.MembershipId);
+            }
+
+            return memberships;
+        }
+
+        private static async Task<List<MembershipMemberInfo>> LoadMembersAsync(MSSADbContext db, int membershipId)
+        {
+            return await (from mh in db.MSSA_MembershipHandlers
+                          join h in db.MSSA_Handlers on mh.HandlerId equals h.HandlerId
+                          where mh.MembershipId == membershipId
+                          orderby mh.IsPrimary descending, h.LastName, h.FirstName
+                          select new MembershipMemberInfo
+                          {
+                              HandlerId = h.HandlerId,
+                              HandlerName = h.FullName,
+                              Email = h.Email,
+                              IsPrimary = mh.IsPrimary
+                          })
+                          .ToListAsync();
         }
     }
 }

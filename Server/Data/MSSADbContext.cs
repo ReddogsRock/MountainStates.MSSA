@@ -15,7 +15,8 @@ namespace MountainStates.MSSA.Module.MSSA_Handlers.Data
 
         // Add DbSets for all tables
         public DbSet<MSSA_Handler> MSSA_Handlers { get; set; }
-        public DbSet<MSSA_HandlerMembership> MSSA_HandlerMemberships { get; set; }
+        public DbSet<MSSA_Membership> MSSA_Memberships { get; set; }
+        public DbSet<MSSA_MembershipHandler> MSSA_MembershipHandlers { get; set; }
         public DbSet<MSSA_State> MSSA_States { get; set; }
         public DbSet<MSSA_Dog> MSSA_Dogs { get; set; }
         public DbSet<MSSA_Event> MSSA_Events { get; set; }
@@ -35,7 +36,8 @@ namespace MountainStates.MSSA.Module.MSSA_Handlers.Data
 
             // Configure table names to match your SQL schema
             modelBuilder.Entity<MSSA_Handler>().ToTable("MSSA_Handlers");
-            modelBuilder.Entity<MSSA_HandlerMembership>().ToTable("MSSA_HandlerMemberships");
+            modelBuilder.Entity<MSSA_Membership>().ToTable("MSSA_Memberships");
+            modelBuilder.Entity<MSSA_MembershipHandler>().ToTable("MSSA_MembershipHandlers");
             modelBuilder.Entity<MSSA_State>().ToTable("MSSA_States");
             modelBuilder.Entity<MSSA_Dog>().ToTable("MSSA_Dogs");
             modelBuilder.Entity<MSSA_Event>().ToTable("MSSA_Events");
@@ -61,11 +63,21 @@ namespace MountainStates.MSSA.Module.MSSA_Handlers.Data
                 .HasForeignKey(h => h.StateCode)
                 .OnDelete(DeleteBehavior.Restrict);
 
-            modelBuilder.Entity<MSSA_HandlerMembership>()
+            modelBuilder.Entity<MSSA_MembershipHandler>()
+                .HasOne<MSSA_Membership>()
+                .WithMany()
+                .HasForeignKey(mh => mh.MembershipId)
+                .OnDelete(DeleteBehavior.Restrict);
+
+            modelBuilder.Entity<MSSA_MembershipHandler>()
                 .HasOne<MSSA_Handler>()
                 .WithMany()
-                .HasForeignKey(m => m.HandlerId)
+                .HasForeignKey(mh => mh.HandlerId)
                 .OnDelete(DeleteBehavior.Restrict);
+
+            modelBuilder.Entity<MSSA_MembershipHandler>()
+                .HasIndex(mh => new { mh.MembershipId, mh.HandlerId })
+                .IsUnique();
 
             modelBuilder.Entity<MSSA_DogFuturityParticipation>()
                 .HasOne<MSSA_Dog>()

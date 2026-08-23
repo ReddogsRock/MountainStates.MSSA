@@ -5,6 +5,7 @@ using Oqtane.Enums;
 using Oqtane.Infrastructure;
 using Oqtane.Shared;
 using System.Collections.Generic;
+using System.Linq;
 using System.Threading.Tasks;
 using MountainStates.MSSA.Module.MSSA_Handlers.Manager;
 using MountainStates.MSSA.Module.MSSA_Handlers.Models;
@@ -167,6 +168,152 @@ namespace MountainStates.MSSA.Module.MSSA_Handlers.Controllers
         private bool IsAuthorizedForRole(string role)
         {
             return User.IsInRole(role) || User.IsInRole(RoleNames.Admin);
+        }
+
+        // GET: api/MSSA_Handler/5/memberships?moduleid=x
+        [HttpGet("{handlerId}/memberships")]
+        [Authorize(Policy = PolicyNames.ViewModule)]
+        public async Task<List<MSSA_Membership>> GetMemberships(int handlerId, int moduleId)
+        {
+            try
+            {
+                return await _manager.GetHandlerMembershipsAsync(handlerId, moduleId);
+            }
+            catch (System.Exception ex)
+            {
+                _logger.Log(LogLevel.Error, this, LogFunction.Read, ex, "Error getting memberships for handler {HandlerId}", handlerId);
+                throw;
+            }
+        }
+
+        // POST: api/MSSA_Handler/membership?moduleid=x
+        // Requires login (any authenticated user), matching the handler edit policy.
+        [HttpPost("membership")]
+        [Authorize]
+        public async Task<MSSA_Membership> AddMembership([FromBody] MSSA_Membership membership, int moduleId)
+        {
+            try
+            {
+                if (!ModelState.IsValid || membership.MemberHandlerIds == null || !membership.MemberHandlerIds.Any())
+                {
+                    HttpContext.Response.StatusCode = (int)System.Net.HttpStatusCode.BadRequest;
+                    return null;
+                }
+
+                var saved = await _manager.AddMembershipAsync(membership, moduleId);
+                _logger.Log(LogLevel.Information, this, LogFunction.Create, "Membership added {Membership}", saved);
+                return saved;
+            }
+            catch (System.Exception ex)
+            {
+                _logger.Log(LogLevel.Error, this, LogFunction.Create, ex, "Error creating membership");
+                throw;
+            }
+        }
+
+        // PUT: api/MSSA_Handler/membership/5?moduleid=x
+        [HttpPut("membership/{membershipId}")]
+        [Authorize]
+        public async Task<MSSA_Membership> UpdateMembership(int membershipId, [FromBody] MSSA_Membership membership, int moduleId)
+        {
+            try
+            {
+                if (!ModelState.IsValid || membership.MembershipId != membershipId)
+                {
+                    HttpContext.Response.StatusCode = (int)System.Net.HttpStatusCode.BadRequest;
+                    return null;
+                }
+
+                var saved = await _manager.UpdateMembershipAsync(membership, moduleId);
+                _logger.Log(LogLevel.Information, this, LogFunction.Update, "Membership updated {Membership}", saved);
+                return saved;
+            }
+            catch (System.Exception ex)
+            {
+                _logger.Log(LogLevel.Error, this, LogFunction.Update, ex, "Error updating membership {MembershipId}", membershipId);
+                throw;
+            }
+        }
+
+        // DELETE: api/MSSA_Handler/membership/5?moduleid=x
+        [HttpDelete("membership/{membershipId}")]
+        [Authorize(Policy = PolicyNames.EditModule)]
+        public async Task DeleteMembership(int membershipId, int moduleId)
+        {
+            try
+            {
+                if (IsAuthorizedForRole(MSSARoles.Admin))
+                {
+                    await _manager.DeleteMembershipAsync(membershipId, moduleId);
+                    _logger.Log(LogLevel.Information, this, LogFunction.Delete, "Membership deleted {MembershipId}", membershipId);
+                }
+                else
+                {
+                    _logger.Log(LogLevel.Error, this, LogFunction.Security, "Unauthorized membership delete attempt");
+                    HttpContext.Response.StatusCode = (int)System.Net.HttpStatusCode.Forbidden;
+                }
+            }
+            catch (System.Exception ex)
+            {
+                _logger.Log(LogLevel.Error, this, LogFunction.Delete, ex, "Error deleting membership {MembershipId}", membershipId);
+                throw;
+            }
+        }
+
+        // POST: api/MSSA_Handler/membership/5/member/12?moduleid=x
+        // No request body needed - both ids are in the route.
+        [HttpPost("membership/{membershipId}/member/{handlerId}")]
+        [Authorize]
+        public async Task<List<MembershipMemberInfo>> AddMemberToMembership(int membershipId, int handlerId, int moduleId)
+        {
+            try
+            {
+                var members = await _manager.AddMemberToMembershipAsync(membershipId, handlerId, moduleId);
+                _logger.Log(LogLevel.Information, this, LogFunction.Update, "Handler {HandlerId} added to membership {MembershipId}", handlerId, membershipId);
+                return members;
+            }
+            catch (System.Exception ex)
+            {
+                _logger.Log(LogLevel.Error, this, LogFunction.Update, ex, "Error adding handler {HandlerId} to membership {MembershipId}", handlerId, membershipId);
+                throw;
+            }
+        }
+
+        // POST: api/MSSA_Handler/membership/5/member/12/remove?moduleid=x
+        // POST rather than DELETE, since this needs to return the updated member list
+        // and every DeleteAsync call elsewhere in this app returns no response body.
+        [HttpPost("membership/{membershipId}/member/{handlerId}/remove")]
+        [Authorize]
+        public async Task<List<MembershipMemberInfo>> RemoveMemberFromMembership(int membershipId, int handlerId, int moduleId)
+        {
+            try
+            {
+                var members = await _manager.RemoveMemberFromMembershipAsync(membershipId, handlerId, moduleId);
+                _logger.Log(LogLevel.Information, this, LogFunction.Update, "Handler {HandlerId} removed from membership {MembershipId}", handlerId, membershipId);
+                return members;
+            }
+            catch (System.Exception ex)
+            {
+                _logger.Log(LogLevel.Error, this, LogFunction.Update, ex, "Error removing handler {HandlerId} from membership {MembershipId}", handlerId, membershipId);
+                throw;
+            }
+        }
+
+        // GET: api/MSSA_Handler/memberships/search?filter=ExpiringThisYear&searchTerm=smith&moduleid=x
+        // filter: ExpiringThisYear, Expired, PendingPayment, or omitted for All.
+        [HttpGet("memberships/search")]
+        [Authorize(Policy = PolicyNames.ViewModule)]
+        public async Task<List<MSSA_Membership>> SearchMemberships(string filter, string searchTerm, int moduleId)
+        {
+            try
+            {
+                return await _manager.SearchMembershipsAsync(filter, searchTerm, moduleId);
+            }
+            catch (System.Exception ex)
+            {
+                _logger.Log(LogLevel.Error, this, LogFunction.Read, ex, "Error searching memberships");
+                throw;
+            }
         }
     }
 }

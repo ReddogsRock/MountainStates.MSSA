@@ -1,0 +1,258 @@
+@namespace MountainStates.MSSA.Module.MSSA_MembershipAdmin
+@inherits ModuleBase
+@using MountainStates.MSSA.Module.MSSA_Handlers.Services
+@using MountainStates.MSSA.Module.MSSA_Handlers.Models
+@inject IMSSA_HandlerService HandlerService
+
+<div class="container-fluid">
+    <div class="row mb-3">
+        <div class="col">
+            <h2>Membership Admin</h2>
+        </div>
+    </div>
+
+    @* Filters *@
+    <div class="card mb-3">
+        <div class="card-body">
+            <div class="row g-2">
+                <div class="col-md-4">
+                    <label class="form-label">View</label>
+                    <select class="form-select" @bind="selectedFilter" @bind:after="LoadMemberships">
+                        <option value="ExpiringThisYear">Expiring This Year</option>
+                        <option value="Expired">Already Expired</option>
+                        <option value="PendingPayment">Pending Payment</option>
+                        <option value="All">All</option>
+                    </select>
+                </div>
+                <div class="col-md-5">
+                    <label class="form-label">Search by name</label>
+                    <input class="form-control" @bind="searchTerm" @bind:event="oninput"
+                           @onkeyup="@(async e => { if (e.Key == "Enter") await LoadMemberships(); })" />
+                </div>
+                <div class="col-md-3 d-flex align-items-end">
+                    <button type="button" class="btn btn-primary w-100" @onclick="LoadMemberships">Search</button>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    @* Results *@
+    @if (memberships == null)
+    {
+        <p><em>Loading...</em></p>
+    }
+    else if (!memberships.Any())
+    {
+        <p class="text-muted"><em>No memberships match this view.</em></p>
+    }
+    else
+    {
+        <div class="table-responsive">
+            <table class="table table-striped table-hover">
+                <thead>
+                    <tr>
+                        <th>Primary</th>
+                        <th>Other Members</th>
+                        <th>Type</th>
+                        <th>Years</th>
+                        <th>Amount</th>
+                        <th>Paid By</th>
+                        <th>Date Received</th>
+                        <th></th>
+                    </tr>
+                </thead>
+                <tbody>
+                    @foreach (var m in memberships)
+                    {
+                        var primary = m.Members?.FirstOrDefault(x => x.IsPrimary) ?? m.Members?.FirstOrDefault();
+                        var others = m.Members?.Where(x => primary == null || x.HandlerId != primary.HandlerId).ToList() ?? new List<MembershipMemberInfo>();
+
+                        <tr>
+                            <td>
+                                @if (primary != null)
+                                {
+                                    <div>@primary.HandlerName</div>
+                                    @if (!string.IsNullOrEmpty(primary.Email))
+                                    {
+                                        <small class="text-muted">
+                                            <a href="mailto:@primary.Email">@primary.Email</a>
+                                        </small>
+                                    }
+                                }
+                            </td>
+                            <td>
+                                @if (others.Any())
+                                {
+                                    <small>@string.Join(", ", others.Select(x => x.HandlerName))</small>
+                                }
+                            </td>
+                            <td>@m.MembershipTypeName</td>
+                            <td>@m.StartYear&ndash;@(m.EndYear?.ToString() ?? "Lifetime")</td>
+                            <td>@(m.Amount.HasValue ? $"${m.Amount.Value:N2}" : "-")</td>
+                            <td>@m.PaidBy</td>
+                            <td>
+                                @if (m.DateReceived.HasValue)
+                                {
+                                    @m.DateReceived.Value.ToString("MMM dd, yyyy")
+                                }
+                                else
+                                {
+                                    <span class="badge bg-warning text-dark">Pending</span>
+                                }
+                            </td>
+                            <td>
+                                @if (!m.DateReceived.HasValue)
+                                {
+                                    <button type="button" class="btn btn-sm btn-success" @onclick="() => ShowMarkPaid(m)">
+                                        Mark Paid
+                                    </button>
+                                }
+                            </td>
+                        </tr>
+                    }
+                </tbody>
+            </table>
+        </div>
+    }
+
+    @* Mark Paid Modal *@
+    @if (showMarkPaidModal && markPaidMembership != null)
+    {
+        <div class="modal fade show d-block" tabindex="-1" style="background-color: rgba(0,0,0,0.5);">
+            <div class="modal-dialog">
+                <div class="modal-content">
+                    <div class="modal-header">
+                        <h5 class="modal-title">Mark Paid</h5>
+                        <button type="button" class="btn-close" @onclick="CloseMarkPaid"></button>
+                    </div>
+                    <div class="modal-body">
+                        <p>
+                            <strong>@markPaidMembership.MembershipTypeName</strong>
+                            (@markPaidMembership.StartYear&ndash;@(markPaidMembership.EndYear?.ToString() ?? "Lifetime"))
+                            @if (markPaidMembership.Members != null && markPaidMembership.Members.Any())
+                            {
+                                <span> &mdash; @string.Join(", ", markPaidMembership.Members.Select(x => x.HandlerName))</span>
+                            }
+                        </p>
+                        <div class="row g-2">
+                            <div class="col-md-4">
+                                <label class="form-label">Amount</label>
+                                <input type="number" step="0.01" class="form-control" @bind="markPaidAmount" />
+                            </div>
+                            <div class="col-md-4">
+                                <label class="form-label">Paid By</label>
+                                <select class="form-select" @bind="markPaidPaidBy">
+                                    <option value="">Select...</option>
+                                    <option value="Cash">Cash</option>
+                                    <option value="Check">Check</option>
+                                    <option value="PayPal">PayPal</option>
+                                    <option value="Credit Card">Credit Card</option>
+                                </select>
+                            </div>
+                            <div class="col-md-4">
+                                <label class="form-label">Date Received</label>
+                                <input type="date" class="form-control"
+                                       value="@markPaidDateReceived.ToString("yyyy-MM-dd")"
+                                       @onchange="@(e => markPaidDateReceived = DateTime.Parse(e.Value.ToString()))" />
+                            </div>
+                        </div>
+                        @if (!string.IsNullOrEmpty(errorMessage))
+                        {
+                            <div class="alert alert-danger mt-3 mb-0">@errorMessage</div>
+                        }
+                    </div>
+                    <div class="modal-footer">
+                        <button type="button" class="btn btn-success" @onclick="ConfirmMarkPaid">Confirm</button>
+                        <button type="button" class="btn btn-secondary" @onclick="CloseMarkPaid">Cancel</button>
+                    </div>
+                </div>
+            </div>
+        </div>
+    }
+</div>
+
+@code {
+    private string selectedFilter = "ExpiringThisYear";
+    private string searchTerm = "";
+    private List<MSSA_Membership> memberships;
+    private string errorMessage = "";
+
+    private bool showMarkPaidModal = false;
+    private MSSA_Membership markPaidMembership;
+    private decimal? markPaidAmount;
+    private string markPaidPaidBy = "";
+    private DateTime markPaidDateReceived = DateTime.Today;
+
+    protected override async Task OnInitializedAsync()
+    {
+        await LoadMemberships();
+    }
+
+    private async Task LoadMemberships()
+    {
+        try
+        {
+            memberships = null; // shows "Loading..." while in flight
+            memberships = await HandlerService.SearchMembershipsAsync(selectedFilter, searchTerm, ModuleState.ModuleId);
+        }
+        catch (Exception ex)
+        {
+            await logger.LogError(ex, "Error loading memberships");
+            AddModuleMessage("Error loading memberships", MessageType.Error);
+        }
+    }
+
+    private void ShowMarkPaid(MSSA_Membership m)
+    {
+        markPaidMembership = m;
+        markPaidAmount = m.Amount;
+        markPaidPaidBy = m.PaidBy ?? "";
+        markPaidDateReceived = DateTime.Today;
+        errorMessage = "";
+        showMarkPaidModal = true;
+    }
+
+    private async Task ConfirmMarkPaid()
+    {
+        try
+        {
+            if (!markPaidAmount.HasValue || markPaidAmount.Value <= 0)
+            {
+                errorMessage = "Amount is required.";
+                return;
+            }
+            if (string.IsNullOrWhiteSpace(markPaidPaidBy))
+            {
+                errorMessage = "Paid By is required.";
+                return;
+            }
+
+            errorMessage = "";
+
+            // Only Amount/PaidBy/DateReceived change - everything else on the
+            // membership (Type, Years) is carried through unchanged.
+            markPaidMembership.Amount = markPaidAmount;
+            markPaidMembership.PaidBy = markPaidPaidBy;
+            markPaidMembership.DateReceived = markPaidDateReceived;
+
+            await HandlerService.UpdateMembershipAsync(markPaidMembership, ModuleState.ModuleId);
+
+            CloseMarkPaid();
+            await LoadMemberships();
+            AddModuleMessage("Membership marked as paid", MessageType.Success);
+        }
+        catch (Exception ex)
+        {
+            await logger.LogError(ex, "Error marking membership paid");
+            errorMessage = "Error saving. Please try again.";
+        }
+    }
+
+    private void CloseMarkPaid()
+    {
+        showMarkPaidModal = false;
+        markPaidMembership = null;
+        markPaidAmount = null;
+        markPaidPaidBy = "";
+    }
+}

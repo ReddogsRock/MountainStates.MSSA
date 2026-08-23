@@ -20,5 +20,14 @@ namespace MountainStates.MSSA.Module.MSSA_Handlers.Manager
 
         // Entries
         Task<IEnumerable<MSSA_HandlerEntry>> GetHandlerEntriesAsync(int handlerId, int moduleId);
+
+        // Memberships
+        Task<List<MSSA_Membership>> GetHandlerMembershipsAsync(int handlerId, int moduleId);
+        Task<MSSA_Membership> AddMembershipAsync(MSSA_Membership membership, int moduleId);
+        Task<MSSA_Membership> UpdateMembershipAsync(MSSA_Membership membership, int moduleId);
+        Task DeleteMembershipAsync(int membershipId, int moduleId);
+        Task<List<MembershipMemberInfo>> AddMemberToMembershipAsync(int membershipId, int handlerId, int moduleId);
+        Task<List<MembershipMemberInfo>> RemoveMemberFromMembershipAsync(int membershipId, int handlerId, int moduleId);
+        Task<List<MSSA_Membership>> SearchMembershipsAsync(string filter, string searchTerm, int moduleId);
     }
 }

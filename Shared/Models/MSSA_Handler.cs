@@ -1,6 +1,8 @@
-﻿using System;
+using System;
+using System.Collections.Generic;
 using System.ComponentModel.DataAnnotations;
 using System.ComponentModel.DataAnnotations.Schema;
+using System.Linq;
 
 namespace MountainStates.MSSA.Module.MSSA_Handlers.Models
 {
@@ -9,27 +11,25 @@ namespace MountainStates.MSSA.Module.MSSA_Handlers.Models
         [Key]
         public int HandlerId { get; set; }
 
-        [Required(ErrorMessage = "First name is required")]
+        [Required]
         [StringLength(100)]
         public string FirstName { get; set; }
 
-        [Required(ErrorMessage = "Last name is required")]
+        [Required]
         [StringLength(100)]
         public string LastName { get; set; }
 
+        // Database-computed persisted column ("FirstName + ' ' + LastName") - read-only
+        // from EF's perspective, never set directly.
         [DatabaseGenerated(DatabaseGeneratedOption.Computed)]
         public string FullName { get; set; }
 
-        // Contact Information
-        [EmailAddress(ErrorMessage = "Invalid email address")]
         [StringLength(255)]
         public string Email { get; set; }
 
-        [Phone(ErrorMessage = "Invalid phone number")]
         [StringLength(20)]
         public string Phone { get; set; }
 
-        [Phone(ErrorMessage = "Invalid alternate phone number")]
         [StringLength(20)]
         public string AlternatePhone { get; set; }
 
@@ -45,19 +45,13 @@ namespace MountainStates.MSSA.Module.MSSA_Handlers.Models
         [StringLength(10)]
         public string ZipCode { get; set; }
 
-        // Competition Information
         [StringLength(20)]
         public string HandlerLevel { get; set; }
 
         public DateTime? LevelMoveUpDate { get; set; }
 
-        // Family Membership Link
-        public int? FamilyMemberHandlerId { get; set; }
+        public bool PhotoReleaseConsent { get; set; } = false;
 
-        // Membership
-        public bool PhotoReleaseConsent { get; set; }
-
-        // Audit Fields
         public DateTime CreatedDate { get; set; }
         public DateTime ModifiedDate { get; set; }
         public bool IsActive { get; set; } = true;
@@ -66,10 +60,12 @@ namespace MountainStates.MSSA.Module.MSSA_Handlers.Models
         [NotMapped]
         public string StateName { get; set; }
 
+        // All membership periods this handler has ever been linked to (current and
+        // historical), populated by the repository - newest first.
         [NotMapped]
-        public string FamilyMemberName { get; set; }
+        public List<MSSA_Membership> Memberships { get; set; } = new();
 
         [NotMapped]
-        public bool HasActiveMembership { get; set; }
+        public bool HasActiveMembership => Memberships != null && Memberships.Any(m => m.IsCurrentlyActive);
     }
 }

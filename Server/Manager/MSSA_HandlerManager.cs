@@ -58,5 +58,41 @@ namespace MountainStates.MSSA.Module.MSSA_Handlers.Manager
         {
             return await _repository.GetHandlerEntriesAsync(handlerId);
         }
+
+        // Memberships
+        public async Task<List<MSSA_Membership>> GetHandlerMembershipsAsync(int handlerId, int moduleId)
+        {
+            return await _repository.GetHandlerMembershipsAsync(handlerId);
+        }
+
+        public async Task<MSSA_Membership> AddMembershipAsync(MSSA_Membership membership, int moduleId)
+        {
+            return await _repository.AddMembershipAsync(membership);
+        }
+
+        public async Task<MSSA_Membership> UpdateMembershipAsync(MSSA_Membership membership, int moduleId)
+        {
+            return await _repository.UpdateMembershipAsync(membership);
+        }
+
+        public async Task DeleteMembershipAsync(int membershipId, int moduleId)
+        {
+            await _repository.DeleteMembershipAsync(membershipId);
+        }
+
+        public async Task<List<MembershipMemberInfo>> AddMemberToMembershipAsync(int membershipId, int handlerId, int moduleId)
+        {
+            return await _repository.AddMemberToMembershipAsync(membershipId, handlerId);
+        }
+
+        public async Task<List<MembershipMemberInfo>> RemoveMemberFromMembershipAsync(int membershipId, int handlerId, int moduleId)
+        {
+            return await _repository.RemoveMemberFromMembershipAsync(membershipId, handlerId);
+        }
+
+        public async Task<List<MSSA_Membership>> SearchMembershipsAsync(string filter, string searchTerm, int moduleId)
+        {
+            return await _repository.SearchMembershipsAsync(filter, searchTerm);
+        }
     }
 }

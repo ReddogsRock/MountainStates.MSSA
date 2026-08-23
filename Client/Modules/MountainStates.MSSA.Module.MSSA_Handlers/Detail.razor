@@ -106,13 +106,71 @@ else
                             <span class="text-muted">Not provided</span>
                         }
                     </dd>
-
-                    @if (!string.IsNullOrEmpty(handler.FamilyMemberName))
-                    {
-                        <dt class="col-sm-3">Family Member:</dt>
-                        <dd class="col-sm-9">@handler.FamilyMemberName</dd>
-                    }
                 </dl>
+            </div>
+        </div>
+
+        @* Membership *@
+        <div class="card mb-3">
+            <div class="card-header">
+                <h4>Membership</h4>
+            </div>
+            <div class="card-body">
+                @if (handler.Memberships == null || !handler.Memberships.Any())
+                {
+                    <p><em>No membership records.</em></p>
+                }
+                else
+                {
+                    var current = handler.Memberships.FirstOrDefault(m => m.IsCurrentlyActive);
+                    <p class="mb-3">
+                        <strong>Current Status:</strong>
+                        @if (current != null)
+                        {
+                            <span class="badge bg-success">Active</span>
+                            <span class="ms-2">
+                                @current.MembershipTypeName &mdash; @current.StartYear&ndash;@(current.EndYear?.ToString() ?? "Lifetime")
+                            </span>
+                        }
+                        else
+                        {
+                            <span class="badge bg-secondary">Not Active</span>
+                        }
+                    </p>
+
+                    <table class="table table-sm">
+                        <thead>
+                            <tr>
+                                <th>Type</th>
+                                <th>Years</th>
+                                <th>Amount</th>
+                                <th>Paid By</th>
+                                <th>Date Received</th>
+                                <th>Members</th>
+                                <th></th>
+                            </tr>
+                        </thead>
+                        <tbody>
+                            @foreach (var m in handler.Memberships)
+                            {
+                                <tr>
+                                    <td>@m.MembershipTypeName</td>
+                                    <td>@m.StartYear&ndash;@(m.EndYear?.ToString() ?? "Lifetime")</td>
+                                    <td>@(m.Amount.HasValue ? $"${m.Amount.Value:N2}" : "N/A")</td>
+                                    <td>@m.PaidBy</td>
+                                    <td>@(m.DateReceived?.ToString("MMM dd, yyyy") ?? "N/A")</td>
+                                    <td>@string.Join(", ", m.Members.Select(x => x.HandlerName))</td>
+                                    <td>
+                                        @if (m.IsCurrentlyActive)
+                                        {
+                                            <span class="badge bg-success">Active</span>
+                                        }
+                                    </td>
+                                </tr>
+                            }
+                        </tbody>
+                    </table>
+                }
             </div>
         </div>
 
