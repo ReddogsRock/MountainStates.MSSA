@@ -16,7 +16,8 @@
         <div class="col">
             <h2>Events</h2>
         </div>
-        @if (UserSecurity.IsAuthorized(PageState.User, RoleNames.Admin))
+        @if (UserSecurity.IsAuthorized(PageState.User, RoleNames.Admin) ||
+                UserSecurity.IsAuthorized(PageState.User, MSSARoles.TrialSecretary))
         {
             <div class="col-auto">
                 <ActionLink Action="Edit" Security="SecurityAccessLevel.Edit" Text="Add Event"
@@ -193,7 +194,7 @@
                             <td>
                                 <ActionLink Action="Detail" Parameters="@($"id={evt.EventId}")"
                                             Text="View" ResourceKey="ViewEvent" Class="btn btn-sm btn-info me-1" />
-                                @if (UserSecurity.IsAuthorized(PageState.User, RoleNames.Admin))
+                                @if (CanEdit(evt))
                                 {
                                     <ActionLink Action="Edit" Parameters="@($"id={evt.EventId}")"
                                                 Security="SecurityAccessLevel.Edit" Text="Edit"
@@ -301,5 +302,17 @@
     private void ToggleFilters()
     {
         showFilters = !showFilters;
+    }
+
+    // Admins can edit any event; Trial Secretaries only the ones they created.
+    private bool CanEdit(MSSA_Event evt)
+    {
+        if (UserSecurity.IsAuthorized(PageState.User, RoleNames.Admin))
+        {
+            return true;
+        }
+
+        return UserSecurity.IsAuthorized(PageState.User, MSSARoles.TrialSecretary)
+            && evt.CreatedByUserId == PageState.User.UserId;
     }
 }

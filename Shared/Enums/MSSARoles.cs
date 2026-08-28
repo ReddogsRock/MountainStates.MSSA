@@ -5,5 +5,6 @@
         public const string Admin = "Admin";
         public const string Scorekeeper = "Scorekeeper";
         public const string Public = "Public";
+        public const string TrialSecretary = "Trial Secretary";
     }
 }

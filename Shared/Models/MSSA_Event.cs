@@ -67,6 +67,11 @@ namespace MountainStates.MSSA.Module.MSSA_Events.Models
         public DateTime ModifiedDate { get; set; }
         public bool IsActive { get; set; } = true;
 
+        // Owner of this event (Oqtane UserId). Null for events created before this field
+        // existed, or by an Admin acting outside the Trial Secretary ownership model.
+        // Trial Secretaries may only edit/delete events where this matches their own UserId.
+        public int? CreatedByUserId { get; set; }
+
         // Navigation properties (not mapped to DB)
         [NotMapped]
         public string StateName { get; set; }

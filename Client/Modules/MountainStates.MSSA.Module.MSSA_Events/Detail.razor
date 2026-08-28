@@ -1,6 +1,7 @@
 @using MountainStates.MSSA.Module.MSSA_Entries.Models
 @using MountainStates.MSSA.Module.MSSA_Events.Services
 @using MountainStates.MSSA.Module.MSSA_Events.Models
+@using MountainStates.MSSA.Module.MSSA_Handlers.Enums
 @using Oqtane.Modules.Controls
 
 @namespace MountainStates.MSSA.Module.MSSA_Events
@@ -22,7 +23,7 @@ else
             </div>
             <div class="col-auto">
                 <ActionLink Action="Index" Text="Back to List" ResourceKey="BackToList" Class="btn btn-secondary me-2" />
-                @if (UserSecurity.IsAuthorized(PageState.User, RoleNames.Admin))
+                @if (CanEdit())
                 {
                     <ActionLink Action="Edit" Parameters="@($"id={evt.EventId}")"
                                 Security="SecurityAccessLevel.Edit" Text="Edit"
@@ -378,6 +379,18 @@ else
 
     private string FlyerDownloadUrl =>
         $"{PageState.Alias.BaseUrl}/api/MSSA_Event/{evt.EventId}/flyer?moduleid={ModuleState.ModuleId}";
+
+    // Admins can edit any event; Trial Secretaries only the ones they created.
+    private bool CanEdit()
+    {
+        if (UserSecurity.IsAuthorized(PageState.User, RoleNames.Admin))
+        {
+            return true;
+        }
+
+        return UserSecurity.IsAuthorized(PageState.User, MSSARoles.TrialSecretary)
+            && evt.CreatedByUserId == PageState.User.UserId;
+    }
 
     protected override async Task OnInitializedAsync()
     {

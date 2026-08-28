@@ -6,6 +6,7 @@ using Oqtane.Controllers;
 using Oqtane.Enums;
 using Oqtane.Infrastructure;
 using Oqtane.Shared;
+using Oqtane.Extensions;
 using System;
 using System.Collections.Generic;
 using System.IO;
@@ -148,7 +149,8 @@ namespace MountainStates.MSSA.Module.MSSA_Events.Controllers
         {
             try
             {
-                if (!IsAuthorizedForRole(MSSARoles.Admin))
+                var existing = await _manager.GetEventAsync(eventId, moduleId);
+                if (!IsAuthorizedForEvent(existing))
                 {
                     _logger.Log(LogLevel.Error, this, LogFunction.Security, "Unauthorized offerings save attempt for event {EventId}", eventId);
                     HttpContext.Response.StatusCode = (int)System.Net.HttpStatusCode.Forbidden;
@@ -173,8 +175,16 @@ namespace MountainStates.MSSA.Module.MSSA_Events.Controllers
         {
             try
             {
-                if (ModelState.IsValid && IsAuthorizedForRole(MSSARoles.Admin))
+                if (ModelState.IsValid && IsAuthorizedForRole(MSSARoles.TrialSecretary))
                 {
+                    if (!IsValidFlyerUpload(evt))
+                    {
+                        HttpContext.Response.StatusCode = (int)System.Net.HttpStatusCode.BadRequest;
+                        return null;
+                    }
+
+                    // Owner is whoever creates the event - never trust a client-supplied value.
+                    evt.CreatedByUserId = User.UserId();
                     SaveFlyerIfPresent(evt);
                     evt = await _manager.AddEventAsync(evt, moduleId);
                     _logger.Log(LogLevel.Information, this, LogFunction.Create, "Event added {Event}", evt);
@@ -201,8 +211,19 @@ namespace MountainStates.MSSA.Module.MSSA_Events.Controllers
         {
             try
             {
-                if (ModelState.IsValid && evt.EventId == id && IsAuthorizedForRole(MSSARoles.Admin))
+                var existing = await _manager.GetEventAsync(id, moduleId);
+
+                if (ModelState.IsValid && evt.EventId == id && existing != null && IsAuthorizedForEvent(existing))
                 {
+                    if (!IsValidFlyerUpload(evt))
+                    {
+                        HttpContext.Response.StatusCode = (int)System.Net.HttpStatusCode.BadRequest;
+                        return null;
+                    }
+
+                    // Ownership is set at creation and never changes via edit, regardless of
+                    // what the submitted payload contains.
+                    evt.CreatedByUserId = existing.CreatedByUserId;
                     SaveFlyerIfPresent(evt);
                     evt = await _manager.UpdateEventAsync(evt, moduleId);
                     _logger.Log(LogLevel.Information, this, LogFunction.Update, "Event updated {Event}", evt);
@@ -229,7 +250,9 @@ namespace MountainStates.MSSA.Module.MSSA_Events.Controllers
         {
             try
             {
-                if (IsAuthorizedForRole(MSSARoles.Admin))
+                var existing = await _manager.GetEventAsync(id, moduleId);
+
+                if (IsAuthorizedForEvent(existing))
                 {
                     await _manager.DeleteEventAsync(id, moduleId);
                     _logger.Log(LogLevel.Information, this, LogFunction.Delete, "Event deleted {EventId}", id);
@@ -286,6 +309,19 @@ namespace MountainStates.MSSA.Module.MSSA_Events.Controllers
             };
         }
 
+        // Flyers are PDF-only. No upload this request (UploadFlyerContentBase64 empty) is
+        // always valid - nothing to check. The client's accept filter and extension check
+        // are UX only; this is the actual enforcement boundary.
+        private static bool IsValidFlyerUpload(MSSA_Event evt)
+        {
+            if (string.IsNullOrEmpty(evt.UploadFlyerContentBase64))
+            {
+                return true;
+            }
+
+            return string.Equals(Path.GetExtension(evt.UploadFlyerFileName), ".pdf", StringComparison.OrdinalIgnoreCase);
+        }
+
         // Writes an uploaded flyer to disk and sets FlyerFileName/FlyerPath on the event.
         // If no file was uploaded this request (UploadFlyerContentBase64 empty), the event's
         // existing FlyerFileName/FlyerPath - already set from the client's copy of the record -
@@ -311,6 +347,21 @@ namespace MountainStates.MSSA.Module.MSSA_Events.Controllers
         private bool IsAuthorizedForRole(string role)
         {
             return User.IsInRole(role) || User.IsInRole(RoleNames.Admin);
+        }
+
+        // Admins can edit/delete any event. Trial Secretaries only their own -
+        // ownership is always checked against the DB record, never the request payload.
+        private bool IsAuthorizedForEvent(MSSA_Event existing)
+        {
+            if (User.IsInRole(RoleNames.Admin))
+            {
+                return true;
+            }
+
+            return existing != null
+                && User.IsInRole(MSSARoles.TrialSecretary)
+                && existing.CreatedByUserId.HasValue
+                && existing.CreatedByUserId.Value == User.UserId();
         }
     }
 }

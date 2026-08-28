@@ -3,6 +3,7 @@
 @using MountainStates.MSSA.Module.MSSA_Events.Enums
 @using MountainStates.MSSA.Module.MSSA_Handlers.Services
 @using MountainStates.MSSA.Module.MSSA_Handlers.Models
+@using MountainStates.MSSA.Module.MSSA_Handlers.Enums
 @using MountainStates.MSSA.Module.MSSA_Entries.Services
 @using MountainStates.MSSA.Module.MSSA_Entries.Models
 @using Oqtane.Modules.Controls
@@ -134,7 +135,8 @@
                 <div class="row mb-3">
                     <div class="col-md-6">
                         <label for="flyer" class="form-label">Event Flyer</label>
-                        <InputFile id="flyer" class="form-control" OnChange="OnFlyerSelected" />
+                        <InputFile id="flyer" class="form-control" accept=".pdf,application/pdf" OnChange="OnFlyerSelected" />
+                        <small class="form-text text-muted">PDF only.</small>
                         @if (selectedFlyer != null)
                         {
                             <small class="form-text text-muted">Selected: @selectedFlyer.Name</small>
@@ -437,6 +439,15 @@
             {
                 eventId = int.Parse(PageState.QueryString["id"]);
                 evt = await EventService.GetEventAsync(eventId, ModuleState.ModuleId);
+
+                if (!CanEdit(evt))
+                {
+                    // Trial Secretary trying to edit an event they don't own - bounce out
+                    // before they fill in a form the server will just reject.
+                    NavigationManager.NavigateTo(NavigateUrl());
+                    return;
+                }
+
                 evt.Offerings ??= new List<MSSA_EventClassOffering>();
                 trials = await EventService.GetEventTrialsAsync(eventId, ModuleState.ModuleId);
             }
@@ -457,6 +468,20 @@
             await logger.LogError(ex, "Error loading event for edit");
             AddModuleMessage("Error loading event", MessageType.Error);
         }
+    }
+
+    // Admins can edit any event; Trial Secretaries only the ones they created.
+    // Only called for an existing event loaded by id - the "Add Event" (eventId == -1)
+    // path never reaches this check.
+    private bool CanEdit(MSSA_Event evt)
+    {
+        if (UserSecurity.IsAuthorized(PageState.User, RoleNames.Admin))
+        {
+            return true;
+        }
+
+        return UserSecurity.IsAuthorized(PageState.User, MSSARoles.TrialSecretary)
+            && evt.CreatedByUserId == PageState.User.UserId;
     }
 
     private void AddOffering()
@@ -547,6 +572,14 @@
 
     private void OnFlyerSelected(InputFileChangeEventArgs e)
     {
+        if (Path.GetExtension(e.File.Name).ToLowerInvariant() != ".pdf")
+        {
+            errorMessage = "Event Flyer must be a PDF file.";
+            selectedFlyer = null;
+            return;
+        }
+
+        errorMessage = "";
         selectedFlyer = e.File;
     }
 
