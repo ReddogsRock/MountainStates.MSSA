@@ -21,8 +21,7 @@ else
             </div>
             <div class="col-auto">
                 <ActionLink Action="Index" Text="Back to List" ResourceKey="BackToList" Class="btn btn-secondary me-2" />
-                @if (UserSecurity.IsAuthorized(PageState.User, RoleNames.Admin) ||
-                            UserSecurity.IsAuthorized(PageState.User, MSSARoles.Scorekeeper))
+                @if (CanEdit())
                 {
                     <ActionLink Action="Edit" Parameters="@($"id={entry.EntryId}")"
                                 Security="SecurityAccessLevel.Edit" Text="Edit"
@@ -194,5 +193,19 @@ else
             await logger.LogError(ex, "Error loading entry details");
             AddModuleMessage("Error loading entry details", MessageType.Error);
         }
+    }
+
+    // Admin/Scorekeeper can edit any entry; a Trial Secretary only entries whose
+    // Event they own.
+    private bool CanEdit()
+    {
+        if (UserSecurity.IsAuthorized(PageState.User, RoleNames.Admin) ||
+            UserSecurity.IsAuthorized(PageState.User, MSSARoles.Scorekeeper))
+        {
+            return true;
+        }
+
+        return UserSecurity.IsAuthorized(PageState.User, MSSARoles.TrialSecretary)
+            && entry.EventCreatedByUserId == PageState.User.UserId;
     }
 }

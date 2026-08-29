@@ -5,7 +5,9 @@ using Oqtane.Controllers;
 using Oqtane.Enums;
 using Oqtane.Infrastructure;
 using Oqtane.Shared;
+using Oqtane.Extensions;
 using System.Collections.Generic;
+using System.Linq;
 using System.Threading.Tasks;
 using MountainStates.MSSA.Module.MSSA_Entries.Manager;
 using MountainStates.MSSA.Module.MSSA_Entries.Models;
@@ -80,7 +82,7 @@ namespace MountainStates.MSSA.Module.MSSA_Entries.Controllers
         {
             try
             {
-                if (ModelState.IsValid && (IsAuthorizedForRole(MSSARoles.Admin) || IsAuthorizedForRole(MSSARoles.Scorekeeper)))
+                if (ModelState.IsValid && await IsAuthorizedToCreateEntryAsync(entry, moduleId))
                 {
                     entry = await _manager.AddEntryAsync(entry, moduleId);
                     _logger.Log(LogLevel.Information, this, LogFunction.Create, "Entry added {Entry}", entry);
@@ -107,8 +109,14 @@ namespace MountainStates.MSSA.Module.MSSA_Entries.Controllers
         {
             try
             {
-                if (ModelState.IsValid && entry.EntryId == id && (IsAuthorizedForRole(MSSARoles.Admin) || IsAuthorizedForRole(MSSARoles.Scorekeeper)))
+                var existing = await _manager.GetEntryAsync(id, moduleId);
+
+                if (ModelState.IsValid && entry.EntryId == id && existing != null && IsAuthorizedForEntry(existing))
                 {
+                    // Trial cannot be changed after creation (enforced client-side too) -
+                    // pin it server-side so a tampered payload can't move an entry into a
+                    // different trial/event.
+                    entry.TrialId = existing.TrialId;
                     entry = await _manager.UpdateEntryAsync(entry, moduleId);
                     _logger.Log(LogLevel.Information, this, LogFunction.Update, "Entry updated {Entry}", entry);
                     return entry;
@@ -134,7 +142,9 @@ namespace MountainStates.MSSA.Module.MSSA_Entries.Controllers
         {
             try
             {
-                if (IsAuthorizedForRole(MSSARoles.Admin) || IsAuthorizedForRole(MSSARoles.Scorekeeper))
+                var existing = await _manager.GetEntryAsync(id, moduleId);
+
+                if (IsAuthorizedForEntry(existing))
                 {
                     await _manager.DeleteEntryAsync(id, moduleId);
                     _logger.Log(LogLevel.Information, this, LogFunction.Delete, "Entry deleted {EntryId}", id);
@@ -177,14 +187,16 @@ namespace MountainStates.MSSA.Module.MSSA_Entries.Controllers
         {
             try
             {
-                if (!IsAuthorizedForRole(MSSARoles.Admin) && !IsAuthorizedForRole(MSSARoles.Scorekeeper))
+                assignments ??= new List<RunOrderEntry>();
+
+                if (!await IsAuthorizedForRunOrderAsync(assignments, moduleId))
                 {
                     _logger.Log(LogLevel.Error, this, LogFunction.Security, "Unauthorized run order save attempt");
                     HttpContext.Response.StatusCode = (int)System.Net.HttpStatusCode.Forbidden;
                     return null;
                 }
 
-                var saved = await _manager.SaveRunOrderAsync(assignments ?? new List<RunOrderEntry>(), moduleId);
+                var saved = await _manager.SaveRunOrderAsync(assignments, moduleId);
                 _logger.Log(LogLevel.Information, this, LogFunction.Update, "Run order saved ({Count} entries)", saved.Count);
                 return saved;
             }
@@ -223,6 +235,69 @@ namespace MountainStates.MSSA.Module.MSSA_Entries.Controllers
         private bool IsAuthorizedForRole(string role)
         {
             return User.IsInRole(role) || User.IsInRole(RoleNames.Admin);
+        }
+
+        // Admin/Scorekeeper can add an entry to any trial. A Trial Secretary only to a
+        // trial whose Event they own.
+        private async Task<bool> IsAuthorizedToCreateEntryAsync(MSSA_Entry entry, int moduleId)
+        {
+            if (User.IsInRole(RoleNames.Admin) || User.IsInRole(MSSARoles.Scorekeeper))
+            {
+                return true;
+            }
+
+            if (!User.IsInRole(MSSARoles.TrialSecretary))
+            {
+                return false;
+            }
+
+            var ownerId = await _manager.GetEventOwnerForTrialAsync(entry.TrialId, moduleId);
+            return ownerId.HasValue && ownerId.Value == User.UserId();
+        }
+
+        // Admin/Scorekeeper can save a run order for any trial. A Trial Secretary only
+        // for trials whose Event they own - checked for every distinct trial referenced,
+        // since a tampered payload could otherwise mix in entries from a trial they
+        // don't own.
+        private async Task<bool> IsAuthorizedForRunOrderAsync(List<RunOrderEntry> assignments, int moduleId)
+        {
+            if (User.IsInRole(RoleNames.Admin) || User.IsInRole(MSSARoles.Scorekeeper))
+            {
+                return true;
+            }
+
+            if (!User.IsInRole(MSSARoles.TrialSecretary) || !assignments.Any())
+            {
+                return false;
+            }
+
+            var trialIds = assignments.Select(a => a.TrialId).Distinct();
+            foreach (var trialId in trialIds)
+            {
+                var ownerId = await _manager.GetEventOwnerForTrialAsync(trialId, moduleId);
+                if (!ownerId.HasValue || ownerId.Value != User.UserId())
+                {
+                    return false;
+                }
+            }
+
+            return true;
+        }
+
+        // Admin/Scorekeeper can edit/delete any entry. A Trial Secretary only an entry
+        // whose Trial's Event they own - checked against the DB record, never the
+        // request payload.
+        private bool IsAuthorizedForEntry(MSSA_Entry existing)
+        {
+            if (User.IsInRole(RoleNames.Admin) || User.IsInRole(MSSARoles.Scorekeeper))
+            {
+                return true;
+            }
+
+            return existing != null
+                && User.IsInRole(MSSARoles.TrialSecretary)
+                && existing.EventCreatedByUserId.HasValue
+                && existing.EventCreatedByUserId.Value == User.UserId();
         }
     }
 }

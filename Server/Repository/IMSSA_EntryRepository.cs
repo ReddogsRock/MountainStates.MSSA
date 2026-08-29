@@ -14,6 +14,10 @@ namespace MountainStates.MSSA.Module.MSSA_Entries.Repository
         Task<MSSA_Entry> UpdateEntryAsync(MSSA_Entry entry);
         Task DeleteEntryAsync(int entryId);
 
+        // Resolves the owner of the Event a Trial belongs to (MSSA_Event.CreatedByUserId),
+        // for authorizing entry creation before an Entry row exists.
+        Task<int?> GetEventOwnerForTrialAsync(int trialId);
+
         // Run order: propose (not persisted, all classes at once in fixed order) ->
         // review/edit client-side -> save (persists, returns the saved list back).
         Task<List<RunOrderEntry>> GetProposedRunOrderAsync(int trialId);

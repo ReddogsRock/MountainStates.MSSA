@@ -23,6 +23,54 @@
         link.click();
         document.body.removeChild(link);
     };
+
+    // Explicitly fetches a script and waits for it to finish loading, rather than
+    // relying on a <script src> tag rendered by a Blazor component (which isn't
+    // guaranteed to actually execute). Safe to call more than once for the same URL.
+    window.mssaLoadScript = (src) => {
+        if (document.querySelector(`script[src="${src}"]`)) {
+            return Promise.resolve();
+        }
+        return new Promise((resolve, reject) => {
+            const script = document.createElement('script');
+            script.src = src;
+            script.onload = () => resolve();
+            script.onerror = () => reject(new Error('Failed to load ' + src));
+            document.head.appendChild(script);
+        });
+    };
+
+    // Landscape, gridlined table export - used by the "Export to PDF" button.
+    window.mssaExportPdf = async (fileName, title, headers, rows) => {
+        if (!window.jspdf) {
+            await window.mssaLoadScript('https://cdnjs.cloudflare.com/ajax/libs/jspdf/2.5.1/jspdf.umd.min.js');
+        }
+        if (!window.jspdf.jsPDF.API.autoTable) {
+            await window.mssaLoadScript('https://cdnjs.cloudflare.com/ajax/libs/jspdf-autotable/3.8.4/jspdf.plugin.autotable.min.js');
+        }
+
+        const { jsPDF } = window.jspdf;
+        const doc = new jsPDF({ orientation: 'landscape' });
+        doc.setFontSize(14);
+        doc.text(title, 14, 15);
+        doc.autoTable({
+            head: [headers],
+            body: rows,
+            startY: 20,
+            theme: 'grid',
+            styles: { fontSize: 8, lineWidth: 0.1, lineColor: [0, 0, 0] },
+            headStyles: { fillColor: [230, 230, 230], textColor: [0, 0, 0] },
+            // autoTable stretches columns to fill the page width, which otherwise gives
+            // Class/Run Order/Handler far more room than their content needs - cap them
+            // so the numeric/blank columns get the space instead.
+            columnStyles: {
+                0: { cellWidth: 26 },  // Class
+                1: { cellWidth: 14 },  // Run Order
+                2: { cellWidth: 24 }   // Handler
+            }
+        });
+        doc.save(fileName);
+    };
 </script>
 
 <div class="container-fluid">
@@ -31,7 +79,8 @@
             <h2>Trial Entries</h2>
         </div>
         @if (UserSecurity.IsAuthorized(PageState.User, RoleNames.Admin) ||
-                UserSecurity.IsAuthorized(PageState.User, MSSARoles.Scorekeeper))
+                UserSecurity.IsAuthorized(PageState.User, MSSARoles.Scorekeeper) ||
+                UserSecurity.IsAuthorized(PageState.User, MSSARoles.TrialSecretary))
         {
             <div class="col-auto">
                 <ActionLink Action="Edit" Security="SecurityAccessLevel.Edit" Text="Add Entry"
@@ -46,12 +95,9 @@
             <label for="eventSelect" class="form-label">Select Event</label>
             <select id="eventSelect" class="form-select" @bind="selectedEventId" @bind:after="OnEventChanged">
                 <option value="">-- Select Event --</option>
-                @if (events != null)
+                @foreach (var evt in VisibleEvents)
                 {
-                    @foreach (var evt in events)
-                    {
-                        <option value="@evt.EventId">@evt.EventName - @evt.DateRange</option>
-                    }
+                    <option value="@evt.EventId">@evt.EventName - @evt.DateRange</option>
                 }
             </select>
         </div>
@@ -79,18 +125,18 @@
                 <h4>Entries for Selected Trial</h4>
             </div>
             @if (UserSecurity.IsAuthorized(PageState.User, RoleNames.Admin) ||
-                    UserSecurity.IsAuthorized(PageState.User, MSSARoles.Scorekeeper))
+                    UserSecurity.IsAuthorized(PageState.User, MSSARoles.Scorekeeper) ||
+                    UserSecurity.IsAuthorized(PageState.User, MSSARoles.TrialSecretary))
             {
                 <div class="col-auto">
                     <button class="btn btn-secondary btn-sm me-2" @onclick="GenerateProposal" disabled="@(entries == null || !entries.Any())">
                         <span class="oi oi-random"></span> Generate Run Order
                     </button>
-                    <button class="btn btn-outline-secondary btn-sm me-2" @onclick="ExportForScoring" disabled="@(entries == null || !entries.Any())">
-                        Export for Scoring
+                    <button class="btn btn-outline-secondary btn-sm me-2" @onclick="ExportToExcel" disabled="@(entries == null || !entries.Any())">
+                        Export to Excel
                     </button>
-                    <InputFile OnChange="ImportScoresFile" style="display:none" id="scoresFileInput" />
-                    <button class="btn btn-outline-secondary btn-sm" onclick="document.getElementById('scoresFileInput').click()">
-                        Import Scores
+                    <button class="btn btn-outline-secondary btn-sm" @onclick="ExportToPdf" disabled="@(entries == null || !entries.Any())">
+                        Export to PDF
                     </button>
                 </div>
             }
@@ -264,8 +310,7 @@
                                         <td>
                                             <ActionLink Action="Detail" Parameters="@($"id={entry.EntryId}")"
                                                         Text="View" ResourceKey="ViewEntry" Class="btn btn-sm btn-info me-1" />
-                                            @if (UserSecurity.IsAuthorized(PageState.User, RoleNames.Admin) ||
-                                                                        UserSecurity.IsAuthorized(PageState.User, MSSARoles.Scorekeeper))
+                                            @if (CanEdit(entry))
                                             {
                                                 <ActionLink Action="Edit" Parameters="@($"id={entry.EntryId}")"
                                                             Security="SecurityAccessLevel.Edit" Text="Edit"
@@ -298,6 +343,23 @@
 
     private int selectedEventId = 0;
     private int selectedTrialId = 0;
+
+    // Admin/Scorekeeper see every event; a Trial Secretary only events they own.
+    private IEnumerable<MSSA_Event> VisibleEvents
+    {
+        get
+        {
+            if (events == null) return Enumerable.Empty<MSSA_Event>();
+
+            if (UserSecurity.IsAuthorized(PageState.User, RoleNames.Admin) ||
+                UserSecurity.IsAuthorized(PageState.User, MSSARoles.Scorekeeper))
+            {
+                return events;
+            }
+
+            return events.Where(e => e.CreatedByUserId == PageState.User.UserId);
+        }
+    }
 
     private bool showRunOrderPreview = false;
     private List<RunOrderEntry> proposedRunOrder;
@@ -368,6 +430,20 @@
             selectedTrialId = 0;
             entries = null;
         }
+    }
+
+    // Admin/Scorekeeper can edit any entry; a Trial Secretary only entries whose
+    // Event they own.
+    private bool CanEdit(EntryListItem entry)
+    {
+        if (UserSecurity.IsAuthorized(PageState.User, RoleNames.Admin) ||
+            UserSecurity.IsAuthorized(PageState.User, MSSARoles.Scorekeeper))
+        {
+            return true;
+        }
+
+        return UserSecurity.IsAuthorized(PageState.User, MSSARoles.TrialSecretary)
+            && entry.EventCreatedByUserId == PageState.User.UserId;
     }
 
     private async Task LoadTrialEntries()
@@ -457,7 +533,7 @@
         proposedRunOrder = null;
     }
 
-    private async Task ExportForScoring()
+    private async Task ExportToExcel()
     {
         if (entries == null || !entries.Any())
         {
@@ -499,6 +575,68 @@
         var fileName = $"Scoring_Trial{selectedTrialId}_{DateTime.Now:yyyyMMdd}.csv";
 
         await JSRuntime.InvokeVoidAsync("mssaDownloadFile", fileName, "text/csv", base64);
+    }
+
+    // Landscape, gridlined results sheet - one row per entry, matching the on-screen
+    // grouping/order (class print order, then run order).
+    private async Task ExportToPdf()
+    {
+        if (entries == null || !entries.Any())
+        {
+            return;
+        }
+
+        var ordered = entries
+            .OrderBy(e => classes?.FirstOrDefault(c => c.ClassName == e.ClassName && c.SubClassName == e.SubClassName)?.PrintOrder ?? 999)
+            .ThenBy(e => e.RunOrder ?? int.MaxValue);
+
+        var headers = new[]
+        {
+            "Class", "Run Order", "Handler", "Dog", "Time", "Tie Time",
+            "#1", "#2", "#3", "#4", "#5", "#6", "#7", "#8", "#9",
+            "Total Score", "Placing", "Points"
+        };
+        var rows = ordered.Select(e =>
+        {
+            // TotalScore is computed server-side as a straight sum with nulls treated
+            // as 0, so it comes back as a real 0 - not null - before any obstacle score
+            // is entered. Only show it once at least one obstacle score actually exists;
+            // otherwise leave it blank like everything else that hasn't been scored yet.
+            bool hasAnyScore = e.ObstacleScore1.HasValue || e.ObstacleScore2.HasValue || e.ObstacleScore3.HasValue ||
+                e.ObstacleScore4.HasValue || e.ObstacleScore5.HasValue || e.ObstacleScore6.HasValue ||
+                e.ObstacleScore7.HasValue || e.ObstacleScore8.HasValue || e.ObstacleScore9.HasValue;
+
+            return new[]
+            {
+                $"{e.ClassName} {e.SubClassName}".Trim(),
+                e.RunOrder?.ToString() ?? "",
+                e.HandlerName,
+                e.DogName,
+                FormatTime(e.RunTime),
+                FormatTime(e.TieBreakerTime),
+                e.ObstacleScore1?.ToString() ?? "",
+                e.ObstacleScore2?.ToString() ?? "",
+                e.ObstacleScore3?.ToString() ?? "",
+                e.ObstacleScore4?.ToString() ?? "",
+                e.ObstacleScore5?.ToString() ?? "",
+                e.ObstacleScore6?.ToString() ?? "",
+                e.ObstacleScore7?.ToString() ?? "",
+                e.ObstacleScore8?.ToString() ?? "",
+                e.ObstacleScore9?.ToString() ?? "",
+                hasAnyScore ? e.TotalScore?.ToString("F2") ?? "" : "",
+                e.Placing?.ToString() ?? "",
+                e.TrialPoints?.ToString() ?? ""
+            };
+        }).ToArray();
+
+        var trial = trials?.FirstOrDefault(t => t.TrialId == selectedTrialId);
+        var title = trial != null
+            ? $"{trial.TrialName} - {trial.TrialDate:MMM dd, yyyy} ({trial.Stock})"
+            : $"Trial {selectedTrialId} Entries";
+
+        var fileName = $"Entries_Trial{selectedTrialId}_{DateTime.Now:yyyyMMdd}.pdf";
+
+        await JSRuntime.InvokeVoidAsync("mssaExportPdf", fileName, title, headers, rows);
     }
 
     private static string FormatTime(TimeSpan? ts)

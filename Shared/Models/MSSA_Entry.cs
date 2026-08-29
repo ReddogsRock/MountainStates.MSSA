@@ -81,6 +81,12 @@ namespace MountainStates.MSSA.Module.MSSA_Entries.Models
         [NotMapped]
         public int Year { get; set; }
 
+        // Owner of the Event this entry's Trial belongs to (MSSA_Event.CreatedByUserId).
+        // Entries have no owner of their own - a Trial Secretary may edit/delete an entry
+        // only when this matches their UserId, same as editing the Event itself.
+        [NotMapped]
+        public int? EventCreatedByUserId { get; set; }
+
         [NotMapped]
         public decimal? TotalScore
         {

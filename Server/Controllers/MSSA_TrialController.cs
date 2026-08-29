@@ -5,6 +5,7 @@ using Oqtane.Controllers;
 using Oqtane.Enums;
 using Oqtane.Infrastructure;
 using Oqtane.Shared;
+using Oqtane.Extensions;
 using System.Collections.Generic;
 using System.Threading.Tasks;
 using MountainStates.MSSA.Module.MSSA_Events.Manager;
@@ -63,7 +64,7 @@ namespace MountainStates.MSSA.Module.MSSA_Events.Controllers
         {
             try
             {
-                if (ModelState.IsValid && IsAuthorizedForRole(MSSARoles.Admin))
+                if (ModelState.IsValid && await IsAuthorizedForEventAsync(trial.EventId, moduleId))
                 {
                     trial = await _manager.AddTrialAsync(trial, moduleId);
                     _logger.Log(LogLevel.Information, this, LogFunction.Create, "Trial added {Trial}", trial);
@@ -90,8 +91,14 @@ namespace MountainStates.MSSA.Module.MSSA_Events.Controllers
         {
             try
             {
-                if (ModelState.IsValid && trial.TrialId == id && IsAuthorizedForRole(MSSARoles.Admin))
+                var existing = await _manager.GetTrialAsync(id, moduleId);
+
+                if (ModelState.IsValid && trial.TrialId == id && existing != null && await IsAuthorizedForEventAsync(existing.EventId, moduleId))
                 {
+                    // A trial's Event never changes via edit, regardless of what the
+                    // submitted payload contains - prevents moving a trial into an event
+                    // the caller doesn't own.
+                    trial.EventId = existing.EventId;
                     trial = await _manager.UpdateTrialAsync(trial, moduleId);
                     _logger.Log(LogLevel.Information, this, LogFunction.Update, "Trial updated {Trial}", trial);
                     return trial;
@@ -117,7 +124,9 @@ namespace MountainStates.MSSA.Module.MSSA_Events.Controllers
         {
             try
             {
-                if (IsAuthorizedForRole(MSSARoles.Admin))
+                var existing = await _manager.GetTrialAsync(id, moduleId);
+
+                if (existing != null && await IsAuthorizedForEventAsync(existing.EventId, moduleId))
                 {
                     await _manager.DeleteTrialAsync(id, moduleId);
                     _logger.Log(LogLevel.Information, this, LogFunction.Delete, "Trial deleted {TrialId}", id);
@@ -135,9 +144,22 @@ namespace MountainStates.MSSA.Module.MSSA_Events.Controllers
             }
         }
 
-        private bool IsAuthorizedForRole(string role)
+        // Admins can manage trials on any event. A Trial Secretary only on an event
+        // they own.
+        private async Task<bool> IsAuthorizedForEventAsync(int eventId, int moduleId)
         {
-            return User.IsInRole(role) || User.IsInRole(RoleNames.Admin);
+            if (User.IsInRole(RoleNames.Admin))
+            {
+                return true;
+            }
+
+            if (!User.IsInRole(MSSARoles.TrialSecretary))
+            {
+                return false;
+            }
+
+            var evt = await _manager.GetEventAsync(eventId, moduleId);
+            return evt != null && evt.CreatedByUserId.HasValue && evt.CreatedByUserId.Value == User.UserId();
         }
     }
 }

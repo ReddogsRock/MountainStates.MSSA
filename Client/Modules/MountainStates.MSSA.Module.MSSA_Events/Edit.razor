@@ -300,7 +300,7 @@
                                     <label class="form-label">Trial Date <span class="text-danger">*</span></label>
                                     <input type="date" class="form-control"
                                            value="@currentTrial.TrialDate.ToString("yyyy-MM-dd")"
-                                           @onchange="@(e => currentTrial.TrialDate = DateTime.Parse(e.Value.ToString()))" required />
+                                           @onchange="@(e => OnTrialDateChanged(e.Value?.ToString()))" required />
                                 </div>
                             </div>
                             <div class="row mb-2">
@@ -568,6 +568,17 @@
     {
         evt.StartDate = string.IsNullOrEmpty(value) ? null : DateTime.Parse(value);
         evt.PointYear = CalculatePointYear(evt.StartDate);
+    }
+
+    // A native date input reports "" while a segment is mid-edit and not yet a valid
+    // date (e.g. typing "0" as the first digit of a two-digit day) - ignore those
+    // transient states rather than crashing, and only commit once it's parseable.
+    private void OnTrialDateChanged(string value)
+    {
+        if (DateTime.TryParse(value, out var parsed))
+        {
+            currentTrial.TrialDate = parsed;
+        }
     }
 
     private void OnFlyerSelected(InputFileChangeEventArgs e)

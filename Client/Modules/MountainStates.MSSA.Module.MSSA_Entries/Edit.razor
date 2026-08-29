@@ -18,17 +18,6 @@
 @inject IMSSA_StateService StateService
 @inject NavigationManager NavigationManager
 
-<script suppress-error="BL9992">
-    window.mssaDownloadFile = (fileName, contentType, base64Content) => {
-        const link = document.createElement('a');
-        link.href = `data:${contentType};base64,${base64Content}`;
-        link.download = fileName;
-        document.body.appendChild(link);
-        link.click();
-        document.body.removeChild(link);
-    };
-</script>
-
 @if (entryId == -1)
 {
     @* ============ ADD ENTRIES (bulk workflow) ============ *@
@@ -58,12 +47,9 @@
                 <label for="addEventSelect" class="form-label"><strong>Event</strong> <span class="text-danger">*</span></label>
                 <select id="addEventSelect" class="form-select" @bind="selectedEventId" @bind:after="OnAddEventChanged">
                     <option value="">-- Select Event --</option>
-                    @if (events != null)
+                    @foreach (var evt in AddableEvents)
                     {
-                        @foreach (var evt in events)
-                        {
-                            <option value="@evt.EventId">@evt.EventName - @evt.DateRange</option>
-                        }
+                        <option value="@evt.EventId">@evt.EventName - @evt.DateRange</option>
                     }
                 </select>
             </div>
@@ -344,12 +330,6 @@
                 <div class="row mb-2 mx-0 pt-3">
                     <div class="col">
                         <h4>Entries for This Event</h4>
-                    </div>
-                    <div class="col-auto">
-                        <button type="button" class="btn btn-sm btn-outline-secondary" @onclick="ExportEntriesToExcel"
-                                disabled="@(eventEntries == null || !eventEntries.Any())">
-                            Export to Excel
-                        </button>
                     </div>
                 </div>
                 <div class="card-body">
@@ -687,6 +667,38 @@ else
 
     private HashSet<(int OfferingId, int TrialId)> checkedCells = new();
 
+    // Admin/Scorekeeper can add entries to any event; a Trial Secretary only to
+    // events they own. Used for the Add-mode Event dropdown.
+    private IEnumerable<MSSA_Event> AddableEvents
+    {
+        get
+        {
+            if (events == null) return Enumerable.Empty<MSSA_Event>();
+
+            if (UserSecurity.IsAuthorized(PageState.User, RoleNames.Admin) ||
+                UserSecurity.IsAuthorized(PageState.User, MSSARoles.Scorekeeper))
+            {
+                return events;
+            }
+
+            return events.Where(e => e.CreatedByUserId == PageState.User.UserId);
+        }
+    }
+
+    // Admin/Scorekeeper can edit any entry; a Trial Secretary only entries whose
+    // Event they own.
+    private bool CanEditEntry(MSSA_Entry entry)
+    {
+        if (UserSecurity.IsAuthorized(PageState.User, RoleNames.Admin) ||
+            UserSecurity.IsAuthorized(PageState.User, MSSARoles.Scorekeeper))
+        {
+            return true;
+        }
+
+        return UserSecurity.IsAuthorized(PageState.User, MSSARoles.TrialSecretary)
+            && entry.EventCreatedByUserId == PageState.User.UserId;
+    }
+
     protected override async Task OnInitializedAsync()
     {
         try
@@ -703,6 +715,14 @@ else
                 dogs = await DogService.GetDogsAsync(ModuleState.ModuleId);
 
                 entry = await EntryService.GetEntryAsync(entryId, ModuleState.ModuleId);
+
+                if (!CanEditEntry(entry))
+                {
+                    // Trial Secretary trying to edit an entry outside an event they own -
+                    // bounce out before they fill in a form the server will just reject.
+                    NavigationManager.NavigateTo(NavigateUrl());
+                    return;
+                }
 
                 // Load the event and trials for this entry
                 var allTrials = new List<MSSA_Trial>();
@@ -972,53 +992,6 @@ else
         }
     }
 
-    private async Task ExportEntriesToExcel()
-    {
-        if (eventEntries == null || !eventEntries.Any()) return;
-
-        var sb = new System.Text.StringBuilder();
-        sb.AppendLine("Trial,Trial Date,Stock,Level,Handler ID,Handler,Dog ID,Dog,Run Order,Placing,Points");
-
-        var ordered = eventEntries
-            .OrderBy(e => e.TrialDate)
-            .ThenBy(e => e.TrialId)
-            .ThenBy(e => classes?.FirstOrDefault(c => c.ClassName == e.ClassName && c.SubClassName == e.SubClassName)?.PrintOrder ?? 999)
-            .ThenBy(e => e.HandlerName);
-
-        foreach (var e in ordered)
-        {
-            var trialName = trials?.FirstOrDefault(t => t.TrialId == e.TrialId)?.TrialName ?? e.TrialDate.ToString("MM/dd/yyyy");
-
-            sb.AppendLine(string.Join(",",
-                CsvEscape(trialName),
-                CsvEscape(e.TrialDate.ToString("MM/dd/yyyy")),
-                CsvEscape(e.Stock),
-                CsvEscape($"{e.ClassName} {e.SubClassName}"),
-                CsvEscape(e.HandlerId.ToString()),
-                CsvEscape(e.HandlerName),
-                CsvEscape(e.DogId.ToString()),
-                CsvEscape(e.DogName),
-                CsvEscape(e.RunOrder?.ToString() ?? ""),
-                CsvEscape(e.Placing?.ToString() ?? ""),
-                CsvEscape(e.TrialPoints?.ToString() ?? "")));
-        }
-
-        var bytes = System.Text.Encoding.UTF8.GetBytes(sb.ToString());
-        var base64 = Convert.ToBase64String(bytes);
-        var fileName = $"Entries_Event{selectedEventId}_{DateTime.Now:yyyyMMdd}.csv";
-
-        await JSRuntime.InvokeVoidAsync("mssaDownloadFile", fileName, "text/csv", base64);
-    }
-
-    private static string CsvEscape(string value)
-    {
-        if (string.IsNullOrEmpty(value)) return "";
-        if (value.Contains(',') || value.Contains('"') || value.Contains('\n'))
-        {
-            return "\"" + value.Replace("\"", "\"\"") + "\"";
-        }
-        return value;
-    }
 
     // ============ EDIT MODE (unchanged) ============
 

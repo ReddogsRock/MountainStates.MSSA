@@ -64,7 +64,8 @@ namespace MountainStates.MSSA.Module.MSSA_Entries.Repository
                                      Stock = t.Stock,
                                      EventName = ev.EventName,
                                      TrialDate = t.TrialDate,
-                                     Year = ev.PointYear ?? t.TrialDate.Year
+                                     Year = ev.PointYear ?? t.TrialDate.Year,
+                                     EventCreatedByUserId = ev.CreatedByUserId
                                  })
                                 .OrderByDescending(e => e.TrialDate)
                                 .ToListAsync();
@@ -120,7 +121,8 @@ namespace MountainStates.MSSA.Module.MSSA_Entries.Repository
                                      EventName = ev.EventName,
                                      TrialDate = t.TrialDate,
                                      Stock = t.Stock,
-                                     Year = ev.PointYear ?? t.TrialDate.Year
+                                     Year = ev.PointYear ?? t.TrialDate.Year,
+                                     EventCreatedByUserId = ev.CreatedByUserId
                                  })
                                 .ToListAsync();
 
@@ -175,7 +177,8 @@ namespace MountainStates.MSSA.Module.MSSA_Entries.Repository
                                    Stock = t.Stock,
                                    EventName = ev.EventName,
                                    TrialDate = t.TrialDate,
-                                   Year = ev.PointYear ?? t.TrialDate.Year
+                                   Year = ev.PointYear ?? t.TrialDate.Year,
+                                   EventCreatedByUserId = ev.CreatedByUserId
                                })
                               .FirstOrDefaultAsync();
 
@@ -224,6 +227,19 @@ namespace MountainStates.MSSA.Module.MSSA_Entries.Repository
             }
         }
 
+        // Resolves the owner of the Event a Trial belongs to, for authorizing entry
+        // creation before an Entry row exists to carry EventCreatedByUserId itself.
+        public async Task<int?> GetEventOwnerForTrialAsync(int trialId)
+        {
+            using var db = await _dbContextFactory.CreateDbContextAsync();
+
+            return await (from t in db.MSSA_Trials
+                          join ev in db.MSSA_Events on t.EventId equals ev.EventId
+                          where t.TrialId == trialId
+                          select ev.CreatedByUserId)
+                         .FirstOrDefaultAsync();
+        }
+
         // Fixed class run order: Open runs first, then Nursery, Intermediate, Novice,
         // Junior - dogs are shuffled randomly within a class, but classes themselves
         // always run in this sequence. Anything not in this list (legacy/unusual
@@ -247,6 +263,7 @@ namespace MountainStates.MSSA.Module.MSSA_Entries.Repository
                                  select new RunOrderEntry
                                  {
                                      EntryId = e.EntryId,
+                                     TrialId = e.TrialId,
                                      ClassId = e.ClassId,
                                      ClassName = c.ClassName,
                                      SubClassName = c.SubClassName,

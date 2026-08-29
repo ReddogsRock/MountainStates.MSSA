@@ -5,6 +5,7 @@ namespace MountainStates.MSSA.Module.MSSA_Entries.Models
     public class RunOrderEntry
     {
         public int EntryId { get; set; }
+        public int TrialId { get; set; }
         public int RunOrder { get; set; }
 
         public int ClassId { get; set; }

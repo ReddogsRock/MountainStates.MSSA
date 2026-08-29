@@ -52,6 +52,10 @@ namespace MountainStates.MSSA.Module.MSSA_Events.Models
         // to check Futurity enrollment for the "+" marker on Nursery-class entries.
         public int Year { get; set; }
 
+        // Owner of the Event this entry's Trial belongs to (MSSA_Event.CreatedByUserId).
+        // Used to gate the per-entry Edit link to the Trial Secretary who owns the event.
+        public int? EventCreatedByUserId { get; set; }
+
         // Helper property for sorting
         public bool IsComplete => Placing.HasValue;
     }
