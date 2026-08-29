@@ -15,6 +15,8 @@ using MountainStates.MSSA.Module.MSSA_Events.Manager;
 using MountainStates.MSSA.Module.MSSA_Events.Models;
 using MountainStates.MSSA.Module.MSSA_Handlers.Enums;
 using MountainStates.MSSA.Module.MSSA_Entries.Models;
+using MountainStates.MSSA.Module.MSSA_Results.Enums;
+using System.Linq;
 
 namespace MountainStates.MSSA.Module.MSSA_Events.Controllers
 {
@@ -116,13 +118,40 @@ namespace MountainStates.MSSA.Module.MSSA_Events.Controllers
         {
             try
             {
-                return await _manager.GetTrialEntriesAsync(trialId, moduleId);
+                var entries = await _manager.GetTrialEntriesAsync(trialId, moduleId);
+
+                // Only actively-pending results are hidden from the public - NotSubmitted
+                // covers every event that predates this workflow (or simply never uses it),
+                // and those must keep displaying exactly as they always have. Empty list
+                // rather than Forbidden since this is a passive view (e.g. expanding a
+                // trial row on the public Calendar), not an explicit action attempt.
+                var first = entries.FirstOrDefault();
+                if (first != null
+                    && first.EventResultsApprovalStatus == EventResultsStatus.PendingApproval
+                    && !IsAuthorizedForEvent(first.EventCreatedByUserId))
+                {
+                    return new List<EntryListItem>();
+                }
+
+                return entries;
             }
             catch (System.Exception ex)
             {
                 _logger.Log(LogLevel.Error, this, LogFunction.Read, ex, "Error getting trial entries for {TrialId}", trialId);
                 throw;
             }
+        }
+
+        private bool IsAuthorizedForEvent(int? eventOwnerUserId)
+        {
+            if (User.IsInRole(RoleNames.Admin))
+            {
+                return true;
+            }
+
+            return eventOwnerUserId.HasValue
+                && User.IsInRole(MSSARoles.TrialSecretary)
+                && eventOwnerUserId.Value == User.UserId();
         }
 
         // GET: api/MSSA_Event/5/offerings?moduleid=x

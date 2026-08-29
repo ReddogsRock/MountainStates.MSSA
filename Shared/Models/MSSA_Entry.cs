@@ -43,6 +43,13 @@ namespace MountainStates.MSSA.Module.MSSA_Entries.Models
         public decimal? Penalty { get; set; }
         public int? TrialPoints { get; set; }
 
+        // Single raw score for the run, entered directly by a Trial Secretary through the
+        // Results module as an alternative to the 9-obstacle breakdown above. When present,
+        // it takes precedence over the obstacle sum wherever a run's total score is used
+        // (see TotalScore below) - the two entry methods are mutually exclusive per entry,
+        // not additive.
+        public decimal? EnteredTotalScore { get; set; }
+
         // Membership Status (affects scoring)
         public bool HandlerIsMSSAMember { get; set; } = false;
 
@@ -92,6 +99,11 @@ namespace MountainStates.MSSA.Module.MSSA_Entries.Models
         {
             get
             {
+                if (EnteredTotalScore.HasValue)
+                {
+                    return EnteredTotalScore;
+                }
+
                 decimal sum = 0;
                 if (ObstacleScore1.HasValue) sum += ObstacleScore1.Value;
                 if (ObstacleScore2.HasValue) sum += ObstacleScore2.Value;

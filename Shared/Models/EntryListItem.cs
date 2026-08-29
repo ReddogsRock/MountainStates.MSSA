@@ -29,6 +29,12 @@ namespace MountainStates.MSSA.Module.MSSA_Events.Models
         public int? TrialPoints { get; set; }
         public decimal? TotalScore { get; set; }
 
+        // Raw score entered directly via the Results module, if that entry method was
+        // used for this run instead of the 9-obstacle breakdown. TotalScore above already
+        // resolves to this when present - kept separately so the Results grid can tell
+        // whether a run was scored this way.
+        public decimal? EnteredTotalScore { get; set; }
+
         // Individual obstacle scores + Penalty + Comments - needed for the scoring
         // export/import round trip (SumOfObstacles/TotalScore alone aren't enough to
         // fill in or edit each obstacle).
@@ -55,6 +61,10 @@ namespace MountainStates.MSSA.Module.MSSA_Events.Models
         // Owner of the Event this entry's Trial belongs to (MSSA_Event.CreatedByUserId).
         // Used to gate the per-entry Edit link to the Trial Secretary who owns the event.
         public int? EventCreatedByUserId { get; set; }
+
+        // MSSA_Event.ResultsApprovalStatus for this entry's Event. Public-facing views
+        // (the Events Detail page) use this to hide results until they're Approved.
+        public string EventResultsApprovalStatus { get; set; }
 
         // Helper property for sorting
         public bool IsComplete => Placing.HasValue;

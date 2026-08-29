@@ -1,7 +1,9 @@
 ﻿using Microsoft.EntityFrameworkCore;
+using MountainStates.MSSA.Module.MSSA_Entries.Enums;
 using MountainStates.MSSA.Module.MSSA_Entries.Models;
 using MountainStates.MSSA.Module.MSSA_Events.Models;
 using MountainStates.MSSA.Module.MSSA_Handlers.Data;
+using MountainStates.MSSA.Module.MSSA_Results.Utilities;
 using Oqtane.Modules;
 using System;
 using System.Collections.Generic;
@@ -113,7 +115,9 @@ namespace MountainStates.MSSA.Module.MSSA_Entries.Repository
                                      ObstacleScore9 = e.ObstacleScore9,
                                      Penalty = e.Penalty,
                                      Comments = e.Comments,
-                                     TotalScore = (e.ObstacleScore1 ?? 0) + (e.ObstacleScore2 ?? 0) +
+                                     EnteredTotalScore = e.EnteredTotalScore,
+                                     TotalScore = e.EnteredTotalScore ??
+                                                 (e.ObstacleScore1 ?? 0) + (e.ObstacleScore2 ?? 0) +
                                                  (e.ObstacleScore3 ?? 0) + (e.ObstacleScore4 ?? 0) +
                                                  (e.ObstacleScore5 ?? 0) + (e.ObstacleScore6 ?? 0) +
                                                  (e.ObstacleScore7 ?? 0) + (e.ObstacleScore8 ?? 0) +
@@ -122,7 +126,8 @@ namespace MountainStates.MSSA.Module.MSSA_Entries.Repository
                                      TrialDate = t.TrialDate,
                                      Stock = t.Stock,
                                      Year = ev.PointYear ?? t.TrialDate.Year,
-                                     EventCreatedByUserId = ev.CreatedByUserId
+                                     EventCreatedByUserId = ev.CreatedByUserId,
+                                     EventResultsApprovalStatus = ev.ResultsApprovalStatus
                                  })
                                 .ToListAsync();
 
@@ -240,12 +245,6 @@ namespace MountainStates.MSSA.Module.MSSA_Entries.Repository
                          .FirstOrDefaultAsync();
         }
 
-        // Fixed class run order: Open runs first, then Nursery, Intermediate, Novice,
-        // Junior - dogs are shuffled randomly within a class, but classes themselves
-        // always run in this sequence. Anything not in this list (legacy/unusual
-        // classes) is appended after, alphabetically, so nothing silently vanishes.
-        private static readonly string[] ClassRunOrder = { "Open", "Nursery", "Intermediate", "Novice", "Junior" };
-
         // Builds a proposed run order for every entry in the trial (all classes at
         // once), NOT persisted - the caller reviews/edits this list and calls
         // SaveRunOrderAsync to actually commit it. Re-running this discards any
@@ -276,9 +275,9 @@ namespace MountainStates.MSSA.Module.MSSA_Entries.Repository
             var ordered = new List<RunOrderEntry>();
 
             var classNames = entries.Select(e => e.ClassName).Distinct().ToList();
-            var orderedClassNames = ClassRunOrder
+            var orderedClassNames = ClassRunOrder.Names
                 .Where(n => classNames.Contains(n))
-                .Concat(classNames.Where(n => !ClassRunOrder.Contains(n)).OrderBy(n => n));
+                .Concat(classNames.Where(n => !ClassRunOrder.Names.Contains(n)).OrderBy(n => n));
 
             int runOrder = 1;
             foreach (var className in orderedClassNames)
@@ -363,13 +362,13 @@ namespace MountainStates.MSSA.Module.MSSA_Entries.Repository
                 entry.TrialPoints = row.TrialPoints;
                 entry.Comments = row.Comments;
 
-                var runTime = ParseMinutesSeconds(row.RunTime);
+                var runTime = TimeParsingHelper.ParseMinutesSeconds(row.RunTime);
                 if (runTime.HasValue)
                 {
                     entry.RunTime = runTime.Value;
                 }
 
-                var tieBreakerTime = ParseMinutesSeconds(row.TieBreakerTime);
+                var tieBreakerTime = TimeParsingHelper.ParseMinutesSeconds(row.TieBreakerTime);
                 if (tieBreakerTime.HasValue)
                 {
                     entry.TieBreakerTime = tieBreakerTime.Value;
@@ -381,46 +380,6 @@ namespace MountainStates.MSSA.Module.MSSA_Entries.Repository
 
             await db.SaveChangesAsync();
             return updatedRows;
-        }
-
-        // Parses run/tie-breaker times. Accepts ':' or '.' as the minutes/seconds
-        // separator - both mean the same thing (MM:SS / MM.SS), '.' is just much
-        // easier to type on a numeric keypad while entering scores at the trial than
-        // switching to type a colon. A value with no separator at all is treated as a
-        // bare number of minutes (e.g. "10" -> 10:00).
-        //
-        // Examples: "10:35" -> 10:35, "10.35" -> 10:35, ".35" -> 0:35, "10" -> 10:00.
-        private static TimeSpan? ParseMinutesSeconds(string value)
-        {
-            if (string.IsNullOrWhiteSpace(value))
-            {
-                return null;
-            }
-
-            var trimmed = value.Trim();
-            char separator = trimmed.Contains(':') ? ':' : (trimmed.Contains('.') ? '.' : '\0');
-
-            if (separator != '\0')
-            {
-                var parts = trimmed.Split(separator);
-                if (parts.Length == 2)
-                {
-                    var minutesPart = string.IsNullOrEmpty(parts[0]) ? "0" : parts[0];
-                    if (int.TryParse(minutesPart, out var minutes) && int.TryParse(parts[1], out var seconds))
-                    {
-                        return new TimeSpan(0, 0, minutes, seconds);
-                    }
-                }
-                return null;
-            }
-
-            // No separator at all - bare number of minutes.
-            if (int.TryParse(trimmed, out var minutesOnly))
-            {
-                return TimeSpan.FromMinutes(minutesOnly);
-            }
-
-            return null;
         }
 
         // Classes

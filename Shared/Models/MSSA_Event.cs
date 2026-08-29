@@ -2,6 +2,7 @@
 using System.Collections.Generic;
 using System.ComponentModel.DataAnnotations;
 using System.ComponentModel.DataAnnotations.Schema;
+using MountainStates.MSSA.Module.MSSA_Results.Enums;
 
 namespace MountainStates.MSSA.Module.MSSA_Events.Models
 {
@@ -71,6 +72,18 @@ namespace MountainStates.MSSA.Module.MSSA_Events.Models
         // existed, or by an Admin acting outside the Trial Secretary ownership model.
         // Trial Secretaries may only edit/delete events where this matches their own UserId.
         public int? CreatedByUserId { get; set; }
+
+        // Results approval workflow (see EventResultsStatus). One-way: NotSubmitted ->
+        // PendingApproval -> Approved. Approval isn't a data-quality check - it's the
+        // admin's sign-off that the event's sanctioning fee has been paid, which is why
+        // there's no "rejected" state. Public views and cross-event rollups (TopScores)
+        // only show results once Approved.
+        [StringLength(20)]
+        public string ResultsApprovalStatus { get; set; } = EventResultsStatus.NotSubmitted;
+        public DateTime? ResultsSubmittedDate { get; set; }
+        public int? ResultsSubmittedByUserId { get; set; }
+        public DateTime? ResultsApprovedDate { get; set; }
+        public int? ResultsApprovedByUserId { get; set; }
 
         // Navigation properties (not mapped to DB)
         [NotMapped]

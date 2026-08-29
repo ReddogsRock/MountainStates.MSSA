@@ -500,13 +500,18 @@ namespace MountainStates.MSSA.Module.MSSA_Events.Repository
                                      Placing = e.Placing,
                                      RunTime = e.RunTime,
                                      TieBreakerTime = e.TieBreakerTime,
-                                     SumOfObstacles = (e.ObstacleScore1 ?? 0) + (e.ObstacleScore2 ?? 0) +
+                                     // Reflects EnteredTotalScore when a run was scored via the
+                                     // Results module's streamlined entry, otherwise the obstacle sum.
+                                     SumOfObstacles = e.EnteredTotalScore ??
+                                                     (e.ObstacleScore1 ?? 0) + (e.ObstacleScore2 ?? 0) +
                                                      (e.ObstacleScore3 ?? 0) + (e.ObstacleScore4 ?? 0) +
                                                      (e.ObstacleScore5 ?? 0) + (e.ObstacleScore6 ?? 0) +
                                                      (e.ObstacleScore7 ?? 0) + (e.ObstacleScore8 ?? 0) +
                                                      (e.ObstacleScore9 ?? 0),
                                      TrialPoints = e.TrialPoints,
-                                     Year = ev.PointYear ?? t.TrialDate.Year
+                                     Year = ev.PointYear ?? t.TrialDate.Year,
+                                     EventCreatedByUserId = ev.CreatedByUserId,
+                                     EventResultsApprovalStatus = ev.ResultsApprovalStatus
                                  })
                                 .ToListAsync();
 

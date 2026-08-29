@@ -1,0 +1,561 @@
+@using MountainStates.MSSA.Module.MSSA_Results.Services
+@using MountainStates.MSSA.Module.MSSA_Results.Models
+@using MountainStates.MSSA.Module.MSSA_Results.Enums
+@using MountainStates.MSSA.Module.MSSA_Entries.Enums
+@using MountainStates.MSSA.Module.MSSA_Events.Services
+@using MountainStates.MSSA.Module.MSSA_Events.Models
+@using MountainStates.MSSA.Module.MSSA_Handlers.Enums
+@using Microsoft.AspNetCore.Components.Web
+
+@namespace MountainStates.MSSA.Module.MSSA_Results
+@inherits ModuleBase
+@inject IMSSA_ResultService ResultService
+@inject IMSSA_EventService EventService
+
+<script suppress-error="BL9992">
+    // Fetches a script and waits for it to finish loading, rather than relying on a
+    // <script src> tag rendered by a Blazor component (not guaranteed to execute).
+    // Safe to call more than once for the same URL.
+    window.mssaResultsLoadScript = (src) => {
+        if (document.querySelector(`script[src="${src}"]`)) {
+            return Promise.resolve();
+        }
+        return new Promise((resolve, reject) => {
+            const script = document.createElement('script');
+            script.src = src;
+            script.onload = () => resolve();
+            script.onerror = () => reject(new Error('Failed to load ' + src));
+            document.head.appendChild(script);
+        });
+    };
+
+    // One results sheet per Class, each its own gridlined table, under a shared
+    // letterhead (org name, Event, Trial, Date) - built for posting to social media.
+    window.mssaExportResultsPdf = async (fileName, headerLines, sections) => {
+        if (!window.jspdf) {
+            await window.mssaResultsLoadScript('https://cdnjs.cloudflare.com/ajax/libs/jspdf/2.5.1/jspdf.umd.min.js');
+        }
+        if (!window.jspdf.jsPDF.API.autoTable) {
+            await window.mssaResultsLoadScript('https://cdnjs.cloudflare.com/ajax/libs/jspdf-autotable/3.8.4/jspdf.plugin.autotable.min.js');
+        }
+
+        const { jsPDF } = window.jspdf;
+        const doc = new jsPDF();
+        let y = 16;
+
+        doc.setFontSize(14);
+        doc.text(headerLines[0], 14, y);
+        y += 8;
+
+        doc.setFontSize(11);
+        for (let i = 1; i < headerLines.length; i++) {
+            doc.text(headerLines[i], 14, y);
+            y += 6;
+        }
+        y += 4;
+
+        for (const section of sections) {
+            if (y > 260) {
+                doc.addPage();
+                y = 16;
+            }
+
+            doc.setFontSize(12);
+            doc.text(section.className, 14, y);
+            y += 4;
+
+            doc.autoTable({
+                head: [['Handler', 'Dog', 'Time', 'Tie Time', 'Total Points', 'Place', 'Points']],
+                body: section.rows,
+                startY: y,
+                theme: 'grid',
+                styles: { fontSize: 9, lineWidth: 0.1, lineColor: [0, 0, 0] },
+                headStyles: { fillColor: [230, 230, 230], textColor: [0, 0, 0] },
+                margin: { left: 14, right: 14 }
+            });
+
+            y = doc.lastAutoTable.finalY + 10;
+        }
+
+        doc.save(fileName);
+    };
+</script>
+
+<div class="container-fluid">
+    <div class="row mb-3">
+        <div class="col">
+            <h2>Results</h2>
+        </div>
+    </div>
+
+    @if (isAdmin)
+    {
+        <div class="card mb-3 border-warning">
+            <div class="card-header bg-warning">
+                <h5 class="mb-0">Pending Approval</h5>
+            </div>
+            <div class="card-body">
+                @if (pendingEvents == null)
+                {
+                    <p><em>Loading...</em></p>
+                }
+                else if (!pendingEvents.Any())
+                {
+                    <p class="text-muted mb-0"><em>Nothing waiting on approval.</em></p>
+                }
+                else
+                {
+                    <table class="table table-sm">
+                        <thead>
+                            <tr>
+                                <th>Event</th>
+                                <th>Dates</th>
+                                <th>Runs Scored</th>
+                                <th>Submitted</th>
+                                <th></th>
+                            </tr>
+                        </thead>
+                        <tbody>
+                            @foreach (var evt in pendingEvents)
+                            {
+                                <tr>
+                                    <td>@evt.EventName</td>
+                                    <td>@evt.DateRange</td>
+                                    <td>@evt.ScoredRuns / @evt.TotalRuns</td>
+                                    <td>@(evt.ResultsSubmittedDate?.ToString("MMM dd, yyyy") ?? "-")</td>
+                                    <td>
+                                        <button class="btn btn-sm btn-success" @onclick="() => ApproveEvent(evt.EventId)">
+                                            Approve
+                                        </button>
+                                    </td>
+                                </tr>
+                            }
+                        </tbody>
+                    </table>
+                }
+            </div>
+        </div>
+    }
+
+    @if (!string.IsNullOrEmpty(errorMessage))
+    {
+        <div class="alert alert-danger">@errorMessage</div>
+    }
+    @if (!string.IsNullOrEmpty(successMessage))
+    {
+        <div class="alert alert-success">@successMessage</div>
+    }
+
+    <div class="row mb-3">
+        <div class="col-md-6">
+            <label for="eventSelect" class="form-label">Select Event</label>
+            <select id="eventSelect" class="form-select" @bind="selectedEventId" @bind:after="OnEventChanged">
+                <option value="0">-- Select Event --</option>
+                @if (events != null)
+                {
+                    @foreach (var evt in events)
+                    {
+                        <option value="@evt.EventId">@evt.EventName - @evt.DateRange (@evt.ScoredRuns/@evt.TotalRuns scored)</option>
+                    }
+                }
+            </select>
+        </div>
+        <div class="col-md-6">
+            <label for="trialSelect" class="form-label">Select Trial</label>
+            <select id="trialSelect" class="form-select" @bind="selectedTrialId" @bind:after="OnTrialChanged"
+                    disabled="@(trials == null || !trials.Any())">
+                <option value="0">-- Select Trial --</option>
+                @if (trials != null)
+                {
+                    @foreach (var trial in trials)
+                    {
+                        <option value="@trial.TrialId">@trial.TrialDate.ToString("MMM dd, yyyy") - @trial.TrialName (@trial.Stock)</option>
+                    }
+                }
+            </select>
+        </div>
+    </div>
+
+    @if (selectedEvent != null)
+    {
+        <div class="card mb-3">
+            <div class="card-body d-flex justify-content-between align-items-center flex-wrap gap-2">
+                <div>
+                    <strong>@selectedEvent.ScoredRuns / @selectedEvent.TotalRuns</strong> runs scored
+                    &nbsp;-&nbsp;
+                    <span class="badge @StatusBadgeClass(selectedEvent.ResultsApprovalStatus)">
+                        @StatusLabel(selectedEvent.ResultsApprovalStatus)
+                    </span>
+                </div>
+                @if (selectedEvent.ResultsApprovalStatus != EventResultsStatus.Approved)
+                {
+                    <button class="btn btn-primary" @onclick="SubmitForApproval">
+                        Submit Event for Approval
+                    </button>
+                }
+            </div>
+        </div>
+    }
+
+    @if (selectedTrialId > 0)
+    {
+        <div class="row mb-2">
+            <div class="col">
+                <button class="btn btn-secondary btn-sm" @onclick="CalculatePlacingAndPoints" disabled="@(rows == null || !rows.Any())">
+                    Calculate Placing &amp; Points
+                </button>
+                <button class="btn btn-outline-secondary btn-sm ms-2" @onclick="ExportResultsPdf" disabled="@(rows == null || !rows.Any())">
+                    Export Results PDF
+                </button>
+                <small class="text-muted ms-2">Calculate is optional - can be run any time, or left until every run is entered.</small>
+            </div>
+        </div>
+
+        @if (rows == null)
+        {
+            <p><em>Loading runs...</em></p>
+        }
+        else if (!rows.Any())
+        {
+            <p class="text-muted"><em>No runs found for this trial.</em></p>
+        }
+        else
+        {
+            <div class="table-responsive">
+                <table class="table table-sm table-bordered align-middle">
+                    <thead>
+                        <tr>
+                            <th style="width:60px">Run #</th>
+                            <th>Class</th>
+                            <th>Handler</th>
+                            <th>Dog</th>
+                            <th style="width:120px">Time</th>
+                            <th style="width:120px">Tie Time</th>
+                            <th style="width:120px">Total Points</th>
+                            <th style="width:70px">Place</th>
+                            <th style="width:70px">Points</th>
+                            <th style="width:40px"></th>
+                        </tr>
+                    </thead>
+                    <tbody>
+                        @foreach (var row in rows)
+                        {
+                            <tr>
+                                <td>@(row.RunOrder?.ToString() ?? "-")</td>
+                                <td>@row.ClassName @row.SubClassName</td>
+                                <td>@row.HandlerName</td>
+                                <td>@row.DogName</td>
+                                <td>
+                                    <input class="form-control form-control-sm" placeholder="m:ss"
+                                           value="@row.RunTimeStr"
+                                           @oninput="e => { row.RunTimeStr = e.Value?.ToString(); MarkDirty(row); }"
+                                           @onkeydown="@(e => OnRowKeyDown(e, row))"
+                                           @onblur="() => SaveRow(row)" />
+                                </td>
+                                <td>
+                                    <input class="form-control form-control-sm" placeholder="m:ss"
+                                           value="@row.TieBreakerTimeStr"
+                                           @oninput="e => { row.TieBreakerTimeStr = e.Value?.ToString(); MarkDirty(row); }"
+                                           @onkeydown="@(e => OnRowKeyDown(e, row))"
+                                           @onblur="() => SaveRow(row)" />
+                                </td>
+                                <td>
+                                    <input type="number" step="0.01" class="form-control form-control-sm"
+                                           value="@row.TotalScore"
+                                           @oninput="e => { row.TotalScore = decimal.TryParse(e.Value?.ToString(), out var v) ? v : (decimal?)null; MarkDirty(row); }"
+                                           @onkeydown="@(e => OnRowKeyDown(e, row))"
+                                           @onblur="() => SaveRow(row)" />
+                                </td>
+                                <td class="text-center">@(row.Placing?.ToString() ?? "-")</td>
+                                <td class="text-center">@(row.TrialPoints?.ToString() ?? "-")</td>
+                                <td class="text-center">
+                                    @if (savedEntryIds.Contains(row.EntryId))
+                                    {
+                                        <span class="text-success" title="Saved">&#10003;</span>
+                                    }
+                                </td>
+                            </tr>
+                        }
+                    </tbody>
+                </table>
+            </div>
+        }
+    }
+</div>
+
+@code {
+    private bool isAdmin;
+
+    private List<EventScoringSummary> events;
+    private List<EventScoringSummary> pendingEvents;
+    private List<MSSA_Trial> trials;
+    private List<ResultRunRow> rows;
+
+    private int selectedEventId = 0;
+    private int selectedTrialId = 0;
+
+    private string errorMessage = "";
+    private string successMessage = "";
+
+    private readonly HashSet<int> savedEntryIds = new();
+
+    private EventScoringSummary selectedEvent => events?.FirstOrDefault(e => e.EventId == selectedEventId);
+
+    protected override async Task OnInitializedAsync()
+    {
+        isAdmin = UserSecurity.IsAuthorized(PageState.User, RoleNames.Admin);
+
+        try
+        {
+            events = await ResultService.GetScoringEventsAsync(ModuleState.ModuleId);
+
+            if (isAdmin)
+            {
+                pendingEvents = await ResultService.GetPendingApprovalEventsAsync(ModuleState.ModuleId);
+            }
+        }
+        catch (Exception ex)
+        {
+            await logger.LogError(ex, "Error loading results events");
+            errorMessage = "Error loading events.";
+        }
+    }
+
+    private async Task OnEventChanged()
+    {
+        errorMessage = "";
+        successMessage = "";
+        selectedTrialId = 0;
+        rows = null;
+        savedEntryIds.Clear();
+
+        if (selectedEventId > 0)
+        {
+            trials = await EventService.GetEventTrialsAsync(selectedEventId, ModuleState.ModuleId);
+        }
+        else
+        {
+            trials = null;
+        }
+    }
+
+    private async Task OnTrialChanged()
+    {
+        errorMessage = "";
+        successMessage = "";
+        savedEntryIds.Clear();
+
+        if (selectedTrialId > 0)
+        {
+            var loaded = await ResultService.GetTrialRunRowsAsync(selectedTrialId, ModuleState.ModuleId);
+
+            // A trial that's already been placed is more useful to review in
+            // Class + Placing order; one that hasn't yet keeps run order, since that's
+            // the order dogs are actually called into the ring.
+            rows = loaded.Any(r => r.Placing.HasValue) ? SortByClassAndPlacing(loaded) : loaded;
+        }
+        else
+        {
+            rows = null;
+        }
+    }
+
+    private static List<ResultRunRow> SortByClassAndPlacing(List<ResultRunRow> list)
+    {
+        return list
+            .OrderBy(r => ClassRunOrder.IndexOf(r.ClassName))
+            .ThenBy(r => r.ClassName)
+            .ThenBy(r => r.SubClassName)
+            .ThenBy(r => r.Placing ?? int.MaxValue)
+            .ToList();
+    }
+
+    private void MarkDirty(ResultRunRow row)
+    {
+        savedEntryIds.Remove(row.EntryId);
+    }
+
+    // One-page-friendly results sheet, grouped by Class in the same fixed run-order
+    // sequence, for a Trial Secretary to post to social media.
+    private async Task ExportResultsPdf()
+    {
+        if (rows == null || !rows.Any())
+        {
+            return;
+        }
+
+        try
+        {
+            var trial = trials?.FirstOrDefault(t => t.TrialId == selectedTrialId);
+
+            var headerLines = new[]
+            {
+                "MSSA - Mountain States Stockdog Association",
+                selectedEvent?.EventName ?? "",
+                trial?.TrialName ?? "",
+                trial?.TrialDate.ToString("MMM dd, yyyy") ?? ""
+            };
+
+            var sections = rows
+                .GroupBy(r => new { r.ClassName, r.SubClassName })
+                .OrderBy(g => ClassRunOrder.IndexOf(g.Key.ClassName))
+                .ThenBy(g => g.Key.ClassName)
+                .ThenBy(g => g.Key.SubClassName)
+                .Select(g => new
+                {
+                    className = $"{g.Key.ClassName} {g.Key.SubClassName}".Trim(),
+                    rows = g
+                        .OrderBy(r => r.Placing ?? int.MaxValue)
+                        .Select(r => new[]
+                        {
+                            r.HandlerName,
+                            r.DogName,
+                            r.RunTimeStr ?? "",
+                            r.TieBreakerTimeStr ?? "",
+                            r.TotalScore?.ToString("F2") ?? "",
+                            r.Placing?.ToString() ?? "",
+                            r.TrialPoints?.ToString() ?? ""
+                        })
+                        .ToArray()
+                })
+                .ToArray();
+
+            var fileName = $"Results_{trial?.TrialIdentifier ?? "Trial"}_{DateTime.Now:yyyyMMdd}.pdf";
+
+            await JSRuntime.InvokeVoidAsync("mssaExportResultsPdf", fileName, headerLines, sections);
+        }
+        catch (Exception ex)
+        {
+            await logger.LogError(ex, "Error exporting results PDF for trial {TrialId}", selectedTrialId);
+            errorMessage = "Error creating the PDF. Please try again.";
+        }
+    }
+
+    private async Task OnRowKeyDown(KeyboardEventArgs e, ResultRunRow row)
+    {
+        if (e.Key == "Enter")
+        {
+            await SaveRow(row);
+        }
+    }
+
+    private async Task SaveRow(ResultRunRow row)
+    {
+        try
+        {
+            var dto = new SaveResultRowDto
+            {
+                EntryId = row.EntryId,
+                RunTimeStr = row.RunTimeStr,
+                TieBreakerTimeStr = row.TieBreakerTimeStr,
+                TotalScore = row.TotalScore
+            };
+
+            await ResultService.SaveResultRowAsync(row.TrialId, dto, ModuleState.ModuleId);
+            savedEntryIds.Add(row.EntryId);
+
+            // Keep the event summary's scored-count in sync without a full reload.
+            await RefreshSelectedEventSummary();
+        }
+        catch (Exception ex)
+        {
+            await logger.LogError(ex, "Error saving result row for entry {EntryId}", row.EntryId);
+            errorMessage = "Error saving that row. Please try again.";
+        }
+    }
+
+    private async Task RefreshSelectedEventSummary()
+    {
+        var updated = await ResultService.GetScoringEventsAsync(ModuleState.ModuleId);
+        events = updated;
+    }
+
+    private async Task CalculatePlacingAndPoints()
+    {
+        try
+        {
+            errorMessage = "";
+            successMessage = "";
+
+            if (rows != null && rows.Any(r => r.Placing.HasValue))
+            {
+                var confirmed = await JSRuntime.InvokeAsync<bool>("confirm",
+                    "This trial has already been placed. Recalculating will overwrite the existing placings and points - continue?");
+                if (!confirmed)
+                {
+                    return;
+                }
+            }
+
+            await ResultService.CalculatePlacingAndPointsAsync(selectedTrialId, ModuleState.ModuleId);
+
+            var calculated = await ResultService.GetTrialRunRowsAsync(selectedTrialId, ModuleState.ModuleId);
+
+            // After calculating, Class + Placing is what you actually want to review -
+            // run order (the default view before scores exist) isn't useful here.
+            rows = SortByClassAndPlacing(calculated);
+
+            successMessage = "Placing and points calculated.";
+        }
+        catch (Exception ex)
+        {
+            await logger.LogError(ex, "Error calculating placing/points for trial {TrialId}", selectedTrialId);
+            errorMessage = "Error calculating placing and points. Please try again.";
+        }
+    }
+
+    private async Task SubmitForApproval()
+    {
+        try
+        {
+            errorMessage = "";
+            successMessage = "";
+
+            var result = await ResultService.SubmitEventForApprovalAsync(selectedEventId, ModuleState.ModuleId);
+            if (result.Success)
+            {
+                successMessage = "Submitted for approval.";
+                await RefreshSelectedEventSummary();
+            }
+            else
+            {
+                errorMessage = string.Join(" ", result.Reasons);
+            }
+        }
+        catch (Exception ex)
+        {
+            await logger.LogError(ex, "Error submitting event {EventId} for approval", selectedEventId);
+            errorMessage = "Error submitting for approval. Please try again.";
+        }
+    }
+
+    private async Task ApproveEvent(int eventId)
+    {
+        try
+        {
+            await ResultService.ApproveEventAsync(eventId, ModuleState.ModuleId);
+            pendingEvents = await ResultService.GetPendingApprovalEventsAsync(ModuleState.ModuleId);
+            events = await ResultService.GetScoringEventsAsync(ModuleState.ModuleId);
+            successMessage = "Event approved.";
+        }
+        catch (Exception ex)
+        {
+            await logger.LogError(ex, "Error approving event {EventId}", eventId);
+            errorMessage = "Error approving event. Please try again.";
+        }
+    }
+
+    private static string StatusLabel(string status) => status switch
+    {
+        EventResultsStatus.PendingApproval => "Pending Approval",
+        EventResultsStatus.Approved => "Approved",
+        _ => "Not Submitted"
+    };
+
+    private static string StatusBadgeClass(string status) => status switch
+    {
+        EventResultsStatus.PendingApproval => "bg-warning text-dark",
+        EventResultsStatus.Approved => "bg-success",
+        _ => "bg-secondary"
+    };
+}
