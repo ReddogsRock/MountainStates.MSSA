@@ -11,7 +11,10 @@ namespace MountainStates.MSSA.Module.MSSA_Dogs.Startup
     {
         public void Configure(IApplicationBuilder app, IWebHostEnvironment env)
         {
-            // Configure middleware if needed
+            // The Stripe webhook is NOT wired up here - by the time Oqtane calls into a
+            // module's Configure(), its own pipeline (routing/antiforgery/auth) is
+            // already fully built, so anything registered here runs too late to matter
+            // for that request. See Program.cs, where it's registered before UseOqtane.
         }
 
         public void ConfigureMvc(IMvcBuilder mvcBuilder)
@@ -26,6 +29,9 @@ namespace MountainStates.MSSA.Module.MSSA_Dogs.Startup
 
             // Register managers
             services.AddTransient<IMSSA_DogManager, MSSA_DogManager>();
+
+            // Register services
+            services.AddTransient<IStripeService, StripeService>();
         }
     }
 }

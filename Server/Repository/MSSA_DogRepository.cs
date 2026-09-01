@@ -1,4 +1,5 @@
 ﻿using Microsoft.EntityFrameworkCore;
+using MountainStates.MSSA.Module.MSSA_Dogs.Enums;
 using MountainStates.MSSA.Module.MSSA_Dogs.Models;
 using MountainStates.MSSA.Module.MSSA_Handlers.Data;
 using Oqtane.Modules;
@@ -132,7 +133,44 @@ namespace MountainStates.MSSA.Module.MSSA_Dogs.Repository
         {
             using var db = await _dbContextFactory.CreateDbContextAsync();
 
+            participation.Status = FuturityPaymentStatus.PendingPayment;
+            participation.CreatedDate = DateTime.UtcNow;
+            participation.ModifiedDate = DateTime.UtcNow;
+
             db.MSSA_DogFuturityParticipation.Add(participation);
+            await db.SaveChangesAsync();
+
+            return participation;
+        }
+
+        public async Task<MSSA_DogFuturityParticipation> GetFuturityParticipationAsync(int participationId)
+        {
+            using var db = await _dbContextFactory.CreateDbContextAsync();
+
+            return await db.MSSA_DogFuturityParticipation.FindAsync(participationId);
+        }
+
+        // Called only from the Stripe webhook once checkout actually completes - never
+        // trust a client-side redirect alone to mark something paid. Idempotent: a
+        // webhook redelivery just overwrites with the same values.
+        public async Task<MSSA_DogFuturityParticipation> MarkFuturityPaymentReceivedAsync(
+            int participationId, string stripePaymentIntentId, decimal amount)
+        {
+            using var db = await _dbContextFactory.CreateDbContextAsync();
+
+            var participation = await db.MSSA_DogFuturityParticipation.FindAsync(participationId);
+            if (participation == null)
+            {
+                return null;
+            }
+
+            participation.Status = FuturityPaymentStatus.Paid;
+            participation.PaymentMethod = "Stripe";
+            participation.StripePaymentIntentId = stripePaymentIntentId;
+            participation.Amount = amount;
+            participation.DateReceived = DateTime.UtcNow.Date;
+            participation.ModifiedDate = DateTime.UtcNow;
+
             await db.SaveChangesAsync();
 
             return participation;

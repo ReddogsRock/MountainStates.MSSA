@@ -9,10 +9,12 @@ namespace MountainStates.MSSA.Module.MSSA_Dogs.Manager
     public class MSSA_DogManager : IMSSA_DogManager, ITransientService
     {
         private readonly IMSSA_DogRepository _repository;
+        private readonly IStripeService _stripeService;
 
-        public MSSA_DogManager(IMSSA_DogRepository repository)
+        public MSSA_DogManager(IMSSA_DogRepository repository, IStripeService stripeService)
         {
             _repository = repository;
+            _stripeService = stripeService;
         }
 
         public async Task<IEnumerable<MSSA_Dog>> GetDogsAsync(int moduleId)
@@ -73,6 +75,21 @@ namespace MountainStates.MSSA.Module.MSSA_Dogs.Manager
         public async Task<MSSA_DogFuturityParticipation> SaveFuturityDocumentAsync(int participationId, string fileName, string filePath, int moduleId)
         {
             return await _repository.SaveFuturityDocumentAsync(participationId, fileName, filePath);
+        }
+
+        public async Task<MSSA_DogFuturityParticipation> GetFuturityParticipationAsync(int participationId, int moduleId)
+        {
+            return await _repository.GetFuturityParticipationAsync(participationId);
+        }
+
+        public async Task<MSSA_DogFuturityParticipation> MarkFuturityPaymentReceivedAsync(int participationId, string stripePaymentIntentId, decimal amount, int moduleId)
+        {
+            return await _repository.MarkFuturityPaymentReceivedAsync(participationId, stripePaymentIntentId, amount);
+        }
+
+        public async Task<string> CreateFuturityCheckoutSessionAsync(int participationId, string successUrl, string cancelUrl, int moduleId)
+        {
+            return await _stripeService.CreateFuturityCheckoutSessionAsync(participationId, successUrl, cancelUrl);
         }
 
         // Entries

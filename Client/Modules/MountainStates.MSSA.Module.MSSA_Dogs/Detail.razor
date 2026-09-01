@@ -1,5 +1,6 @@
 ﻿@using MountainStates.MSSA.Module.MSSA_Dogs.Services
 @using MountainStates.MSSA.Module.MSSA_Dogs.Models
+@using MountainStates.MSSA.Module.MSSA_Dogs.Enums
 @using Oqtane.Modules.Controls
 
 @namespace MountainStates.MSSA.Module.MSSA_Dogs
@@ -31,6 +32,24 @@ else
                 }
             </div>
         </div>
+
+        @if (PageState.QueryString.ContainsKey("futurity"))
+        {
+            @if (PageState.QueryString["futurity"] == "success")
+            {
+                <div class="alert alert-success">
+                    Payment received - thank you! Your Futurity nomination will show as
+                    paid here shortly once Stripe confirms the charge.
+                </div>
+            }
+            else if (PageState.QueryString["futurity"] == "cancelled")
+            {
+                <div class="alert alert-warning">
+                    The Futurity nomination fee wasn't paid, so the nomination is still
+                    pending. Contact MSSA if you'd like help completing payment.
+                </div>
+            }
+        }
 
         @* Dog Information *@
         <div class="card mb-3">
@@ -140,6 +159,7 @@ else
                             <tr>
                                 <th>Year</th>
                                 <th>Documentation</th>
+                                <th>Payment</th>
                             </tr>
                         </thead>
                         <tbody>
@@ -155,6 +175,16 @@ else
                                         else
                                         {
                                             <span class="badge bg-secondary">Not on file</span>
+                                        }
+                                    </td>
+                                    <td>
+                                        @if (participation.Status == FuturityPaymentStatus.Paid)
+                                        {
+                                            <span class="badge bg-success">Paid</span>
+                                        }
+                                        else
+                                        {
+                                            <span class="badge bg-warning text-dark">Pending Payment</span>
                                         }
                                     </td>
                                 </tr>

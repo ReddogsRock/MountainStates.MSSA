@@ -171,7 +171,7 @@
                     {
                         <div class="mb-2">
                             <label for="futurityDoc" class="form-label">
-                                Age Documentation <small class="text-muted">(optional &mdash; can be uploaded later instead; PDF only)</small>
+                                Age Documentation <span class="text-danger">*</span> <small class="text-muted">(required to enroll; PDF only)</small>
                             </label>
                             <InputFile id="futurityDoc" class="form-control" accept=".pdf" OnChange="OnFuturityDocumentSelected" />
                             @if (futurityDocument != null)
@@ -179,6 +179,11 @@
                                 <small class="form-text text-muted">Selected: @futurityDocument.Name</small>
                             }
                         </div>
+                        <p class="text-muted small mb-0">
+                            This also establishes Nursery eligibility, so there's no need to upload
+                            documentation again below. After you submit, you'll be taken to a secure
+                            Stripe checkout page to pay the nomination fee.
+                        </p>
                     }
                 </div>
             </div>
@@ -190,17 +195,24 @@
                 <h4>Nursery</h4>
             </div>
             <div class="card-body">
-                <label for="nurseryDoc" class="form-label">
-                    Age Documentation <small class="text-muted">(PDF only)</small>
-                </label>
-                <InputFile id="nurseryDoc" class="form-control" accept=".pdf" OnChange="OnNurseryDocumentSelected" />
-                @if (selectedNurseryDocument != null)
+                @if (dogId == -1 && enrollInFuturity && futurityDocument != null)
                 {
-                    <small class="form-text text-muted">Selected: @selectedNurseryDocument.Name</small>
+                    <p class="text-muted small mb-0">Covered by the Futurity documentation above - nothing else needed here.</p>
                 }
-                else if (!string.IsNullOrEmpty(dog.NurseryDocumentFileName))
+                else
                 {
-                    <small class="form-text text-muted">Current: @dog.NurseryDocumentFileName</small>
+                    <label for="nurseryDoc" class="form-label">
+                        Age Documentation <small class="text-muted">(PDF only)</small>
+                    </label>
+                    <InputFile id="nurseryDoc" class="form-control" accept=".pdf" OnChange="OnNurseryDocumentSelected" />
+                    @if (selectedNurseryDocument != null)
+                    {
+                        <small class="form-text text-muted">Selected: @selectedNurseryDocument.Name</small>
+                    }
+                    else if (!string.IsNullOrEmpty(dog.NurseryDocumentFileName))
+                    {
+                        <small class="form-text text-muted">Current: @dog.NurseryDocumentFileName</small>
+                    }
                 }
             </div>
         </div>
@@ -317,9 +329,25 @@
                 return;
             }
 
+            if (dogId == -1 && enrollInFuturity && futurityDocument == null)
+            {
+                errorMessage = "Age documentation is required to enroll in Futurity.";
+                return;
+            }
+
             if (selectedNurseryDocument != null)
             {
                 await AttachNurseryDocumentAsync();
+            }
+            else if (dogId == -1 && enrollInFuturity && futurityDocument != null)
+            {
+                // Futurity's age-proof document establishes Nursery eligibility too - same
+                // underlying question (how old is this dog) - so don't make them upload
+                // the same proof twice. Only kicks in if they didn't separately choose a
+                // distinct Nursery document above. The reverse isn't true: uploading
+                // Nursery documentation alone doesn't enroll a dog in Futurity, since that
+                // also requires payment.
+                await AttachFuturityDocumentAsNurseryAsync();
             }
 
             if (dogId == -1)
@@ -338,10 +366,24 @@
                     participation = await DogService.AddFuturityParticipationAsync(participation, ModuleState.ModuleId);
                     await logger.LogInformation("Futurity participation added for new dog {DogId}", dog.DogId);
 
-                    if (futurityDocument != null)
-                    {
-                        await UploadFuturityDocument(participation.ParticipationId);
-                    }
+                    await UploadFuturityDocument(participation.ParticipationId);
+
+                    // Stripe Checkout requires absolute URLs to redirect back to.
+                    var successUrl = NavigationManager.ToAbsoluteUri(EditUrl("Detail", $"id={dog.DogId}&futurity=success")).ToString();
+                    var cancelUrl = NavigationManager.ToAbsoluteUri(EditUrl("Detail", $"id={dog.DogId}&futurity=cancelled")).ToString();
+
+                    var checkout = await DogService.CreateFuturityCheckoutSessionAsync(
+                        new CreateFuturityCheckoutDto
+                        {
+                            ParticipationId = participation.ParticipationId,
+                            SuccessUrl = successUrl,
+                            CancelUrl = cancelUrl
+                        },
+                        ModuleState.ModuleId);
+
+                    await logger.LogInformation("Redirecting to Stripe checkout for participation {ParticipationId}", participation.ParticipationId);
+                    await JSRuntime.InvokeVoidAsync("window.location.assign", checkout.CheckoutUrl);
+                    return;
                 }
 
                 // Land on the view page for the dog just added, not another edit form.
@@ -387,6 +429,17 @@
         await stream.CopyToAsync(memoryStream);
 
         dog.UploadNurseryDocFileName = selectedNurseryDocument.Name;
+        dog.UploadNurseryDocContentBase64 = Convert.ToBase64String(memoryStream.ToArray());
+    }
+
+    private async Task AttachFuturityDocumentAsNurseryAsync()
+    {
+        const long maxFileSize = 10 * 1024 * 1024; // 10 MB
+        await using var stream = futurityDocument.OpenReadStream(maxFileSize);
+        using var memoryStream = new MemoryStream();
+        await stream.CopyToAsync(memoryStream);
+
+        dog.UploadNurseryDocFileName = futurityDocument.Name;
         dog.UploadNurseryDocContentBase64 = Convert.ToBase64String(memoryStream.ToArray());
     }
 

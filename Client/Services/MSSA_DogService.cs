@@ -91,6 +91,13 @@ namespace MountainStates.MSSA.Module.MSSA_Dogs.Services
                 CreateAuthorizationPolicyUrl($"{url}/document?moduleid={moduleId}", EntityNames.Module, moduleId), participation);
         }
 
+        public async Task<FuturityCheckoutResult> CreateFuturityCheckoutSessionAsync(CreateFuturityCheckoutDto dto, int moduleId)
+        {
+            var url = CreateApiUrl("MSSA_DogFuturity");
+            return await PostJsonAsync<CreateFuturityCheckoutDto, FuturityCheckoutResult>(
+                CreateAuthorizationPolicyUrl($"{url}/{dto.ParticipationId}/checkout?moduleid={moduleId}", EntityNames.Module, moduleId), dto);
+        }
+
         // Entries
         public async Task<List<MSSA_DogEntry>> GetDogEntriesAsync(int dogId, int moduleId)
         {

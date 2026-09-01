@@ -2,12 +2,15 @@ using System;
 using System.IO;
 using Microsoft.AspNetCore.Builder;
 using Microsoft.AspNetCore.Cors.Infrastructure;
+using Microsoft.AspNetCore.Http;
 using Microsoft.Extensions.Configuration;
 using Microsoft.Extensions.DependencyInjection;
 using Microsoft.Extensions.Logging;
 using Oqtane.Extensions;
 using Oqtane.Infrastructure;
 using Oqtane.Shared;
+using MountainStates.MSSA.Module.MSSA_Dogs.Manager;
+using MountainStates.MSSA.Module.MSSA_Dogs.Startup;
 
 namespace MountainStates.MSSA.Server
 {
@@ -33,6 +36,45 @@ namespace MountainStates.MSSA.Server
             var corsService = app.Services.GetRequiredService<ICorsService>();
             var corsPolicyProvider = app.Services.GetRequiredService<ICorsPolicyProvider>();
             var syncManager = app.Services.GetRequiredService<ISyncManager>();
+
+            // Registered before UseOqtane deliberately: Oqtane's own pipeline (routing,
+            // antiforgery, auth) is entirely set up inside that one call, with no
+            // supported extension point for a module to run earlier. Stripe's webhook
+            // needs to run before all of that - it's authenticated by verifying the
+            // Stripe-Signature header (see StripeWebhookHandler), not by anything Oqtane
+            // would recognize, and Oqtane's site-wide antiforgery check has no opt-out
+            // that applies to it. This is the only point in the whole app that's
+            // guaranteed to run first.
+            app.Use(async (context, next) =>
+            {
+                if (context.Request.Path.StartsWithSegments("/api/StripeWebhook") && context.Request.Method == "POST")
+                {
+                    try
+                    {
+                        // Plain ILogger, not Oqtane's ILogManager - ILogManager needs the
+                        // current Site/Alias resolved, and that happens inside UseOqtane,
+                        // which hasn't run yet here. A prior version of this used
+                        // ILogManager and every failure was silently swallowed before it
+                        // could even be logged - Console.WriteLine below is a deliberate
+                        // second, unconditional fallback so that can never happen again.
+                        var stripeService = context.RequestServices.GetRequiredService<IStripeService>();
+                        var dogManager = context.RequestServices.GetRequiredService<IMSSA_DogManager>();
+                        var loggerFactory = context.RequestServices.GetRequiredService<ILoggerFactory>();
+                        var logger = loggerFactory.CreateLogger("StripeWebhook");
+
+                        await StripeWebhookHandler.HandleAsync(context, stripeService, dogManager, logger);
+                    }
+                    catch (Exception ex)
+                    {
+                        Console.WriteLine($"[StripeWebhook] Unhandled exception: {ex}");
+                        context.Response.StatusCode = StatusCodes.Status500InternalServerError;
+                    }
+
+                    return;
+                }
+
+                await next();
+            });
 
             app.UseOqtane(configuration, builder.Environment, corsService, corsPolicyProvider, syncManager);
 

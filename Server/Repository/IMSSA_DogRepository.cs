@@ -21,9 +21,11 @@ namespace MountainStates.MSSA.Module.MSSA_Dogs.Repository
 
         // Futurity
         Task<IEnumerable<MSSA_DogFuturityParticipation>> GetDogFuturityParticipationAsync(int dogId);
+        Task<MSSA_DogFuturityParticipation> GetFuturityParticipationAsync(int participationId);
         Task<MSSA_DogFuturityParticipation> AddFuturityParticipationAsync(MSSA_DogFuturityParticipation participation);
         Task DeleteFuturityParticipationAsync(int participationId);
         Task<MSSA_DogFuturityParticipation> SaveFuturityDocumentAsync(int participationId, string fileName, string filePath);
+        Task<MSSA_DogFuturityParticipation> MarkFuturityPaymentReceivedAsync(int participationId, string stripePaymentIntentId, decimal amount);
 
         // Entries for detail view
         Task<IEnumerable<MSSA_DogEntry>> GetDogEntriesAsync(int dogId);

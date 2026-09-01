@@ -46,13 +46,16 @@ namespace MountainStates.MSSA.Module.MSSA_Dogs.Controllers
         }
 
         // POST: api/MSSA_DogFuturity?moduleid=x
+        // Open to everyone, matching Dog creation (MSSA_DogController.Post) - nomination
+        // happens as part of adding a dog, before the person paying is necessarily
+        // logged in at all.
         [HttpPost]
-        [Authorize(Policy = PolicyNames.EditModule)]
+        [AllowAnonymous]
         public async Task<MSSA_DogFuturityParticipation> Post([FromBody] MSSA_DogFuturityParticipation participation, int moduleId)
         {
             try
             {
-                if (ModelState.IsValid && IsAuthorizedForRole(MSSARoles.Admin))
+                if (ModelState.IsValid)
                 {
                     participation = await _manager.AddFuturityParticipationAsync(participation, moduleId);
                     _logger.Log(LogLevel.Information, this, LogFunction.Create, "Futurity participation added {Participation}", participation);
@@ -60,14 +63,50 @@ namespace MountainStates.MSSA.Module.MSSA_Dogs.Controllers
                 }
                 else
                 {
-                    _logger.Log(LogLevel.Error, this, LogFunction.Security, "Unauthorized futurity participation post attempt");
-                    HttpContext.Response.StatusCode = (int)System.Net.HttpStatusCode.Forbidden;
+                    HttpContext.Response.StatusCode = (int)System.Net.HttpStatusCode.BadRequest;
                     return null;
                 }
             }
             catch (System.Exception ex)
             {
                 _logger.Log(LogLevel.Error, this, LogFunction.Create, ex, "Error creating futurity participation");
+                throw;
+            }
+        }
+
+        // POST: api/MSSA_DogFuturity/5/checkout?moduleid=x
+        // Open to everyone, same reasoning as Post above - creates a Stripe Checkout
+        // Session for the nomination fee and returns its URL for the client to redirect
+        // to. Doesn't touch the participation record itself; only the webhook
+        // (StripeWebhookController) ever marks it Paid.
+        [HttpPost("{id}/checkout")]
+        [AllowAnonymous]
+        public async Task<FuturityCheckoutResult> CreateCheckout(int id, [FromBody] CreateFuturityCheckoutDto dto, int moduleId)
+        {
+            try
+            {
+                if (dto == null || dto.ParticipationId != id
+                    || string.IsNullOrEmpty(dto.SuccessUrl) || string.IsNullOrEmpty(dto.CancelUrl))
+                {
+                    HttpContext.Response.StatusCode = (int)System.Net.HttpStatusCode.BadRequest;
+                    return null;
+                }
+
+                var participation = await _manager.GetFuturityParticipationAsync(id, moduleId);
+                if (participation == null)
+                {
+                    HttpContext.Response.StatusCode = (int)System.Net.HttpStatusCode.NotFound;
+                    return null;
+                }
+
+                var checkoutUrl = await _manager.CreateFuturityCheckoutSessionAsync(id, dto.SuccessUrl, dto.CancelUrl, moduleId);
+                _logger.Log(LogLevel.Information, this, LogFunction.Create, "Futurity checkout session created for participation {ParticipationId}", id);
+
+                return new FuturityCheckoutResult { CheckoutUrl = checkoutUrl };
+            }
+            catch (System.Exception ex)
+            {
+                _logger.Log(LogLevel.Error, this, LogFunction.Create, ex, "Error creating futurity checkout session for participation {ParticipationId}", id);
                 throw;
             }
         }
@@ -98,8 +137,11 @@ namespace MountainStates.MSSA.Module.MSSA_Dogs.Controllers
         }
 
         // POST: api/MSSA_DogFuturity/document?moduleid=x
+        // Open to everyone, matching Post above - the age-proof document is uploaded as
+        // part of the same anonymous enrollment flow, before the dog/participation
+        // records even exist server-side from the person's perspective.
         [HttpPost("document")]
-        [Authorize(Policy = PolicyNames.EditModule)]
+        [AllowAnonymous]
         public async Task<MSSA_DogFuturityParticipation> UploadDocument([FromBody] MSSA_DogFuturityParticipation participation, int moduleId)
         {
             try
@@ -107,10 +149,9 @@ namespace MountainStates.MSSA.Module.MSSA_Dogs.Controllers
                 // Note: this payload only carries ParticipationId + the two Upload*
                 // transient fields, so we don't run full ModelState validation here
                 // (DogId/Year required-field rules don't apply to this endpoint).
-                if (!IsAuthorizedForRole(MSSARoles.Admin) || string.IsNullOrEmpty(participation.UploadContentBase64))
+                if (string.IsNullOrEmpty(participation.UploadContentBase64))
                 {
-                    _logger.Log(LogLevel.Error, this, LogFunction.Security, "Unauthorized or empty futurity document upload attempt");
-                    HttpContext.Response.StatusCode = (int)System.Net.HttpStatusCode.Forbidden;
+                    HttpContext.Response.StatusCode = (int)System.Net.HttpStatusCode.BadRequest;
                     return null;
                 }
 
