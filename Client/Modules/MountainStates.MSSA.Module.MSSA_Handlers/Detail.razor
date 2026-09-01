@@ -35,48 +35,58 @@ else
                 <h4>Contact Information</h4>
             </div>
             <div class="card-body">
-                <div class="row">
-                    <div class="col-md-6">
-                        <dl class="row">
-                            <dt class="col-sm-4">Email:</dt>
-                            <dd class="col-sm-8">
-                                @if (!string.IsNullOrEmpty(handler.Email))
-                                {
-                                    <a href="mailto:@handler.Email">@handler.Email</a>
-                                }
-                                else
-                                {
-                                    <em>Not provided</em>
-                                }
-                            </dd>
+                @if (UserSecurity.IsAuthorized(PageState.User, RoleNames.Admin))
+                {
+                    <div class="row">
+                        <div class="col-md-6">
+                            <dl class="row">
+                                <dt class="col-sm-4">Email:</dt>
+                                <dd class="col-sm-8">
+                                    @if (!string.IsNullOrEmpty(handler.Email))
+                                    {
+                                        <a href="mailto:@handler.Email">@handler.Email</a>
+                                    }
+                                    else
+                                    {
+                                        <em>Not provided</em>
+                                    }
+                                </dd>
 
-                            <dt class="col-sm-4">Phone:</dt>
-                            <dd class="col-sm-8">@FormatPhone(handler.Phone ?? "Not provided")</dd>
+                                <dt class="col-sm-4">Phone:</dt>
+                                <dd class="col-sm-8">@FormatPhone(handler.Phone ?? "Not provided")</dd>
 
 
-                            <dt class="col-sm-4">Alternate Phone:</dt>
-                            <dd class="col-sm-8">@FormatPhone(handler.AlternatePhone ?? "Not provided")</dd>
-                        </dl>
+                                <dt class="col-sm-4">Alternate Phone:</dt>
+                                <dd class="col-sm-8">@FormatPhone(handler.AlternatePhone ?? "Not provided")</dd>
+                            </dl>
+                        </div>
+                        <div class="col-md-6">
+                            <dl class="row">
+                                <dt class="col-sm-4">Address:</dt>
+                                <dd class="col-sm-8">
+                                    @if (!string.IsNullOrEmpty(handler.Address))
+                                    {
+                                        <text>@handler.Address</text>
+
+                                        <br />
+                                        <text>@handler.City, @handler.StateCode @handler.ZipCode</text>
+                                    }
+                                    else
+                                    {
+                                        <em>Not provided</em>
+                                    }
+                                </dd>
+                            </dl>
+                        </div>
                     </div>
-                    <div class="col-md-6">
-                        <dl class="row">
-                            <dt class="col-sm-4">Address:</dt>
-                            <dd class="col-sm-8">
-                                @if (!string.IsNullOrEmpty(handler.Address))
-                                {
-                                    <text>@handler.Address</text>
-                            
-                                    <br />
-                                    <text>@handler.City, @handler.StateCode @handler.ZipCode</text>
-                                }
-                                else
-                                {
-                                    <em>Not provided</em>
-                                }
-                            </dd>
-                        </dl>
-                    </div>
-                </div>
+                }
+                else
+                {
+                    <dl class="row mb-0">
+                        <dt class="col-sm-2">State:</dt>
+                        <dd class="col-sm-10">@(string.IsNullOrEmpty(handler.StateCode) ? "Not provided" : handler.StateCode)</dd>
+                    </dl>
+                }
             </div>
         </div>
 

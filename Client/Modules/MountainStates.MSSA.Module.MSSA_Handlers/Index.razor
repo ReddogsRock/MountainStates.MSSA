@@ -84,11 +84,8 @@
                 <thead>
                     <tr>
                         <th>Name</th>
-                        <th>City</th>
                         <th>State</th>
                         <th>Level</th>
-                        <th>Email</th>
-                        <th>Phone</th>
                         <th>Actions</th>
                     </tr>
                 </thead>
@@ -100,11 +97,8 @@
                                 <ActionLink Action="Detail" Parameters="@($"id={handler.HandlerId}")"
                                             Text="@handler.FullName" ResourceKey="ViewHandlerName" />
                             </td>
-                            <td>@handler.City</td>
                             <td>@handler.StateCode</td>
                             <td>@handler.HandlerLevel</td>
-                            <td>@handler.Email</td>
-                            <td>@handler.Phone</td>
                             <td>
                                 <ActionLink Action="Detail" Parameters="@($"id={handler.HandlerId}")"
                                             Text="View" ResourceKey="ViewHandler" Class="btn btn-sm btn-info me-1" />
