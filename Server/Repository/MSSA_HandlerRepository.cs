@@ -295,6 +295,32 @@ namespace MountainStates.MSSA.Module.MSSA_Handlers.Repository
             return await LoadMembersAsync(db, membershipId);
         }
 
+        // Mirrors MSSA_DogRepository.MarkFuturityPaymentReceivedAsync. Unlike Futurity,
+        // there's no separate Status column here - DateReceived being set is already
+        // the established "paid" signal (see SearchMembershipsAsync's PendingPayment
+        // filter), so this just fills in the same Amount/PaidBy/DateReceived fields the
+        // admin's manual "Mark Paid" flow uses, plus the Stripe payment intent id.
+        public async Task<MSSA_Membership> MarkMembershipPaymentReceivedAsync(int membershipId, string stripePaymentIntentId, decimal amount)
+        {
+            using var db = await _dbContextFactory.CreateDbContextAsync();
+
+            var membership = await db.MSSA_Memberships.FindAsync(membershipId);
+            if (membership == null)
+            {
+                return null;
+            }
+
+            membership.Amount = amount;
+            membership.PaidBy = "Stripe";
+            membership.StripePaymentIntentId = stripePaymentIntentId;
+            membership.DateReceived = DateTime.UtcNow.Date;
+            membership.ModifiedDate = DateTime.UtcNow;
+
+            await db.SaveChangesAsync();
+
+            return membership;
+        }
+
         public async Task<List<MembershipMemberInfo>> RemoveMemberFromMembershipAsync(int membershipId, int handlerId)
         {
             using var db = await _dbContextFactory.CreateDbContextAsync();

@@ -6,6 +6,7 @@ using Microsoft.Extensions.Logging;
 using Stripe;
 using Stripe.Checkout;
 using MountainStates.MSSA.Module.MSSA_Dogs.Manager;
+using MountainStates.MSSA.Module.MSSA_Handlers.Manager;
 
 namespace MountainStates.MSSA.Module.MSSA_Dogs.Startup
 {
@@ -19,7 +20,7 @@ namespace MountainStates.MSSA.Module.MSSA_Dogs.Startup
     // what the signature proves.
     public static class StripeWebhookHandler
     {
-        public static async Task HandleAsync(HttpContext context, IStripeService stripeService, IMSSA_DogManager dogManager, ILogger logger)
+        public static async Task HandleAsync(HttpContext context, IStripeService stripeService, IMSSA_DogManager dogManager, IMSSA_HandlerManager handlerManager, ILogger logger)
         {
             string json;
             using (var reader = new StreamReader(context.Request.Body, leaveOpen: true))
@@ -44,7 +45,7 @@ namespace MountainStates.MSSA.Module.MSSA_Dogs.Startup
                 if (stripeEvent.Type == "checkout.session.completed")
                 {
                     var session = stripeEvent.Data.Object as Session;
-                    await HandleCheckoutCompletedAsync(session, dogManager, logger);
+                    await HandleCheckoutCompletedAsync(session, dogManager, handlerManager, logger);
                 }
 
                 context.Response.StatusCode = StatusCodes.Status200OK;
@@ -57,15 +58,26 @@ namespace MountainStates.MSSA.Module.MSSA_Dogs.Startup
             }
         }
 
-        private static async Task HandleCheckoutCompletedAsync(Session session, IMSSA_DogManager dogManager, ILogger logger)
+        private static async Task HandleCheckoutCompletedAsync(Session session, IMSSA_DogManager dogManager, IMSSA_HandlerManager handlerManager, ILogger logger)
         {
-            if (session?.Metadata == null
-                || !session.Metadata.TryGetValue("Purpose", out var purpose)
-                || purpose != "FuturityNomination")
+            if (session?.Metadata == null || !session.Metadata.TryGetValue("Purpose", out var purpose))
             {
                 return;
             }
 
+            switch (purpose)
+            {
+                case "FuturityNomination":
+                    await HandleFuturityNominationAsync(session, dogManager, logger);
+                    break;
+                case "MembershipPurchase":
+                    await HandleMembershipPurchaseAsync(session, handlerManager, logger);
+                    break;
+            }
+        }
+
+        private static async Task HandleFuturityNominationAsync(Session session, IMSSA_DogManager dogManager, ILogger logger)
+        {
             if (!session.Metadata.TryGetValue("ParticipationId", out var participationIdText)
                 || !int.TryParse(participationIdText, out var participationId))
             {
@@ -84,6 +96,29 @@ namespace MountainStates.MSSA.Module.MSSA_Dogs.Startup
             else
             {
                 logger.LogInformation("Futurity participation {ParticipationId} marked Paid via Stripe session {SessionId}", participationId, session.Id);
+            }
+        }
+
+        private static async Task HandleMembershipPurchaseAsync(Session session, IMSSA_HandlerManager handlerManager, ILogger logger)
+        {
+            if (!session.Metadata.TryGetValue("MembershipId", out var membershipIdText)
+                || !int.TryParse(membershipIdText, out var membershipId))
+            {
+                logger.LogError("Membership checkout session {SessionId} completed with no valid MembershipId in metadata", session.Id);
+                return;
+            }
+
+            // AmountTotal is in the smallest currency unit (cents for USD).
+            var amount = (session.AmountTotal ?? 0) / 100m;
+
+            var updated = await handlerManager.MarkMembershipPaymentReceivedAsync(membershipId, session.PaymentIntentId, amount, moduleId: 0);
+            if (updated == null)
+            {
+                logger.LogError("Membership {MembershipId} not found - could not mark Paid", membershipId);
+            }
+            else
+            {
+                logger.LogInformation("Membership {MembershipId} marked Paid via Stripe session {SessionId}", membershipId, session.Id);
             }
         }
     }

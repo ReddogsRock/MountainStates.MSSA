@@ -47,6 +47,31 @@ namespace MountainStates.MSSA.Module.MSSA_Dogs.Manager
         {
             var productId = _configuration["Stripe:FuturityProductId"];
 
+            return await CreateCheckoutSessionAsync(productId, successUrl, cancelUrl, new Dictionary<string, string>
+            {
+                { "Purpose", "FuturityNomination" },
+                { "ParticipationId", participationId.ToString() }
+            });
+        }
+
+        public async Task<string> CreateMembershipCheckoutSessionAsync(int membershipId, string membershipType, string successUrl, string cancelUrl)
+        {
+            var productId = _configuration[$"Stripe:MembershipProductIds:{membershipType}"];
+            if (string.IsNullOrEmpty(productId))
+            {
+                throw new InvalidOperationException(
+                    $"No Stripe product configured for membership type '{membershipType}' (Stripe:MembershipProductIds:{membershipType}).");
+            }
+
+            return await CreateCheckoutSessionAsync(productId, successUrl, cancelUrl, new Dictionary<string, string>
+            {
+                { "Purpose", "MembershipPurchase" },
+                { "MembershipId", membershipId.ToString() }
+            });
+        }
+
+        private async Task<string> CreateCheckoutSessionAsync(string productId, string successUrl, string cancelUrl, Dictionary<string, string> metadata)
+        {
             var priceId = await ResolveActivePriceIdAsync(productId);
 
             var options = new SessionCreateOptions
@@ -54,8 +79,8 @@ namespace MountainStates.MSSA.Module.MSSA_Dogs.Manager
                 Mode = "payment",
                 // Restricting to plain card entry keeps Stripe from offering Link (its
                 // cross-merchant saved-card/SMS-verification feature) - a one-off
-                // nomination fee doesn't need it, and its verification UI has been
-                // unreliable enough in testing to just avoid entirely.
+                // payment doesn't need it, and its verification UI has been unreliable
+                // enough in testing to just avoid entirely.
                 PaymentMethodTypes = new List<string> { "card" },
                 LineItems = new List<SessionLineItemOptions>
                 {
@@ -67,11 +92,7 @@ namespace MountainStates.MSSA.Module.MSSA_Dogs.Manager
                 },
                 SuccessUrl = successUrl,
                 CancelUrl = cancelUrl,
-                Metadata = new Dictionary<string, string>
-                {
-                    { "Purpose", "FuturityNomination" },
-                    { "ParticipationId", participationId.ToString() }
-                }
+                Metadata = metadata
             };
 
             var sessionService = new SessionService();

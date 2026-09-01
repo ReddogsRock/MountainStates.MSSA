@@ -4,16 +4,19 @@ using System.Threading.Tasks;
 using Oqtane.Modules;
 using MountainStates.MSSA.Module.MSSA_Handlers.Repository;
 using MountainStates.MSSA.Module.MSSA_Handlers.Models;
+using MountainStates.MSSA.Module.MSSA_Dogs.Manager;
 
 namespace MountainStates.MSSA.Module.MSSA_Handlers.Manager
 {
     public class MSSA_HandlerManager : IMSSA_HandlerManager, ITransientService
     {
         private readonly IMSSA_HandlerRepository _repository;
+        private readonly IStripeService _stripeService;
 
-        public MSSA_HandlerManager(IMSSA_HandlerRepository repository)
+        public MSSA_HandlerManager(IMSSA_HandlerRepository repository, IStripeService stripeService)
         {
             _repository = repository;
+            _stripeService = stripeService;
         }
 
         public async Task<IEnumerable<MSSA_Handler>> GetHandlersAsync(int moduleId)
@@ -88,6 +91,16 @@ namespace MountainStates.MSSA.Module.MSSA_Handlers.Manager
         public async Task<List<MembershipMemberInfo>> RemoveMemberFromMembershipAsync(int membershipId, int handlerId, int moduleId)
         {
             return await _repository.RemoveMemberFromMembershipAsync(membershipId, handlerId);
+        }
+
+        public async Task<MSSA_Membership> MarkMembershipPaymentReceivedAsync(int membershipId, string stripePaymentIntentId, decimal amount, int moduleId)
+        {
+            return await _repository.MarkMembershipPaymentReceivedAsync(membershipId, stripePaymentIntentId, amount);
+        }
+
+        public async Task<string> CreateMembershipCheckoutSessionAsync(int membershipId, string membershipType, string successUrl, string cancelUrl, int moduleId)
+        {
+            return await _stripeService.CreateMembershipCheckoutSessionAsync(membershipId, membershipType, successUrl, cancelUrl);
         }
 
         public async Task<List<MSSA_Membership>> SearchMembershipsAsync(string filter, string searchTerm, int moduleId)

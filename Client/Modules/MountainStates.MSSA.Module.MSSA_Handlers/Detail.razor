@@ -29,6 +29,24 @@ else
             </div>
         </div>
 
+        @if (PageState.QueryString.ContainsKey("membership"))
+        {
+            @if (PageState.QueryString["membership"] == "success")
+            {
+                <div class="alert alert-success">
+                    Payment received - thank you! The membership will show as paid here
+                    shortly once Stripe confirms the charge.
+                </div>
+            }
+            else if (PageState.QueryString["membership"] == "cancelled")
+            {
+                <div class="alert alert-warning">
+                    The membership payment wasn't completed, so it's still pending.
+                    You can try again below.
+                </div>
+            }
+        }
+
         @* Handler Information *@
         <div class="card mb-3">
             <div class="card-header">
@@ -122,8 +140,11 @@ else
 
         @* Membership *@
         <div class="card mb-3">
-            <div class="card-header">
-                <h4>Membership</h4>
+            <div class="card-header d-flex justify-content-between align-items-center">
+                <h4 class="mb-0">Membership</h4>
+                <button type="button" class="btn btn-sm btn-primary" @onclick="ShowPurchaseMembership">
+                    Purchase / Renew Membership
+                </button>
             </div>
             <div class="card-body">
                 @if (handler.Memberships == null || !handler.Memberships.Any())
@@ -183,6 +204,112 @@ else
                 }
             </div>
         </div>
+
+        @* Purchase/Renew Membership Modal *@
+        @if (showMembershipModal)
+        {
+            <div class="modal fade show d-block" tabindex="-1" style="background-color: rgba(0,0,0,0.5);">
+                <div class="modal-dialog">
+                    <div class="modal-content">
+                        <div class="modal-header">
+                            <h5 class="modal-title">Purchase / Renew Membership</h5>
+                            <button type="button" class="btn-close" @onclick="CloseMembershipModal"></button>
+                        </div>
+                        <div class="modal-body">
+                            <div class="row g-2">
+                                <div class="col-md-7">
+                                    <label class="form-label">Membership Type</label>
+                                    <select class="form-select" @bind="selectedMembershipType">
+                                        <option value="AI">Annual Individual</option>
+                                        <option value="AF">Annual Family</option>
+                                        <option value="3I">3 Year Individual</option>
+                                        <option value="3F">3 Year Family</option>
+                                        <option value="Lifetime">Lifetime</option>
+                                    </select>
+                                </div>
+                                <div class="col-md-5">
+                                    <label class="form-label">Start Year</label>
+                                    <input type="number" class="form-control" @bind="membershipStartYear" />
+                                </div>
+                            </div>
+
+                            @if (selectedMembershipType == "AF" || selectedMembershipType == "3F")
+                            {
+                                <hr />
+                                <p class="mb-2">
+                                    <strong>Family members</strong> - @handler.FullName is included automatically.
+                                    Add anyone else this membership should cover.
+                                </p>
+
+                                <div class="row g-2">
+                                    <div class="col-md-8">
+                                        <input class="form-control" placeholder="Search by name" @bind="familySearchTerm" @bind:event="oninput"
+                                               @onkeyup="@(async e => { if (e.Key == "Enter") await SearchFamilyMembers(); })" />
+                                    </div>
+                                    <div class="col-md-4">
+                                        <button type="button" class="btn btn-outline-primary w-100" @onclick="SearchFamilyMembers">Search</button>
+                                    </div>
+                                </div>
+
+                                @if (familySearchResults != null)
+                                {
+                                    @if (!familySearchResults.Any())
+                                    {
+                                        <p class="text-muted mt-2 mb-0"><em>No handlers found.</em></p>
+                                    }
+                                    else
+                                    {
+                                        <table class="table table-sm mt-2">
+                                            <tbody>
+                                                @foreach (var h in familySearchResults)
+                                                {
+                                                    <tr>
+                                                        <td>@h.FullName</td>
+                                                        <td>@h.StateCode</td>
+                                                        <td class="text-end">
+                                                            <button type="button" class="btn btn-sm btn-outline-primary"
+                                                                    disabled="@selectedFamilyMembers.Any(x => x.HandlerId == h.HandlerId)"
+                                                                    @onclick="() => AddFamilyMember(h)">
+                                                                Add
+                                                            </button>
+                                                        </td>
+                                                    </tr>
+                                                }
+                                            </tbody>
+                                        </table>
+                                    }
+                                }
+
+                                @if (selectedFamilyMembers.Any())
+                                {
+                                    <p class="mb-1 mt-2"><strong>Also covered:</strong></p>
+                                    <ul class="list-group">
+                                        @foreach (var m in selectedFamilyMembers)
+                                        {
+                                            <li class="list-group-item d-flex justify-content-between align-items-center py-1">
+                                                @m.FullName
+                                                <button type="button" class="btn btn-sm btn-outline-danger" @onclick="() => RemoveFamilyMember(m.HandlerId)">Remove</button>
+                                            </li>
+                                        }
+                                    </ul>
+                                }
+                            }
+
+                            @if (!string.IsNullOrEmpty(membershipErrorMessage))
+                            {
+                                <div class="alert alert-danger mt-3 mb-0">@membershipErrorMessage</div>
+                            }
+                        </div>
+                        <div class="modal-footer">
+                            <button type="button" class="btn btn-primary" disabled="@creatingMembershipCheckout" @onclick="SubmitMembershipPurchase">
+                                @(creatingMembershipCheckout ? "Redirecting to payment..." : "Continue to Payment")
+                            </button>
+                            <button type="button" class="btn btn-secondary" @onclick="CloseMembershipModal">Cancel</button>
+                        </div>
+                    </div>
+                </div>
+            </div>
+        }
 
         @* Competition Entries *@
         <div class="card">
@@ -319,6 +446,15 @@ else
     private string sortColumn = "Date";
     private bool sortAscending = false;
 
+    private bool showMembershipModal = false;
+    private string selectedMembershipType = "AI";
+    private int membershipStartYear = DateTime.Today.Year;
+    private string familySearchTerm = "";
+    private List<MSSA_Handler> familySearchResults;
+    private List<MSSA_Handler> selectedFamilyMembers = new();
+    private string membershipErrorMessage = "";
+    private bool creatingMembershipCheckout = false;
+
     protected override async Task OnInitializedAsync()
     {
         try
@@ -413,5 +549,90 @@ else
             return $"({phone.Substring(0, 3)}) {phone.Substring(3, 3)}-{phone.Substring(6, 4)}";
         }
         return phone ?? "";
+    }
+
+    private void ShowPurchaseMembership()
+    {
+        selectedMembershipType = "AI";
+        membershipStartYear = DateTime.Today.Year;
+        familySearchTerm = "";
+        familySearchResults = null;
+        selectedFamilyMembers = new List<MSSA_Handler>();
+        membershipErrorMessage = "";
+        creatingMembershipCheckout = false;
+        showMembershipModal = true;
+    }
+
+    private void CloseMembershipModal()
+    {
+        showMembershipModal = false;
+    }
+
+    private async Task SearchFamilyMembers()
+    {
+        if (string.IsNullOrWhiteSpace(familySearchTerm))
+        {
+            familySearchResults = new List<MSSA_Handler>();
+            return;
+        }
+
+        var results = await HandlerService.SearchHandlersAsync(familySearchTerm, null, null, ModuleState.ModuleId);
+        // The handler viewing this page is already covered automatically - don't show
+        // them again as a separate "family member" to add.
+        familySearchResults = results.Where(h => h.HandlerId != handler.HandlerId).ToList();
+    }
+
+    private void AddFamilyMember(MSSA_Handler h)
+    {
+        if (!selectedFamilyMembers.Any(x => x.HandlerId == h.HandlerId))
+        {
+            selectedFamilyMembers.Add(h);
+        }
+    }
+
+    private void RemoveFamilyMember(int handlerId)
+    {
+        selectedFamilyMembers.RemoveAll(x => x.HandlerId == handlerId);
+    }
+
+    private async Task SubmitMembershipPurchase()
+    {
+        try
+        {
+            membershipErrorMessage = "";
+            creatingMembershipCheckout = true;
+
+            var memberHandlerIds = new List<int> { handler.HandlerId };
+            memberHandlerIds.AddRange(selectedFamilyMembers.Select(m => m.HandlerId));
+
+            var membership = new MSSA_Membership
+            {
+                MembershipType = selectedMembershipType,
+                StartYear = membershipStartYear,
+                PrimaryHandlerId = handler.HandlerId,
+                MemberHandlerIds = memberHandlerIds.Distinct().ToList()
+            };
+
+            var saved = await HandlerService.AddMembershipAsync(membership, ModuleState.ModuleId);
+
+            var successUrl = NavigationManager.ToAbsoluteUri(EditUrl("Detail", $"id={handler.HandlerId}&membership=success")).ToString();
+            var cancelUrl = NavigationManager.ToAbsoluteUri(EditUrl("Detail", $"id={handler.HandlerId}&membership=cancelled")).ToString();
+
+            var checkout = await HandlerService.CreateMembershipCheckoutSessionAsync(new CreateMembershipCheckoutDto
+            {
+                MembershipId = saved.MembershipId,
+                MembershipType = selectedMembershipType,
+                SuccessUrl = successUrl,
+                CancelUrl = cancelUrl
+            }, ModuleState.ModuleId);
+
+            await JSRuntime.InvokeVoidAsync("window.location.assign", checkout.CheckoutUrl);
+        }
+        catch (Exception ex)
+        {
+            await logger.LogError(ex, "Error starting membership purchase");
+            membershipErrorMessage = "Error starting payment. Please try again.";
+            creatingMembershipCheckout = false;
+        }
     }
 }

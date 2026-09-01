@@ -187,9 +187,12 @@ namespace MountainStates.MSSA.Module.MSSA_Handlers.Controllers
         }
 
         // POST: api/MSSA_Handler/membership?moduleid=x
-        // Requires login (any authenticated user), matching the handler edit policy.
+        // Open to everyone - same reasoning as Handler creation (Post above): there's
+        // no link between an authenticated person and handler ownership, and per
+        // project decision, someone paying for another handler's membership isn't
+        // something to gate against.
         [HttpPost("membership")]
-        [Authorize]
+        [AllowAnonymous]
         public async Task<MSSA_Membership> AddMembership([FromBody] MSSA_Membership membership, int moduleId)
         {
             try
@@ -261,9 +264,11 @@ namespace MountainStates.MSSA.Module.MSSA_Handlers.Controllers
         }
 
         // POST: api/MSSA_Handler/membership/5/member/12?moduleid=x
-        // No request body needed - both ids are in the route.
+        // No request body needed - both ids are in the route. Anonymous for the same
+        // reason AddMembership is - adding a family member while purchasing happens
+        // before there's any authenticated session to require.
         [HttpPost("membership/{membershipId}/member/{handlerId}")]
-        [Authorize]
+        [AllowAnonymous]
         public async Task<List<MembershipMemberInfo>> AddMemberToMembership(int membershipId, int handlerId, int moduleId)
         {
             try
@@ -283,7 +288,7 @@ namespace MountainStates.MSSA.Module.MSSA_Handlers.Controllers
         // POST rather than DELETE, since this needs to return the updated member list
         // and every DeleteAsync call elsewhere in this app returns no response body.
         [HttpPost("membership/{membershipId}/member/{handlerId}/remove")]
-        [Authorize]
+        [AllowAnonymous]
         public async Task<List<MembershipMemberInfo>> RemoveMemberFromMembership(int membershipId, int handlerId, int moduleId)
         {
             try
@@ -295,6 +300,37 @@ namespace MountainStates.MSSA.Module.MSSA_Handlers.Controllers
             catch (System.Exception ex)
             {
                 _logger.Log(LogLevel.Error, this, LogFunction.Update, ex, "Error removing handler {HandlerId} from membership {MembershipId}", handlerId, membershipId);
+                throw;
+            }
+        }
+
+        // POST: api/MSSA_Handler/membership/5/checkout?moduleid=x
+        // Open to everyone, same reasoning as AddMembership above - creates a Stripe
+        // Checkout Session for the membership's price and returns its URL for the
+        // client to redirect to. Doesn't touch the membership record itself; only the
+        // webhook (StripeWebhookHandler) ever marks it Paid.
+        [HttpPost("membership/{membershipId}/checkout")]
+        [AllowAnonymous]
+        public async Task<MembershipCheckoutResult> CreateMembershipCheckout(int membershipId, [FromBody] CreateMembershipCheckoutDto dto, int moduleId)
+        {
+            try
+            {
+                if (dto == null || dto.MembershipId != membershipId
+                    || string.IsNullOrEmpty(dto.MembershipType)
+                    || string.IsNullOrEmpty(dto.SuccessUrl) || string.IsNullOrEmpty(dto.CancelUrl))
+                {
+                    HttpContext.Response.StatusCode = (int)System.Net.HttpStatusCode.BadRequest;
+                    return null;
+                }
+
+                var checkoutUrl = await _manager.CreateMembershipCheckoutSessionAsync(membershipId, dto.MembershipType, dto.SuccessUrl, dto.CancelUrl, moduleId);
+                _logger.Log(LogLevel.Information, this, LogFunction.Create, "Membership checkout session created for membership {MembershipId}", membershipId);
+
+                return new MembershipCheckoutResult { CheckoutUrl = checkoutUrl };
+            }
+            catch (System.Exception ex)
+            {
+                _logger.Log(LogLevel.Error, this, LogFunction.Create, ex, "Error creating membership checkout session for membership {MembershipId}", membershipId);
                 throw;
             }
         }

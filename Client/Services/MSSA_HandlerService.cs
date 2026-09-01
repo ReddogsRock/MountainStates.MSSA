@@ -115,5 +115,11 @@ namespace MountainStates.MSSA.Module.MSSA_Handlers.Services
             var url = $"{ApiUrl}/memberships/search?{string.Join("&", queryParams)}";
             return await GetJsonAsync<List<MSSA_Membership>>(CreateAuthorizationPolicyUrl(url, EntityNames.Module, moduleId));
         }
+
+        public async Task<MembershipCheckoutResult> CreateMembershipCheckoutSessionAsync(CreateMembershipCheckoutDto dto, int moduleId)
+        {
+            return await PostJsonAsync<CreateMembershipCheckoutDto, MembershipCheckoutResult>(
+                CreateAuthorizationPolicyUrl($"{ApiUrl}/membership/{dto.MembershipId}/checkout?moduleid={moduleId}", EntityNames.Module, moduleId), dto);
+        }
     }
 }

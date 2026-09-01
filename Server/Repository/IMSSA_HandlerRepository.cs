@@ -28,6 +28,7 @@ namespace MountainStates.MSSA.Module.MSSA_Handlers.Repository
         Task DeleteMembershipAsync(int membershipId);
         Task<List<MembershipMemberInfo>> AddMemberToMembershipAsync(int membershipId, int handlerId);
         Task<List<MembershipMemberInfo>> RemoveMemberFromMembershipAsync(int membershipId, int handlerId);
+        Task<MSSA_Membership> MarkMembershipPaymentReceivedAsync(int membershipId, string stripePaymentIntentId, decimal amount);
         Task<List<MSSA_Membership>> SearchMembershipsAsync(string filter, string searchTerm);
     }
 }

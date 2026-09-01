@@ -11,6 +11,7 @@ using Oqtane.Infrastructure;
 using Oqtane.Shared;
 using MountainStates.MSSA.Module.MSSA_Dogs.Manager;
 using MountainStates.MSSA.Module.MSSA_Dogs.Startup;
+using MountainStates.MSSA.Module.MSSA_Handlers.Manager;
 
 namespace MountainStates.MSSA.Server
 {
@@ -59,10 +60,11 @@ namespace MountainStates.MSSA.Server
                         // second, unconditional fallback so that can never happen again.
                         var stripeService = context.RequestServices.GetRequiredService<IStripeService>();
                         var dogManager = context.RequestServices.GetRequiredService<IMSSA_DogManager>();
+                        var handlerManager = context.RequestServices.GetRequiredService<IMSSA_HandlerManager>();
                         var loggerFactory = context.RequestServices.GetRequiredService<ILoggerFactory>();
                         var logger = loggerFactory.CreateLogger("StripeWebhook");
 
-                        await StripeWebhookHandler.HandleAsync(context, stripeService, dogManager, logger);
+                        await StripeWebhookHandler.HandleAsync(context, stripeService, dogManager, handlerManager, logger);
                     }
                     catch (Exception ex)
                     {

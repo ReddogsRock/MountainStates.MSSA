@@ -29,5 +29,6 @@ namespace MountainStates.MSSA.Module.MSSA_Handlers.Services
         Task<List<MembershipMemberInfo>> AddMemberToMembershipAsync(int membershipId, int handlerId, int moduleId);
         Task<List<MembershipMemberInfo>> RemoveMemberFromMembershipAsync(int membershipId, int handlerId, int moduleId);
         Task<List<MSSA_Membership>> SearchMembershipsAsync(string filter, string searchTerm, int moduleId);
+        Task<MembershipCheckoutResult> CreateMembershipCheckoutSessionAsync(CreateMembershipCheckoutDto dto, int moduleId);
     }
 }

@@ -34,6 +34,9 @@ namespace MountainStates.MSSA.Module.MSSA_Handlers.Models
 
         public DateTime? DateReceived { get; set; }
 
+        [StringLength(255)]
+        public string StripePaymentIntentId { get; set; }
+
         public DateTime CreatedDate { get; set; }
         public DateTime ModifiedDate { get; set; }
 
