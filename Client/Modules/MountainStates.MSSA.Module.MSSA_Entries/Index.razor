@@ -79,7 +79,6 @@
             <h2>Trial Entries</h2>
         </div>
         @if (UserSecurity.IsAuthorized(PageState.User, RoleNames.Admin) ||
-                UserSecurity.IsAuthorized(PageState.User, MSSARoles.Scorekeeper) ||
                 UserSecurity.IsAuthorized(PageState.User, MSSARoles.TrialSecretary))
         {
             <div class="col-auto">
@@ -129,9 +128,13 @@
                     UserSecurity.IsAuthorized(PageState.User, MSSARoles.TrialSecretary))
             {
                 <div class="col-auto">
-                    <button class="btn btn-secondary btn-sm me-2" @onclick="GenerateProposal" disabled="@(entries == null || !entries.Any())">
-                        <span class="oi oi-random"></span> Generate Run Order
-                    </button>
+                    @if (UserSecurity.IsAuthorized(PageState.User, RoleNames.Admin) ||
+                            UserSecurity.IsAuthorized(PageState.User, MSSARoles.TrialSecretary))
+                    {
+                        <button class="btn btn-secondary btn-sm me-2" @onclick="GenerateProposal" disabled="@(entries == null || !entries.Any())">
+                            <span class="oi oi-random"></span> Generate Run Order
+                        </button>
+                    }
                     <button class="btn btn-outline-secondary btn-sm me-2" @onclick="ExportToExcel" disabled="@(entries == null || !entries.Any())">
                         Export to Excel
                     </button>
@@ -141,6 +144,28 @@
                 </div>
             }
         </div>
+
+        @if (UserSecurity.IsAuthorized(PageState.User, RoleNames.Admin) ||
+                UserSecurity.IsAuthorized(PageState.User, MSSARoles.TrialSecretary))
+        {
+            <div class="row mb-3">
+                <div class="col-md-4">
+                    <label for="scorekeeperSelect" class="form-label">Scorekeeper for this Trial</label>
+                    <select id="scorekeeperSelect" class="form-select form-select-sm"
+                            value="@SelectedTrial?.ScorekeeperUserId"
+                            @onchange="OnScorekeeperChanged">
+                        <option value="">-- Not assigned --</option>
+                        @if (scorekeepers != null)
+                        {
+                            @foreach (var sk in scorekeepers)
+                            {
+                                <option value="@sk.UserId">@sk.DisplayName</option>
+                            }
+                        }
+                    </select>
+                </div>
+            </div>
+        }
 
         @if (showRunOrderPreview && proposedRunOrder != null)
         {
@@ -340,6 +365,7 @@
     private List<MSSA_Trial> trials;
     private List<EntryListItem> entries;
     private List<MSSA_Class> classes;
+    private List<UserOptionDto> scorekeepers;
 
     private int selectedEventId = 0;
     private int selectedTrialId = 0;
@@ -360,6 +386,8 @@
             return events.Where(e => e.CreatedByUserId == PageState.User.UserId);
         }
     }
+
+    private MSSA_Trial SelectedTrial => trials?.FirstOrDefault(t => t.TrialId == selectedTrialId);
 
     private bool showRunOrderPreview = false;
     private List<RunOrderEntry> proposedRunOrder;
@@ -386,6 +414,7 @@
         {
             events = await EventService.GetEventsAsync(ModuleState.ModuleId);
             classes = await EntryService.GetClassesAsync(ModuleState.ModuleId);
+            scorekeepers = await EventService.GetScorekeepersAsync(PageState.Site.SiteId, ModuleState.ModuleId);
 
             // If we have a trial ID in query string, pre-select it
             if (PageState.QueryString.ContainsKey("trialId"))
@@ -432,18 +461,24 @@
         }
     }
 
-    // Admin/Scorekeeper can edit any entry; a Trial Secretary only entries whose
-    // Event they own.
+    // Admin can edit any entry. A Trial Secretary only entries whose Event they own.
+    // A Scorekeeper only entries whose Trial they're assigned to - they don't create
+    // entries, so they have no ownership claim otherwise.
     private bool CanEdit(EntryListItem entry)
     {
-        if (UserSecurity.IsAuthorized(PageState.User, RoleNames.Admin) ||
-            UserSecurity.IsAuthorized(PageState.User, MSSARoles.Scorekeeper))
+        if (UserSecurity.IsAuthorized(PageState.User, RoleNames.Admin))
         {
             return true;
         }
 
-        return UserSecurity.IsAuthorized(PageState.User, MSSARoles.TrialSecretary)
-            && entry.EventCreatedByUserId == PageState.User.UserId;
+        if (UserSecurity.IsAuthorized(PageState.User, MSSARoles.TrialSecretary)
+            && entry.EventCreatedByUserId == PageState.User.UserId)
+        {
+            return true;
+        }
+
+        return UserSecurity.IsAuthorized(PageState.User, MSSARoles.Scorekeeper)
+            && entry.TrialScorekeeperUserId == PageState.User.UserId;
     }
 
     private async Task LoadTrialEntries()
@@ -455,6 +490,34 @@
         else
         {
             entries = null;
+        }
+    }
+
+    private async Task OnScorekeeperChanged(ChangeEventArgs e)
+    {
+        var trial = SelectedTrial;
+        if (trial == null)
+        {
+            return;
+        }
+
+        try
+        {
+            var value = e.Value?.ToString();
+            trial.ScorekeeperUserId = string.IsNullOrEmpty(value) ? null : int.Parse(value);
+
+            await EventService.UpdateTrialAsync(trial, ModuleState.ModuleId);
+
+            // Refresh so each entry's TrialScorekeeperUserId (used to gate their Edit
+            // link for the newly-assigned Scorekeeper) reflects the change immediately.
+            await LoadTrialEntries();
+
+            AddModuleMessage("Scorekeeper updated", MessageType.Success);
+        }
+        catch (Exception ex)
+        {
+            await logger.LogError(ex, "Error updating scorekeeper for trial {TrialId}", trial.TrialId);
+            AddModuleMessage("Error updating scorekeeper. Please try again.", MessageType.Error);
         }
     }
 

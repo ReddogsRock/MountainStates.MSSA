@@ -67,7 +67,8 @@ namespace MountainStates.MSSA.Module.MSSA_Entries.Repository
                                      EventName = ev.EventName,
                                      TrialDate = t.TrialDate,
                                      Year = ev.PointYear ?? t.TrialDate.Year,
-                                     EventCreatedByUserId = ev.CreatedByUserId
+                                     EventCreatedByUserId = ev.CreatedByUserId,
+                                     TrialScorekeeperUserId = t.ScorekeeperUserId
                                  })
                                 .OrderByDescending(e => e.TrialDate)
                                 .ToListAsync();
@@ -127,6 +128,7 @@ namespace MountainStates.MSSA.Module.MSSA_Entries.Repository
                                      Stock = t.Stock,
                                      Year = ev.PointYear ?? t.TrialDate.Year,
                                      EventCreatedByUserId = ev.CreatedByUserId,
+                                     TrialScorekeeperUserId = t.ScorekeeperUserId,
                                      EventResultsApprovalStatus = ev.ResultsApprovalStatus
                                  })
                                 .ToListAsync();
@@ -183,7 +185,8 @@ namespace MountainStates.MSSA.Module.MSSA_Entries.Repository
                                    EventName = ev.EventName,
                                    TrialDate = t.TrialDate,
                                    Year = ev.PointYear ?? t.TrialDate.Year,
-                                   EventCreatedByUserId = ev.CreatedByUserId
+                                   EventCreatedByUserId = ev.CreatedByUserId,
+                                   TrialScorekeeperUserId = t.ScorekeeperUserId
                                })
                               .FirstOrDefaultAsync();
 

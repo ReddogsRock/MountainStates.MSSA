@@ -94,6 +94,12 @@ namespace MountainStates.MSSA.Module.MSSA_Entries.Models
         [NotMapped]
         public int? EventCreatedByUserId { get; set; }
 
+        // Who's assigned to score this entry's Trial (MSSA_Trial.ScorekeeperUserId).
+        // A Scorekeeper may edit an entry only when this matches their UserId - they
+        // don't create entries, so they have no ownership claim otherwise.
+        [NotMapped]
+        public int? TrialScorekeeperUserId { get; set; }
+
         [NotMapped]
         public decimal? TotalScore
         {

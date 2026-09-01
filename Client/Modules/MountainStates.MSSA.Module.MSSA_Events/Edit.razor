@@ -323,6 +323,22 @@
                                     </select>
                                 </div>
                             </div>
+                            <div class="row mb-2">
+                                <div class="col-md-4">
+                                    <label class="form-label">Scorekeeper</label>
+                                    <select class="form-select" @bind="currentTrial.ScorekeeperUserId">
+                                        <option value="">-- Not assigned --</option>
+                                        @if (scorekeepers != null)
+                                        {
+                                            @foreach (var sk in scorekeepers)
+                                            {
+                                                <option value="@sk.UserId">@sk.DisplayName</option>
+                                            }
+                                        }
+                                    </select>
+                                    <small class="form-text text-muted">Who enters scores for this trial - can differ per trial for multi-day events.</small>
+                                </div>
+                            </div>
                             <div class="mt-2">
                                 <button type="button" class="btn btn-sm btn-success me-2" @onclick="SaveTrial">Save</button>
                                 <button type="button" class="btn btn-sm btn-secondary" @onclick="CancelTrial">Cancel</button>
@@ -425,6 +441,7 @@
     private bool showTrialForm = false;
     private int editingTrialId = -1;
     private MSSA_Trial currentTrial = new();
+    private List<UserOptionDto> scorekeepers;
 
     private IBrowserFile selectedFlyer;
 
@@ -434,6 +451,7 @@
         {
             states = await StateService.GetStatesAsync(ModuleState.ModuleId);
             classes = await EntryService.GetClassesAsync(ModuleState.ModuleId);
+            scorekeepers = await EventService.GetScorekeepersAsync(PageState.Site.SiteId, ModuleState.ModuleId);
 
             if (PageState.QueryString.ContainsKey("id"))
             {
@@ -646,7 +664,8 @@
             TrialName = trial.TrialName,
             TrialDate = trial.TrialDate,
             Stock = trial.Stock,
-            Venue = trial.Venue
+            Venue = trial.Venue,
+            ScorekeeperUserId = trial.ScorekeeperUserId
         };
         editingTrialId = trial.TrialId;
         showTrialForm = true;

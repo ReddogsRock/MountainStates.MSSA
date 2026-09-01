@@ -667,16 +667,16 @@ else
 
     private HashSet<(int OfferingId, int TrialId)> checkedCells = new();
 
-    // Admin/Scorekeeper can add entries to any event; a Trial Secretary only to
-    // events they own. Used for the Add-mode Event dropdown.
+    // Admin can add entries to any event; a Trial Secretary only to events they own.
+    // A Scorekeeper doesn't create entries at all, so they get nothing here. Used for
+    // the Add-mode Event dropdown.
     private IEnumerable<MSSA_Event> AddableEvents
     {
         get
         {
             if (events == null) return Enumerable.Empty<MSSA_Event>();
 
-            if (UserSecurity.IsAuthorized(PageState.User, RoleNames.Admin) ||
-                UserSecurity.IsAuthorized(PageState.User, MSSARoles.Scorekeeper))
+            if (UserSecurity.IsAuthorized(PageState.User, RoleNames.Admin))
             {
                 return events;
             }
@@ -685,18 +685,23 @@ else
         }
     }
 
-    // Admin/Scorekeeper can edit any entry; a Trial Secretary only entries whose
-    // Event they own.
+    // Admin can edit any entry. A Trial Secretary only entries whose Event they own.
+    // A Scorekeeper only entries whose Trial they're assigned to.
     private bool CanEditEntry(MSSA_Entry entry)
     {
-        if (UserSecurity.IsAuthorized(PageState.User, RoleNames.Admin) ||
-            UserSecurity.IsAuthorized(PageState.User, MSSARoles.Scorekeeper))
+        if (UserSecurity.IsAuthorized(PageState.User, RoleNames.Admin))
         {
             return true;
         }
 
-        return UserSecurity.IsAuthorized(PageState.User, MSSARoles.TrialSecretary)
-            && entry.EventCreatedByUserId == PageState.User.UserId;
+        if (UserSecurity.IsAuthorized(PageState.User, MSSARoles.TrialSecretary)
+            && entry.EventCreatedByUserId == PageState.User.UserId)
+        {
+            return true;
+        }
+
+        return UserSecurity.IsAuthorized(PageState.User, MSSARoles.Scorekeeper)
+            && entry.TrialScorekeeperUserId == PageState.User.UserId;
     }
 
     protected override async Task OnInitializedAsync()

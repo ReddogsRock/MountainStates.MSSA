@@ -5,9 +5,11 @@ using MountainStates.MSSA.Module.MSSA_Handlers.Data;
 using MountainStates.MSSA.Module.MSSA_Results.Enums;
 using MountainStates.MSSA.Module.MSSA_Results.Models;
 using MountainStates.MSSA.Module.MSSA_Results.Utilities;
+using OfficeOpenXml;
 using Oqtane.Modules;
 using System;
 using System.Collections.Generic;
+using System.IO;
 using System.Linq;
 using System.Threading.Tasks;
 
@@ -17,19 +19,56 @@ namespace MountainStates.MSSA.Module.MSSA_Results.Repository
     {
         private readonly IDbContextFactory<MSSADbContext> _dbContextFactory;
 
+        // EPPlus's license must be set before any ExcelPackage is used, but this
+        // repository is transient - a new instance per request - so the constructor
+        // runs far more than once per process. Guard so the license call itself only
+        // ever runs once, regardless of how many instances get created.
+        private static bool _excelLicenseSet;
+        private static readonly object _excelLicenseLock = new();
+
         public MSSA_ResultRepository(IDbContextFactory<MSSADbContext> dbContextFactory)
         {
             _dbContextFactory = dbContextFactory;
+            EnsureExcelLicenseSet();
         }
 
-        public async Task<List<EventScoringSummary>> GetScoringEventsAsync(int? ownerUserId)
+        private static void EnsureExcelLicenseSet()
+        {
+            if (_excelLicenseSet)
+            {
+                return;
+            }
+
+            lock (_excelLicenseLock)
+            {
+                if (_excelLicenseSet)
+                {
+                    return;
+                }
+
+                ExcelPackage.License.SetNonCommercialOrganization("Mountain States Stockdog Association");
+                _excelLicenseSet = true;
+            }
+        }
+
+        public async Task<List<EventScoringSummary>> GetScoringEventsAsync(int? ownerUserId, int? scorekeeperUserId)
         {
             using var db = await _dbContextFactory.CreateDbContextAsync();
 
             var query = db.MSSA_Events.Where(e => e.IsActive && e.ResultsApprovalStatus != EventResultsStatus.Approved);
+
             if (ownerUserId.HasValue)
             {
                 query = query.Where(e => e.CreatedByUserId == ownerUserId.Value);
+            }
+            else if (scorekeeperUserId.HasValue)
+            {
+                // A Scorekeeper doesn't own the Event - they're assigned per Trial, so an
+                // event qualifies if any of its trials are assigned to them.
+                var eventIdsWithScorekeeper = db.MSSA_Trials
+                    .Where(t => t.ScorekeeperUserId == scorekeeperUserId.Value)
+                    .Select(t => t.EventId);
+                query = query.Where(e => eventIdsWithScorekeeper.Contains(e.EventId));
             }
 
             var events = await query.OrderByDescending(e => e.StartDate).ToListAsync();
@@ -102,6 +141,16 @@ namespace MountainStates.MSSA.Module.MSSA_Results.Repository
                           where t.TrialId == trialId
                           select ev.CreatedByUserId)
                          .FirstOrDefaultAsync();
+        }
+
+        public async Task<int?> GetTrialScorekeeperUserIdAsync(int trialId)
+        {
+            using var db = await _dbContextFactory.CreateDbContextAsync();
+
+            return await db.MSSA_Trials
+                .Where(t => t.TrialId == trialId)
+                .Select(t => t.ScorekeeperUserId)
+                .FirstOrDefaultAsync();
         }
 
         public async Task<int?> GetEventOwnerAsync(int eventId)
@@ -370,6 +419,241 @@ namespace MountainStates.MSSA.Module.MSSA_Results.Repository
             await db.SaveChangesAsync();
 
             return new SubmitEventResultsDto { Success = true, ResultsApprovalStatus = evt.ResultsApprovalStatus };
+        }
+
+        // ─────────────────────────────────────────────────────
+        //  Scoring sheet (Excel) - generate and import
+        // ─────────────────────────────────────────────────────
+
+        // Column order here is just for a human filling it in by hand - the importer
+        // reads by header name, in any order, and ignores anything extra.
+        private static readonly string[] ScoreSheetHeaders =
+        {
+            "RunOrder", "ClassName", "SubClassName", "ClassId",
+            "HandlerId", "HandlerName", "DogId", "DogName", "EntryId",
+            "Time", "TieTime", "TotalPoints"
+        };
+
+        public async Task<byte[]> GenerateScoreSheetAsync(int trialId)
+        {
+            using var db = await _dbContextFactory.CreateDbContextAsync();
+
+            var entries = await db.MSSA_Entries.Where(e => e.TrialId == trialId).ToListAsync();
+
+            var handlerIds = entries.Select(e => e.HandlerId).Distinct().ToList();
+            var handlers = await db.MSSA_Handlers
+                .Where(h => handlerIds.Contains(h.HandlerId))
+                .ToDictionaryAsync(h => h.HandlerId, h => h.FullName);
+
+            var dogIds = entries.Select(e => e.DogId).Distinct().ToList();
+            var dogs = await db.MSSA_Dogs
+                .Where(d => dogIds.Contains(d.DogId))
+                .ToDictionaryAsync(d => d.DogId, d => d.Name);
+
+            var classIds = entries.Select(e => e.ClassId).Distinct().ToList();
+            var classes = await db.MSSA_Classes
+                .Where(c => classIds.Contains(c.ClassId))
+                .ToDictionaryAsync(c => c.ClassId);
+
+            var ordered = entries
+                .OrderBy(e => e.RunOrder ?? int.MaxValue)
+                .ThenBy(e => classes.TryGetValue(e.ClassId, out var ci) ? ci.PrintOrder ?? int.MaxValue : int.MaxValue)
+                .ToList();
+
+            using var package = new ExcelPackage();
+            var ws = package.Workbook.Worksheets.Add("Scoring Sheet");
+
+            for (int col = 0; col < ScoreSheetHeaders.Length; col++)
+            {
+                ws.Cells[1, col + 1].Value = ScoreSheetHeaders[col];
+            }
+
+            using (var headerRange = ws.Cells[1, 1, 1, ScoreSheetHeaders.Length])
+            {
+                headerRange.Style.Font.Bold = true;
+                headerRange.Style.Fill.PatternType = OfficeOpenXml.Style.ExcelFillStyle.Solid;
+                headerRange.Style.Fill.BackgroundColor.SetColor(System.Drawing.Color.LightGray);
+            }
+
+            int row = 2;
+            foreach (var e in ordered)
+            {
+                var c = classes.TryGetValue(e.ClassId, out var classInfo) ? classInfo : null;
+
+                ws.Cells[row, 1].Value = e.RunOrder;
+                ws.Cells[row, 2].Value = c?.ClassName ?? "";
+                ws.Cells[row, 3].Value = c?.SubClassName ?? "";
+                ws.Cells[row, 4].Value = e.ClassId;
+                ws.Cells[row, 5].Value = e.HandlerId;
+                ws.Cells[row, 6].Value = handlers.TryGetValue(e.HandlerId, out var hn) ? hn : "";
+                ws.Cells[row, 7].Value = e.DogId;
+                ws.Cells[row, 8].Value = dogs.TryGetValue(e.DogId, out var dn) ? dn : "";
+                ws.Cells[row, 9].Value = e.EntryId;
+                ws.Cells[row, 10].Value = TimeParsingHelper.Format(e.RunTime);
+                ws.Cells[row, 11].Value = TimeParsingHelper.Format(e.TieBreakerTime);
+                if (e.EnteredTotalScore.HasValue)
+                {
+                    ws.Cells[row, 12].Value = e.EnteredTotalScore.Value;
+                }
+                row++;
+            }
+
+            if (ws.Dimension != null)
+            {
+                ws.Cells[ws.Dimension.Address].AutoFitColumns();
+            }
+
+            return package.GetAsByteArray();
+        }
+
+        public async Task<ScoreSheetImportResult> ImportScoreSheetAsync(int trialId, byte[] fileBytes, int userId)
+        {
+            var result = new ScoreSheetImportResult();
+
+            using var db = await _dbContextFactory.CreateDbContextAsync();
+            var entries = await db.MSSA_Entries.Where(e => e.TrialId == trialId).ToListAsync();
+
+            using var stream = new MemoryStream(fileBytes);
+            using var package = new ExcelPackage(stream);
+            var ws = package.Workbook.Worksheets.FirstOrDefault();
+
+            if (ws?.Dimension == null)
+            {
+                result.Warnings.Add("The file appears to be empty.");
+                return result;
+            }
+
+            int lastCol = ws.Dimension.End.Column;
+            int lastRow = ws.Dimension.End.Row;
+
+            var headerIndex = new Dictionary<string, int>();
+            for (int col = 1; col <= lastCol; col++)
+            {
+                var header = ws.Cells[1, col].Value?.ToString();
+                if (!string.IsNullOrWhiteSpace(header))
+                {
+                    headerIndex[NormalizeHeader(header)] = col;
+                }
+            }
+
+            int? ColOf(string name) => headerIndex.TryGetValue(NormalizeHeader(name), out var c) ? c : (int?)null;
+
+            var entryIdCol = ColOf("EntryId");
+            var handlerIdCol = ColOf("HandlerId");
+            var dogIdCol = ColOf("DogId");
+            var classIdCol = ColOf("ClassId");
+            var timeCol = ColOf("Time") ?? ColOf("RunTime");
+            var tieTimeCol = ColOf("TieTime") ?? ColOf("TieBreakerTime");
+            var totalPointsCol = ColOf("TotalPoints") ?? ColOf("TotalScore") ?? ColOf("Score");
+
+            bool hasEntryIdColumn = entryIdCol.HasValue;
+            bool hasTripleColumns = handlerIdCol.HasValue && dogIdCol.HasValue && classIdCol.HasValue;
+
+            if (!hasEntryIdColumn && !hasTripleColumns)
+            {
+                result.Warnings.Add("The file must include either an EntryId column, or HandlerId, DogId, and ClassId columns.");
+                return result;
+            }
+
+            var byEntryId = entries.ToDictionary(e => e.EntryId);
+            var byTriple = entries
+                .GroupBy(e => (e.HandlerId, e.DogId, e.ClassId))
+                .ToDictionary(g => g.Key, g => g.ToList());
+
+            for (int row = 2; row <= lastRow; row++)
+            {
+                bool rowHasData = false;
+                for (int col = 1; col <= lastCol; col++)
+                {
+                    if (ws.Cells[row, col].Value != null)
+                    {
+                        rowHasData = true;
+                        break;
+                    }
+                }
+                if (!rowHasData)
+                {
+                    continue;
+                }
+
+                result.RowsProcessed++;
+
+                MSSA_Entry entry = null;
+
+                if (hasEntryIdColumn)
+                {
+                    var entryId = ParseInt(ws.Cells[row, entryIdCol.Value].Value);
+                    if (entryId.HasValue)
+                    {
+                        byEntryId.TryGetValue(entryId.Value, out entry);
+                    }
+                }
+
+                if (entry == null && hasTripleColumns)
+                {
+                    var handlerId = ParseInt(ws.Cells[row, handlerIdCol.Value].Value);
+                    var dogId = ParseInt(ws.Cells[row, dogIdCol.Value].Value);
+                    var classId = ParseInt(ws.Cells[row, classIdCol.Value].Value);
+
+                    if (handlerId.HasValue && dogId.HasValue && classId.HasValue)
+                    {
+                        if (byTriple.TryGetValue((handlerId.Value, dogId.Value, classId.Value), out var matches))
+                        {
+                            if (matches.Count == 1)
+                            {
+                                entry = matches[0];
+                            }
+                            else
+                            {
+                                result.Warnings.Add($"Row {row}: multiple entries match Handler {handlerId}, Dog {dogId}, Class {classId} - skipped.");
+                                result.RowsSkipped++;
+                                continue;
+                            }
+                        }
+                    }
+                }
+
+                if (entry == null)
+                {
+                    result.Warnings.Add($"Row {row}: no matching entry found in this trial - skipped.");
+                    result.RowsSkipped++;
+                    continue;
+                }
+
+                if (timeCol.HasValue)
+                {
+                    entry.RunTime = TimeParsingHelper.ParseMinutesSeconds(ws.Cells[row, timeCol.Value].Value?.ToString());
+                }
+                if (tieTimeCol.HasValue)
+                {
+                    entry.TieBreakerTime = TimeParsingHelper.ParseMinutesSeconds(ws.Cells[row, tieTimeCol.Value].Value?.ToString());
+                }
+                if (totalPointsCol.HasValue)
+                {
+                    var raw = ws.Cells[row, totalPointsCol.Value].Value;
+                    entry.EnteredTotalScore = raw != null && decimal.TryParse(raw.ToString(), out var score) ? score : (decimal?)null;
+                }
+
+                entry.ModifiedDate = DateTime.UtcNow;
+                entry.ModifiedBy = userId;
+                result.RowsUpdated++;
+            }
+
+            await db.SaveChangesAsync();
+
+            return result;
+        }
+
+        // Header matching ignores case, spaces, and punctuation - "Tie Time", "TieTime",
+        // and "tie_time" all match the same column.
+        private static string NormalizeHeader(string header)
+        {
+            return new string(header.Where(char.IsLetterOrDigit).ToArray()).ToLowerInvariant();
+        }
+
+        private static int? ParseInt(object value)
+        {
+            return value != null && int.TryParse(value.ToString(), out var i) ? i : (int?)null;
         }
     }
 }

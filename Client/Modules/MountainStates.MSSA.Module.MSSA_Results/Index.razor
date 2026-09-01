@@ -6,6 +6,8 @@
 @using MountainStates.MSSA.Module.MSSA_Events.Models
 @using MountainStates.MSSA.Module.MSSA_Handlers.Enums
 @using Microsoft.AspNetCore.Components.Web
+@using Microsoft.AspNetCore.Components.Forms
+@using System.IO
 
 @namespace MountainStates.MSSA.Module.MSSA_Results
 @inherits ModuleBase
@@ -187,7 +189,7 @@
                         @StatusLabel(selectedEvent.ResultsApprovalStatus)
                     </span>
                 </div>
-                @if (selectedEvent.ResultsApprovalStatus != EventResultsStatus.Approved)
+                @if (selectedEvent.ResultsApprovalStatus != EventResultsStatus.Approved && canSubmitForApproval)
                 {
                     <button class="btn btn-primary" @onclick="SubmitForApproval">
                         Submit Event for Approval
@@ -207,9 +209,43 @@
                 <button class="btn btn-outline-secondary btn-sm ms-2" @onclick="ExportResultsPdf" disabled="@(rows == null || !rows.Any())">
                     Export Results PDF
                 </button>
-                <small class="text-muted ms-2">Calculate is optional - can be run any time, or left until every run is entered.</small>
+                <br />
+                <small class="text-muted">Calculate is optional - can be run any time, or left until every run is entered.</small>
             </div>
         </div>
+
+        <div class="row mb-3">
+            <div class="col">
+                <a class="btn btn-outline-secondary btn-sm" href="@ScoreSheetDownloadUrl" target="_blank">
+                    Download Scoring Sheet
+                </a>
+                <label class="btn btn-outline-secondary btn-sm ms-2 mb-0">
+                    Upload Completed Score Sheet
+                    <InputFile OnChange="OnScoreSheetSelected" style="display:none" accept=".xlsx" />
+                </label>
+                <br />
+                <small class="text-muted">
+                    Works with our template, or your own spreadsheet - as long as it has HandlerId, DogId, and
+                    ClassId columns (column order and extra columns don't matter).
+                </small>
+            </div>
+        </div>
+
+        @if (importResult != null)
+        {
+            <div class="alert @(importResult.RowsUpdated > 0 ? "alert-success" : "alert-warning") mb-3">
+                <div>Updated @importResult.RowsUpdated of @importResult.RowsProcessed row(s).</div>
+                @if (importResult.Warnings.Any())
+                {
+                    <ul class="mb-0">
+                        @foreach (var warning in importResult.Warnings)
+                        {
+                            <li>@warning</li>
+                        }
+                    </ul>
+                }
+            </div>
+        }
 
         @if (rows == null)
         {
@@ -285,6 +321,7 @@
 
 @code {
     private bool isAdmin;
+    private bool canSubmitForApproval;
 
     private List<EventScoringSummary> events;
     private List<EventScoringSummary> pendingEvents;
@@ -298,12 +335,16 @@
     private string successMessage = "";
 
     private readonly HashSet<int> savedEntryIds = new();
+    private ScoreSheetImportResult importResult;
 
     private EventScoringSummary selectedEvent => events?.FirstOrDefault(e => e.EventId == selectedEventId);
 
     protected override async Task OnInitializedAsync()
     {
         isAdmin = UserSecurity.IsAuthorized(PageState.User, RoleNames.Admin);
+        // A Scorekeeper is assigned per Trial, not the Event, so submitting for approval
+        // (an event-owner/sanctioning-fee decision) isn't theirs to make.
+        canSubmitForApproval = isAdmin || UserSecurity.IsAuthorized(PageState.User, MSSARoles.TrialSecretary);
 
         try
         {
@@ -328,10 +369,18 @@
         selectedTrialId = 0;
         rows = null;
         savedEntryIds.Clear();
+        importResult = null;
 
         if (selectedEventId > 0)
         {
-            trials = await EventService.GetEventTrialsAsync(selectedEventId, ModuleState.ModuleId);
+            var eventTrials = await EventService.GetEventTrialsAsync(selectedEventId, ModuleState.ModuleId);
+
+            // A Scorekeeper (and not also Admin/Trial Secretary) can't act on a trial
+            // they're not assigned to anyway - showing it here would just be a dead end,
+            // so only their assigned trial(s) for this event appear.
+            trials = canSubmitForApproval
+                ? eventTrials
+                : eventTrials.Where(t => t.ScorekeeperUserId == PageState.User.UserId).ToList();
         }
         else
         {
@@ -344,6 +393,7 @@
         errorMessage = "";
         successMessage = "";
         savedEntryIds.Clear();
+        importResult = null;
 
         if (selectedTrialId > 0)
         {
@@ -428,6 +478,43 @@
         {
             await logger.LogError(ex, "Error exporting results PDF for trial {TrialId}", selectedTrialId);
             errorMessage = "Error creating the PDF. Please try again.";
+        }
+    }
+
+    private string ScoreSheetDownloadUrl =>
+        $"{PageState.Alias.BaseUrl}/api/MSSA_Result/trial/{selectedTrialId}/scoresheet?moduleid={ModuleState.ModuleId}";
+
+    private async Task OnScoreSheetSelected(InputFileChangeEventArgs e)
+    {
+        try
+        {
+            errorMessage = "";
+            successMessage = "";
+            importResult = null;
+
+            const long maxFileSize = 10 * 1024 * 1024; // 10 MB
+            await using var stream = e.File.OpenReadStream(maxFileSize);
+            using var memoryStream = new MemoryStream();
+            await stream.CopyToAsync(memoryStream);
+
+            var dto = new ImportScoreSheetDto
+            {
+                FileName = e.File.Name,
+                ContentBase64 = Convert.ToBase64String(memoryStream.ToArray())
+            };
+
+            importResult = await ResultService.ImportScoreSheetAsync(selectedTrialId, dto, ModuleState.ModuleId);
+
+            var reloaded = await ResultService.GetTrialRunRowsAsync(selectedTrialId, ModuleState.ModuleId);
+            rows = reloaded.Any(r => r.Placing.HasValue) ? SortByClassAndPlacing(reloaded) : reloaded;
+            savedEntryIds.Clear();
+
+            await RefreshSelectedEventSummary();
+        }
+        catch (Exception ex)
+        {
+            await logger.LogError(ex, "Error importing score sheet for trial {TrialId}", selectedTrialId);
+            errorMessage = "Error importing that file. Please check it and try again.";
         }
     }
 

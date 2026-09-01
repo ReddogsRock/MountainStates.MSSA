@@ -214,14 +214,16 @@ namespace MountainStates.MSSA.Module.MSSA_Entries.Controllers
         {
             try
             {
-                if (!IsAuthorizedForRole(MSSARoles.Admin) && !IsAuthorizedForRole(MSSARoles.Scorekeeper))
+                rows ??= new List<ScoreImportRow>();
+
+                if (!await IsAuthorizedForScoreImportAsync(rows, moduleId))
                 {
                     _logger.Log(LogLevel.Error, this, LogFunction.Security, "Unauthorized score import attempt");
                     HttpContext.Response.StatusCode = (int)System.Net.HttpStatusCode.Forbidden;
                     return null;
                 }
 
-                var updatedRows = await _manager.ImportScoresAsync(rows ?? new List<ScoreImportRow>(), moduleId);
+                var updatedRows = await _manager.ImportScoresAsync(rows, moduleId);
                 _logger.Log(LogLevel.Information, this, LogFunction.Update, "Scores imported ({Count} entries updated)", updatedRows.Count);
                 return updatedRows;
             }
@@ -232,16 +234,41 @@ namespace MountainStates.MSSA.Module.MSSA_Entries.Controllers
             }
         }
 
-        private bool IsAuthorizedForRole(string role)
+        // Admin can import scores for any entry. A Trial Secretary or Scorekeeper only
+        // for entries they're each individually authorized to edit (same rule as a
+        // single entry edit) - checked per distinct EntryId referenced, since a
+        // tampered payload could otherwise mix in entries from a trial they don't own.
+        private async Task<bool> IsAuthorizedForScoreImportAsync(List<ScoreImportRow> rows, int moduleId)
         {
-            return User.IsInRole(role) || User.IsInRole(RoleNames.Admin);
+            if (User.IsInRole(RoleNames.Admin))
+            {
+                return true;
+            }
+
+            if (!rows.Any() || (!User.IsInRole(MSSARoles.TrialSecretary) && !User.IsInRole(MSSARoles.Scorekeeper)))
+            {
+                return false;
+            }
+
+            var entryIds = rows.Select(r => r.EntryId).Distinct();
+            foreach (var entryId in entryIds)
+            {
+                var entry = await _manager.GetEntryAsync(entryId, moduleId);
+                if (!IsAuthorizedForEntry(entry))
+                {
+                    return false;
+                }
+            }
+
+            return true;
         }
 
-        // Admin/Scorekeeper can add an entry to any trial. A Trial Secretary only to a
-        // trial whose Event they own.
+        // Only Admin, or a Trial Secretary on a trial whose Event they own, can create
+        // an entry - a Scorekeeper doesn't create the entries they score, so they have
+        // no basis to add one.
         private async Task<bool> IsAuthorizedToCreateEntryAsync(MSSA_Entry entry, int moduleId)
         {
-            if (User.IsInRole(RoleNames.Admin) || User.IsInRole(MSSARoles.Scorekeeper))
+            if (User.IsInRole(RoleNames.Admin))
             {
                 return true;
             }
@@ -255,13 +282,13 @@ namespace MountainStates.MSSA.Module.MSSA_Entries.Controllers
             return ownerId.HasValue && ownerId.Value == User.UserId();
         }
 
-        // Admin/Scorekeeper can save a run order for any trial. A Trial Secretary only
-        // for trials whose Event they own - checked for every distinct trial referenced,
-        // since a tampered payload could otherwise mix in entries from a trial they
-        // don't own.
+        // Only Admin, or a Trial Secretary on trials whose Event they own, can set run
+        // order - checked for every distinct trial referenced, since a tampered payload
+        // could otherwise mix in entries from a trial they don't own. Run order is
+        // pre-trial planning, not a Scorekeeper concern.
         private async Task<bool> IsAuthorizedForRunOrderAsync(List<RunOrderEntry> assignments, int moduleId)
         {
-            if (User.IsInRole(RoleNames.Admin) || User.IsInRole(MSSARoles.Scorekeeper))
+            if (User.IsInRole(RoleNames.Admin))
             {
                 return true;
             }
@@ -284,20 +311,32 @@ namespace MountainStates.MSSA.Module.MSSA_Entries.Controllers
             return true;
         }
 
-        // Admin/Scorekeeper can edit/delete any entry. A Trial Secretary only an entry
-        // whose Trial's Event they own - checked against the DB record, never the
-        // request payload.
+        // Admin can edit/delete any entry. A Trial Secretary only an entry whose Trial's
+        // Event they own. A Scorekeeper only an entry whose Trial they're assigned to -
+        // they don't own the event, just the scoring for trials assigned to them. Checked
+        // against the DB record, never the request payload.
         private bool IsAuthorizedForEntry(MSSA_Entry existing)
         {
-            if (User.IsInRole(RoleNames.Admin) || User.IsInRole(MSSARoles.Scorekeeper))
+            if (User.IsInRole(RoleNames.Admin))
             {
                 return true;
             }
 
-            return existing != null
-                && User.IsInRole(MSSARoles.TrialSecretary)
+            if (existing == null)
+            {
+                return false;
+            }
+
+            if (User.IsInRole(MSSARoles.TrialSecretary)
                 && existing.EventCreatedByUserId.HasValue
-                && existing.EventCreatedByUserId.Value == User.UserId();
+                && existing.EventCreatedByUserId.Value == User.UserId())
+            {
+                return true;
+            }
+
+            return User.IsInRole(MSSARoles.Scorekeeper)
+                && existing.TrialScorekeeperUserId.HasValue
+                && existing.TrialScorekeeperUserId.Value == User.UserId();
         }
     }
 }

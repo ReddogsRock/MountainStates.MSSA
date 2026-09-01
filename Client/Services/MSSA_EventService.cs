@@ -149,5 +149,13 @@ namespace MountainStates.MSSA.Module.MSSA_Events.Services
             return await GetJsonAsync<List<EntryListItem>>(
                 CreateAuthorizationPolicyUrl($"{ApiUrl}/trial/{trialId}/entries?moduleid={moduleId}", EntityNames.Module, moduleId));
         }
+
+        // Scorekeepers
+        public async Task<List<UserOptionDto>> GetScorekeepersAsync(int siteId, int moduleId)
+        {
+            var url = CreateApiUrl("MSSA_Trial");
+            return await GetJsonAsync<List<UserOptionDto>>(
+                CreateAuthorizationPolicyUrl($"{url}/scorekeepers?siteId={siteId}&moduleid={moduleId}", EntityNames.Module, moduleId));
+        }
     }
 }

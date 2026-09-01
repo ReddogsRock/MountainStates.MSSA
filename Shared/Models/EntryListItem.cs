@@ -62,6 +62,10 @@ namespace MountainStates.MSSA.Module.MSSA_Events.Models
         // Used to gate the per-entry Edit link to the Trial Secretary who owns the event.
         public int? EventCreatedByUserId { get; set; }
 
+        // Who's assigned to score this entry's Trial (MSSA_Trial.ScorekeeperUserId).
+        // Used to gate the per-entry Edit link to that Scorekeeper.
+        public int? TrialScorekeeperUserId { get; set; }
+
         // MSSA_Event.ResultsApprovalStatus for this entry's Event. Public-facing views
         // (the Events Detail page) use this to hide results until they're Approved.
         public string EventResultsApprovalStatus { get; set; }

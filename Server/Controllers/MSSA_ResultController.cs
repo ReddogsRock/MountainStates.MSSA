@@ -26,16 +26,26 @@ namespace MountainStates.MSSA.Module.MSSA_Results.Controllers
         }
 
         // GET api/MSSA_Result/events?moduleid=x
-        // Admin/Scorekeeper see every event still needing attention; a Trial Secretary
-        // only their own.
+        // Admin sees every event still needing attention. A Trial Secretary only events
+        // they created. A Scorekeeper only events with a trial assigned to them - they
+        // don't own the event, so ownership isn't the right filter for them.
         [HttpGet("events")]
         [Authorize(Policy = PolicyNames.ViewModule)]
         public async Task<List<EventScoringSummary>> GetScoringEvents(int moduleId)
         {
             try
             {
-                int? ownerUserId = IsAdminOrScorekeeper() ? (int?)null : User.UserId();
-                return await _manager.GetScoringEventsAsync(ownerUserId, moduleId);
+                if (User.IsInRole(RoleNames.Admin))
+                {
+                    return await _manager.GetScoringEventsAsync(null, null, moduleId);
+                }
+
+                if (User.IsInRole(MSSARoles.Scorekeeper))
+                {
+                    return await _manager.GetScoringEventsAsync(null, User.UserId(), moduleId);
+                }
+
+                return await _manager.GetScoringEventsAsync(User.UserId(), null, moduleId);
             }
             catch (System.Exception ex)
             {
@@ -179,18 +189,78 @@ namespace MountainStates.MSSA.Module.MSSA_Results.Controllers
             }
         }
 
-        private bool IsAdminOrScorekeeper()
+        // GET api/MSSA_Result/trial/5/scoresheet?moduleid=x
+        [HttpGet("trial/{trialId}/scoresheet")]
+        [Authorize(Policy = PolicyNames.ViewModule)]
+        public async Task<IActionResult> GetScoreSheet(int trialId, int moduleId)
         {
-            return User.IsInRole(RoleNames.Admin) || User.IsInRole(MSSARoles.Scorekeeper);
+            try
+            {
+                if (!await IsAuthorizedForTrialAsync(trialId, moduleId))
+                {
+                    return StatusCode((int)System.Net.HttpStatusCode.Forbidden);
+                }
+
+                var fileData = await _manager.GenerateScoreSheetAsync(trialId, moduleId);
+                return File(fileData,
+                    "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
+                    $"ScoreSheet_Trial{trialId}_{System.DateTime.Now:yyyyMMdd}.xlsx");
+            }
+            catch (System.Exception ex)
+            {
+                _logger.Log(LogLevel.Error, this, LogFunction.Read, ex, "Error generating score sheet for trial {TrialId}", trialId);
+                throw;
+            }
         }
 
-        // Admin/Scorekeeper can act on any trial. A Trial Secretary only on a trial
-        // whose Event they own.
+        // POST api/MSSA_Result/trial/5/scoresheet/import?moduleid=x
+        [HttpPost("trial/{trialId}/scoresheet/import")]
+        [Authorize(Policy = PolicyNames.EditModule)]
+        public async Task<ActionResult<ScoreSheetImportResult>> ImportScoreSheet(int trialId, [FromBody] ImportScoreSheetDto dto, int moduleId)
+        {
+            try
+            {
+                if (!await IsAuthorizedForTrialAsync(trialId, moduleId))
+                {
+                    return StatusCode((int)System.Net.HttpStatusCode.Forbidden);
+                }
+
+                if (string.IsNullOrEmpty(dto?.ContentBase64))
+                {
+                    return BadRequest("No file uploaded.");
+                }
+
+                var bytes = System.Convert.FromBase64String(dto.ContentBase64);
+                var result = await _manager.ImportScoreSheetAsync(trialId, bytes, moduleId, User.UserId());
+                _logger.Log(LogLevel.Information, this, LogFunction.Update,
+                    "Score sheet imported for trial {TrialId}: {Updated} updated, {Skipped} skipped", trialId, result.RowsUpdated, result.RowsSkipped);
+                return result;
+            }
+            catch (System.Exception ex)
+            {
+                _logger.Log(LogLevel.Error, this, LogFunction.Update, ex, "Error importing score sheet for trial {TrialId}", trialId);
+                throw;
+            }
+        }
+
+        // Admin can act on any trial. A Trial Secretary only on a trial whose Event
+        // they own. A Scorekeeper only on a trial they're explicitly assigned to -
+        // unlike a Trial Secretary, they don't own an event, so assignment is the only
+        // basis they have.
         private async Task<bool> IsAuthorizedForTrialAsync(int trialId, int moduleId)
         {
-            if (IsAdminOrScorekeeper())
+            if (User.IsInRole(RoleNames.Admin))
             {
                 return true;
+            }
+
+            if (User.IsInRole(MSSARoles.Scorekeeper))
+            {
+                var scorekeeperId = await _manager.GetTrialScorekeeperUserIdAsync(trialId, moduleId);
+                if (scorekeeperId.HasValue && scorekeeperId.Value == User.UserId())
+                {
+                    return true;
+                }
             }
 
             if (!User.IsInRole(MSSARoles.TrialSecretary))
@@ -202,9 +272,12 @@ namespace MountainStates.MSSA.Module.MSSA_Results.Controllers
             return ownerId.HasValue && ownerId.Value == User.UserId();
         }
 
+        // Submitting an Event for approval is the event owner's call - it's about
+        // sanctioning fees, not scoring - so a Scorekeeper (assigned per Trial, not the
+        // Event) doesn't get a say here even though they can score the trial itself.
         private async Task<bool> IsAuthorizedForEventAsync(int eventId, int moduleId)
         {
-            if (IsAdminOrScorekeeper())
+            if (User.IsInRole(RoleNames.Admin))
             {
                 return true;
             }

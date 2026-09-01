@@ -15,9 +15,9 @@ namespace MountainStates.MSSA.Module.MSSA_Results.Manager
             _repository = repository;
         }
 
-        public async Task<List<EventScoringSummary>> GetScoringEventsAsync(int? ownerUserId, int moduleId)
+        public async Task<List<EventScoringSummary>> GetScoringEventsAsync(int? ownerUserId, int? scorekeeperUserId, int moduleId)
         {
-            return await _repository.GetScoringEventsAsync(ownerUserId);
+            return await _repository.GetScoringEventsAsync(ownerUserId, scorekeeperUserId);
         }
 
         public async Task<List<EventScoringSummary>> GetPendingApprovalEventsAsync(int moduleId)
@@ -33,6 +33,11 @@ namespace MountainStates.MSSA.Module.MSSA_Results.Manager
         public async Task<int?> GetEventOwnerAsync(int eventId, int moduleId)
         {
             return await _repository.GetEventOwnerAsync(eventId);
+        }
+
+        public async Task<int?> GetTrialScorekeeperUserIdAsync(int trialId, int moduleId)
+        {
+            return await _repository.GetTrialScorekeeperUserIdAsync(trialId);
         }
 
         public async Task<List<ResultRunRow>> GetTrialRunRowsAsync(int trialId, int moduleId)
@@ -58,6 +63,16 @@ namespace MountainStates.MSSA.Module.MSSA_Results.Manager
         public async Task<SubmitEventResultsDto> ApproveEventAsync(int eventId, int moduleId, int userId)
         {
             return await _repository.ApproveEventAsync(eventId, userId);
+        }
+
+        public async Task<byte[]> GenerateScoreSheetAsync(int trialId, int moduleId)
+        {
+            return await _repository.GenerateScoreSheetAsync(trialId);
+        }
+
+        public async Task<ScoreSheetImportResult> ImportScoreSheetAsync(int trialId, byte[] fileBytes, int moduleId, int userId)
+        {
+            return await _repository.ImportScoreSheetAsync(trialId, fileBytes, userId);
         }
     }
 }

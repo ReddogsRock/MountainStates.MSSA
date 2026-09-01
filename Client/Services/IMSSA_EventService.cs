@@ -44,5 +44,8 @@ namespace MountainStates.MSSA.Module.MSSA_Events.Services
 
         // Entries (for trial details expansion)
         Task<List<EntryListItem>> GetTrialEntriesAsync(int trialId, int moduleId);
+
+        // Users holding the Scorekeeper role, for assigning one to a Trial
+        Task<List<UserOptionDto>> GetScorekeepersAsync(int siteId, int moduleId);
     }
 }

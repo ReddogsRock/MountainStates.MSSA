@@ -4,9 +4,11 @@ using Microsoft.AspNetCore.Mvc;
 using Oqtane.Controllers;
 using Oqtane.Enums;
 using Oqtane.Infrastructure;
+using Oqtane.Repository;
 using Oqtane.Shared;
 using Oqtane.Extensions;
 using System.Collections.Generic;
+using System.Linq;
 using System.Threading.Tasks;
 using MountainStates.MSSA.Module.MSSA_Events.Manager;
 using MountainStates.MSSA.Module.MSSA_Events.Models;
@@ -18,11 +20,37 @@ namespace MountainStates.MSSA.Module.MSSA_Events.Controllers
     public class MSSA_TrialController : ModuleControllerBase
     {
         private readonly IMSSA_EventManager _manager;
+        private readonly IUserRoleRepository _userRoleRepository;
 
-        public MSSA_TrialController(IMSSA_EventManager manager, ILogManager logger, IHttpContextAccessor httpContextAccessor)
+        public MSSA_TrialController(IMSSA_EventManager manager, IUserRoleRepository userRoleRepository, ILogManager logger, IHttpContextAccessor httpContextAccessor)
             : base(logger, httpContextAccessor)
         {
             _manager = manager;
+            _userRoleRepository = userRoleRepository;
+        }
+
+        // GET: api/MSSA_Trial/scorekeepers?siteId=x&moduleid=x
+        // Users holding the Scorekeeper role, for the Trial edit form's assignment dropdown.
+        [HttpGet("scorekeepers")]
+        [Authorize(Policy = PolicyNames.ViewModule)]
+        public Task<IEnumerable<UserOptionDto>> GetScorekeepers(int siteId, int moduleId)
+        {
+            try
+            {
+                var userRoles = _userRoleRepository.GetUserRoles(siteId);
+                var result = userRoles
+                    .Where(ur => ur.Role.Name == MSSARoles.Scorekeeper)
+                    .Select(ur => new UserOptionDto { UserId = ur.UserId, DisplayName = ur.User.DisplayName })
+                    .OrderBy(u => u.DisplayName)
+                    .ToList();
+
+                return Task.FromResult<IEnumerable<UserOptionDto>>(result);
+            }
+            catch (System.Exception ex)
+            {
+                _logger.Log(LogLevel.Error, this, LogFunction.Read, ex, "Error getting scorekeepers");
+                throw;
+            }
         }
 
         // GET: api/MSSA_Trial/event/5?moduleid=x
