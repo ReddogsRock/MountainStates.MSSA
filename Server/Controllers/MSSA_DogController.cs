@@ -147,6 +147,110 @@ namespace MountainStates.MSSA.Module.MSSA_Dogs.Controllers
             }
         }
 
+        // PUT: api/MSSA_Dog/5/status?moduleid=x
+        // Open to everyone, per project decision - narrowly scoped to just
+        // Active/Deceased so this doesn't also expose breed, registration number,
+        // etc. to anonymous editing the way opening the full Put above would.
+        [HttpPut("{id}/status")]
+        [AllowAnonymous]
+        public async Task<MSSA_Dog> UpdateStatus(int id, [FromBody] UpdateDogStatusDto dto, int moduleId)
+        {
+            try
+            {
+                if (dto == null || dto.DogId != id)
+                {
+                    HttpContext.Response.StatusCode = (int)System.Net.HttpStatusCode.BadRequest;
+                    return null;
+                }
+
+                var dog = await _manager.UpdateDogStatusAsync(id, dto.IsActive, dto.IsDeceased, moduleId);
+                if (dog == null)
+                {
+                    HttpContext.Response.StatusCode = (int)System.Net.HttpStatusCode.NotFound;
+                    return null;
+                }
+
+                _logger.Log(LogLevel.Information, this, LogFunction.Update, "Dog {DogId} status updated", id);
+                return dog;
+            }
+            catch (System.Exception ex)
+            {
+                _logger.Log(LogLevel.Error, this, LogFunction.Update, ex, "Error updating status for dog {DogId}", id);
+                throw;
+            }
+        }
+
+        // POST: api/MSSA_Dog/5/transfer-ownership?moduleid=x
+        // Open to everyone, same reasoning as UpdateStatus above.
+        [HttpPost("{id}/transfer-ownership")]
+        [AllowAnonymous]
+        public async Task<MSSA_Dog> TransferOwnership(int id, [FromBody] TransferDogOwnershipDto dto, int moduleId)
+        {
+            try
+            {
+                if (dto == null || dto.DogId != id || string.IsNullOrWhiteSpace(dto.NewOwnerName))
+                {
+                    HttpContext.Response.StatusCode = (int)System.Net.HttpStatusCode.BadRequest;
+                    return null;
+                }
+
+                var dog = await _manager.TransferDogOwnershipAsync(id, dto.NewOwnerName.Trim(), moduleId);
+                if (dog == null)
+                {
+                    HttpContext.Response.StatusCode = (int)System.Net.HttpStatusCode.NotFound;
+                    return null;
+                }
+
+                _logger.Log(LogLevel.Information, this, LogFunction.Update, "Dog {DogId} ownership transferred to {NewOwnerName}", id, dto.NewOwnerName);
+                return dog;
+            }
+            catch (System.Exception ex)
+            {
+                _logger.Log(LogLevel.Error, this, LogFunction.Update, ex, "Error transferring ownership for dog {DogId}", id);
+                throw;
+            }
+        }
+
+        // POST: api/MSSA_Dog/merge?moduleid=x
+        // Admin-only - unlike Status/OwnershipTransfer above, this repoints history
+        // across Entries/Futurity/Ownership/Finals and deactivates a record, so it
+        // isn't something to open up to anonymous use.
+        [HttpPost("merge")]
+        [Authorize(Policy = PolicyNames.EditModule)]
+        public async Task<MSSA_Dog> Merge([FromBody] MergeDogsDto dto, int moduleId)
+        {
+            try
+            {
+                if (!IsAuthorizedForRole(MSSARoles.Admin))
+                {
+                    _logger.Log(LogLevel.Error, this, LogFunction.Security, "Unauthorized dog merge attempt");
+                    HttpContext.Response.StatusCode = (int)System.Net.HttpStatusCode.Forbidden;
+                    return null;
+                }
+
+                if (dto == null || dto.KeepDogId <= 0 || dto.MergeDogId <= 0 || dto.KeepDogId == dto.MergeDogId)
+                {
+                    HttpContext.Response.StatusCode = (int)System.Net.HttpStatusCode.BadRequest;
+                    return null;
+                }
+
+                var dog = await _manager.MergeDogsAsync(dto.KeepDogId, dto.MergeDogId, moduleId);
+                if (dog == null)
+                {
+                    HttpContext.Response.StatusCode = (int)System.Net.HttpStatusCode.NotFound;
+                    return null;
+                }
+
+                _logger.Log(LogLevel.Information, this, LogFunction.Update, "Dog {MergeDogId} merged into {KeepDogId}", dto.MergeDogId, dto.KeepDogId);
+                return dog;
+            }
+            catch (System.Exception ex)
+            {
+                _logger.Log(LogLevel.Error, this, LogFunction.Update, ex, "Error merging dog {MergeDogId} into {KeepDogId}", dto?.MergeDogId, dto?.KeepDogId);
+                throw;
+            }
+        }
+
         // DELETE: api/MSSA_Dog/5?moduleid=x
         // Left as Admin-only - not part of today's change.
         [HttpDelete("{id}")]

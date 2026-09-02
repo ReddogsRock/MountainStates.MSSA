@@ -1,4 +1,5 @@
 using System;
+using System.Collections.Generic;
 using System.ComponentModel.DataAnnotations;
 using System.ComponentModel.DataAnnotations.Schema;
 
@@ -28,15 +29,19 @@ namespace MountainStates.MSSA.Module.MSSA_Dogs.Models
         [StringLength(255)]
         public string OwnerName { get; set; }
 
-        // No longer editable via the UI (checkbox removed from Edit.razor per request),
-        // but left on the model since Search/Repository/Manager/Service/Controller and
-        // the Index/Detail pages still reference it - removing the property outright
-        // would require touching all of those. Existing data and search-by-member
-        // capability stay intact; the field just can't be set from this page anymore.
+        // No longer editable or displayed anywhere in the UI (removed from Edit and
+        // Detail per request), but left on the model since Search/Repository/Manager/
+        // Service/Controller still reference it for the search-by-member filter.
+        // Removing the property outright would require touching all of those.
         public bool OwnerIsMSSAMember { get; set; } = false;
 
         // Status Flags
         public bool IsDeceased { get; set; } = false;
+
+        // No longer settable from the UI - ownership changes are now tracked via
+        // MSSA_DogOwnershipHistory instead of a boolean flag (see OwnershipHistory
+        // below). Left on the model so any dogs already flagged sold keep showing
+        // that way in the Index search grid's badge.
         public bool IsSold { get; set; } = false;
 
         // Nursery age-eligibility documentation. Unlike Futurity, there's no
@@ -89,5 +94,9 @@ namespace MountainStates.MSSA.Module.MSSA_Dogs.Models
 
         [NotMapped]
         public string UploadNurseryDocContentBase64 { get; set; }
+
+        // Populated by the repository join when loading a single dog - not persisted here.
+        [NotMapped]
+        public List<MSSA_DogOwnershipHistory> OwnershipHistory { get; set; } = new();
     }
 }

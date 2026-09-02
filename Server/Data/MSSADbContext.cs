@@ -25,6 +25,7 @@ namespace MountainStates.MSSA.Module.MSSA_Handlers.Data
         public DbSet<MSSA_Class> MSSA_Classes { get; set; }
         public DbSet<MSSA_Entry> MSSA_Entries { get; set; }
         public DbSet<MSSA_DogFuturityParticipation> MSSA_DogFuturityParticipation { get; set; }
+        public DbSet<MSSA_DogOwnershipHistory> MSSA_DogOwnershipHistory { get; set; }
         public DbSet<MSSA_User> MSSA_Users { get; set; }
         public DbSet<MSSA_FinalsData> MSSA_FinalsData { get; set; }
         public DbSet<MSSA_FinalsResult> vw_AllFinalsResults { get; set; }
@@ -46,6 +47,7 @@ namespace MountainStates.MSSA.Module.MSSA_Handlers.Data
             modelBuilder.Entity<MSSA_Class>().ToTable("MSSA_Classes");
             modelBuilder.Entity<MSSA_Entry>().ToTable("MSSA_Entries");
             modelBuilder.Entity<MSSA_DogFuturityParticipation>().ToTable("MSSA_DogFuturityParticipation");
+            modelBuilder.Entity<MSSA_DogOwnershipHistory>().ToTable("MSSA_DogOwnershipHistory");
             modelBuilder.Entity<MSSA_User>().ToTable("MSSA_Users");
 
             // Configure any specific relationships or constraints if needed
@@ -83,6 +85,12 @@ namespace MountainStates.MSSA.Module.MSSA_Handlers.Data
                 .HasOne<MSSA_Dog>()
                 .WithMany()
                 .HasForeignKey(f => f.DogId)
+                .OnDelete(DeleteBehavior.Restrict);
+
+            modelBuilder.Entity<MSSA_DogOwnershipHistory>()
+                .HasOne<MSSA_Dog>()
+                .WithMany()
+                .HasForeignKey(h => h.DogId)
                 .OnDelete(DeleteBehavior.Restrict);
 
             modelBuilder.Entity<MSSA_Event>()

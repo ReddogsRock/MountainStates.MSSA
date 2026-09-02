@@ -87,26 +87,6 @@ else
                         <dl class="row">
                             <dt class="col-sm-4">First Competition:</dt>
                             <dd class="col-sm-8">@(dog.FirstCompetitionYear?.ToString() ?? "N/A")</dd>
-
-                            <dt class="col-sm-4">Status:</dt>
-                            <dd class="col-sm-8">
-                                @if (dog.IsDeceased)
-                                {
-                                    <span class="badge bg-dark">Deceased</span>
-                                }
-                                else if (dog.IsSold)
-                                {
-                                    <span class="badge bg-warning">Sold</span>
-                                }
-                                else if (!dog.IsActive)
-                                {
-                                    <span class="badge bg-secondary">Inactive</span>
-                                }
-                                else
-                                {
-                                    <span class="badge bg-success">Active</span>
-                                }
-                            </dd>
                         </dl>
                     </div>
                 </div>
@@ -119,22 +99,66 @@ else
                 <h4>Ownership Information</h4>
             </div>
             <div class="card-body">
-                <dl class="row">
+                <dl class="row mb-3">
                     <dt class="col-sm-3">Owner:</dt>
                     <dd class="col-sm-9">@(dog.OwnerName ?? "Not specified")</dd>
-
-                    <dt class="col-sm-3">Owner is MSSA Member:</dt>
-                    <dd class="col-sm-9">
-                        @if (dog.OwnerIsMSSAMember)
-                        {
-                            <span class="badge bg-success">Yes</span>
-                        }
-                        else
-                        {
-                            <span class="badge bg-secondary">No</span>
-                        }
-                    </dd>
                 </dl>
+
+                <hr />
+
+                <h5>Ownership Transfer</h5>
+                <div class="form-check mb-2">
+                    <input id="ownershipSold" type="checkbox" class="form-check-input" @bind="ownershipSold" />
+                    <label for="ownershipSold" class="form-check-label">Sold</label>
+                </div>
+
+                @if (ownershipSold)
+                {
+                    <div class="row g-2 align-items-end mb-2">
+                        <div class="col-md-6">
+                            <label for="newOwnerName" class="form-label">New Owner Name</label>
+                            <input id="newOwnerName" class="form-control" @bind="newOwnerName" maxlength="255" />
+                        </div>
+                        <div class="col-md-6">
+                            <button type="button" class="btn btn-primary" disabled="@savingOwnershipTransfer" @onclick="SubmitOwnershipTransfer">
+                                @(savingOwnershipTransfer ? "Saving..." : "Record Transfer")
+                            </button>
+                        </div>
+                    </div>
+                }
+
+                @if (!string.IsNullOrEmpty(ownershipTransferError))
+                {
+                    <div class="alert alert-danger py-2 mb-2">@ownershipTransferError</div>
+                }
+                @if (!string.IsNullOrEmpty(ownershipTransferMessage))
+                {
+                    <div class="alert alert-success py-2 mb-2">@ownershipTransferMessage</div>
+                }
+
+                @if (dog.OwnershipHistory != null && dog.OwnershipHistory.Any())
+                {
+                    <h6 class="mt-3">Previous Owners</h6>
+                    <table class="table table-sm mb-0">
+                        <thead>
+                            <tr>
+                                <th>Date</th>
+                                <th>Previous Owner</th>
+                                <th>New Owner</th>
+                            </tr>
+                        </thead>
+                        <tbody>
+                            @foreach (var h in dog.OwnershipHistory)
+                            {
+                                <tr>
+                                    <td>@h.TransferDate.ToString("MMM dd, yyyy")</td>
+                                    <td>@(h.PreviousOwnerName ?? "Not specified")</td>
+                                    <td>@h.NewOwnerName</td>
+                                </tr>
+                            }
+                        </tbody>
+                    </table>
+                }
             </div>
         </div>
 
@@ -191,6 +215,42 @@ else
                             }
                         </tbody>
                     </table>
+                }
+            </div>
+        </div>
+
+        @* Status *@
+        <div class="card mb-3">
+            <div class="card-header">
+                <h4>Status</h4>
+            </div>
+            <div class="card-body">
+                <div class="row">
+                    <div class="col-md-6">
+                        <div class="form-check mb-2">
+                            <input id="detailIsActive" type="checkbox" class="form-check-input"
+                                   checked="@statusIsActive" @onchange="@(e => SetStatusActive((bool)e.Value))" />
+                            <label for="detailIsActive" class="form-check-label">Active</label>
+                        </div>
+                    </div>
+                    <div class="col-md-6">
+                        <div class="form-check mb-2">
+                            <input id="detailIsDeceased" type="checkbox" class="form-check-input"
+                                   checked="@statusIsDeceased" @onchange="@(e => SetStatusDeceased((bool)e.Value))" />
+                            <label for="detailIsDeceased" class="form-check-label">Deceased</label>
+                        </div>
+                    </div>
+                </div>
+                <button type="button" class="btn btn-primary" disabled="@savingStatus" @onclick="SubmitStatusUpdate">
+                    @(savingStatus ? "Saving..." : "Save Status")
+                </button>
+                @if (!string.IsNullOrEmpty(statusError))
+                {
+                    <div class="alert alert-danger py-2 mt-2 mb-0">@statusError</div>
+                }
+                @if (!string.IsNullOrEmpty(statusMessage))
+                {
+                    <div class="alert alert-success py-2 mt-2 mb-0">@statusMessage</div>
                 }
             </div>
         </div>
@@ -331,6 +391,18 @@ else
     private string sortColumn = "Date";
     private bool sortAscending = false;
 
+    private bool statusIsActive;
+    private bool statusIsDeceased;
+    private bool savingStatus = false;
+    private string statusError = "";
+    private string statusMessage = "";
+
+    private bool ownershipSold = false;
+    private string newOwnerName = "";
+    private bool savingOwnershipTransfer = false;
+    private string ownershipTransferError = "";
+    private string ownershipTransferMessage = "";
+
     protected override async Task OnInitializedAsync()
     {
         try
@@ -339,6 +411,9 @@ else
             dog = await DogService.GetDogAsync(dogId, ModuleState.ModuleId);
             futurityParticipation = await DogService.GetDogFuturityParticipationAsync(dogId, ModuleState.ModuleId);
             entries = await DogService.GetDogEntriesAsync(dogId, ModuleState.ModuleId);
+
+            statusIsActive = dog.IsActive;
+            statusIsDeceased = dog.IsDeceased;
 
             filteredEntries = entries;
             SortEntries(sortColumn);
@@ -411,6 +486,84 @@ else
             "Points" => sortAscending ? filteredEntries.OrderBy(e => e.TrialPoints ?? 0).ToList() : filteredEntries.OrderByDescending(e => e.TrialPoints ?? 0).ToList(),
             _ => filteredEntries
         };
+    }
+
+    // A dog can't be both Active and Deceased - checking one clears the other.
+    // Unchecking both is still allowed (Inactive but not deceased, e.g. retired).
+    private void SetStatusActive(bool value)
+    {
+        statusIsActive = value;
+        if (value) statusIsDeceased = false;
+    }
+
+    private void SetStatusDeceased(bool value)
+    {
+        statusIsDeceased = value;
+        if (value) statusIsActive = false;
+    }
+
+    private async Task SubmitStatusUpdate()
+    {
+        try
+        {
+            statusError = "";
+            statusMessage = "";
+            savingStatus = true;
+
+            dog = await DogService.UpdateDogStatusAsync(new UpdateDogStatusDto
+            {
+                DogId = dog.DogId,
+                IsActive = statusIsActive,
+                IsDeceased = statusIsDeceased
+            }, ModuleState.ModuleId);
+
+            statusMessage = "Status updated.";
+        }
+        catch (Exception ex)
+        {
+            await logger.LogError(ex, "Error updating dog status");
+            statusError = "Error saving status. Please try again.";
+        }
+        finally
+        {
+            savingStatus = false;
+        }
+    }
+
+    private async Task SubmitOwnershipTransfer()
+    {
+        try
+        {
+            ownershipTransferError = "";
+            ownershipTransferMessage = "";
+
+            if (string.IsNullOrWhiteSpace(newOwnerName))
+            {
+                ownershipTransferError = "New owner name is required.";
+                return;
+            }
+
+            savingOwnershipTransfer = true;
+
+            dog = await DogService.TransferDogOwnershipAsync(new TransferDogOwnershipDto
+            {
+                DogId = dog.DogId,
+                NewOwnerName = newOwnerName
+            }, ModuleState.ModuleId);
+
+            ownershipSold = false;
+            newOwnerName = "";
+            ownershipTransferMessage = "Ownership transfer recorded.";
+        }
+        catch (Exception ex)
+        {
+            await logger.LogError(ex, "Error transferring dog ownership");
+            ownershipTransferError = "Error saving transfer. Please try again.";
+        }
+        finally
+        {
+            savingOwnershipTransfer = false;
+        }
     }
 
     private string GetSortIcon(string column)

@@ -10,6 +10,9 @@ namespace MountainStates.MSSA.Module.MSSA_Dogs.Services
         Task<MSSA_Dog> GetDogAsync(int dogId, int moduleId);
         Task<MSSA_Dog> AddDogAsync(MSSA_Dog dog, int moduleId);
         Task<MSSA_Dog> UpdateDogAsync(MSSA_Dog dog, int moduleId);
+        Task<MSSA_Dog> UpdateDogStatusAsync(UpdateDogStatusDto dto, int moduleId);
+        Task<MSSA_Dog> TransferDogOwnershipAsync(TransferDogOwnershipDto dto, int moduleId);
+        Task<MSSA_Dog> MergeDogsAsync(MergeDogsDto dto, int moduleId);
         Task DeleteDogAsync(int dogId, int moduleId);
 
         Task<List<MSSA_Dog>> SearchDogsAsync(

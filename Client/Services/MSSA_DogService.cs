@@ -36,6 +36,24 @@ namespace MountainStates.MSSA.Module.MSSA_Dogs.Services
             return await PutJsonAsync<MSSA_Dog>(CreateAuthorizationPolicyUrl($"{ApiUrl}/{dog.DogId}?moduleid={moduleId}", EntityNames.Module, moduleId), dog);
         }
 
+        public async Task<MSSA_Dog> UpdateDogStatusAsync(UpdateDogStatusDto dto, int moduleId)
+        {
+            return await PutJsonAsync<UpdateDogStatusDto, MSSA_Dog>(
+                CreateAuthorizationPolicyUrl($"{ApiUrl}/{dto.DogId}/status?moduleid={moduleId}", EntityNames.Module, moduleId), dto);
+        }
+
+        public async Task<MSSA_Dog> TransferDogOwnershipAsync(TransferDogOwnershipDto dto, int moduleId)
+        {
+            return await PostJsonAsync<TransferDogOwnershipDto, MSSA_Dog>(
+                CreateAuthorizationPolicyUrl($"{ApiUrl}/{dto.DogId}/transfer-ownership?moduleid={moduleId}", EntityNames.Module, moduleId), dto);
+        }
+
+        public async Task<MSSA_Dog> MergeDogsAsync(MergeDogsDto dto, int moduleId)
+        {
+            return await PostJsonAsync<MergeDogsDto, MSSA_Dog>(
+                CreateAuthorizationPolicyUrl($"{ApiUrl}/merge?moduleid={moduleId}", EntityNames.Module, moduleId), dto);
+        }
+
         public async Task DeleteDogAsync(int dogId, int moduleId)
         {
             await DeleteAsync(CreateAuthorizationPolicyUrl($"{ApiUrl}/{dogId}?moduleid={moduleId}", EntityNames.Module, moduleId));

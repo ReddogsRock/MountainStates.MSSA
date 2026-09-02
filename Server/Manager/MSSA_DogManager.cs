@@ -37,6 +37,21 @@ namespace MountainStates.MSSA.Module.MSSA_Dogs.Manager
             return await _repository.UpdateDogAsync(dog);
         }
 
+        public async Task<MSSA_Dog> UpdateDogStatusAsync(int dogId, bool isActive, bool isDeceased, int moduleId)
+        {
+            return await _repository.UpdateDogStatusAsync(dogId, isActive, isDeceased);
+        }
+
+        public async Task<MSSA_Dog> TransferDogOwnershipAsync(int dogId, string newOwnerName, int moduleId)
+        {
+            return await _repository.TransferDogOwnershipAsync(dogId, newOwnerName);
+        }
+
+        public async Task<MSSA_Dog> MergeDogsAsync(int keepDogId, int mergeDogId, int moduleId)
+        {
+            return await _repository.MergeDogsAsync(keepDogId, mergeDogId);
+        }
+
         public async Task DeleteDogAsync(int dogId, int moduleId)
         {
             await _repository.DeleteDogAsync(dogId);

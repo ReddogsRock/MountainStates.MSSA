@@ -14,6 +14,12 @@
             <h2>Dogs</h2>
         </div>
         <div class="col-auto">
+            @if (UserSecurity.IsAuthorized(PageState.User, RoleNames.Admin))
+            {
+                <button type="button" class="btn btn-outline-secondary me-2" @onclick="ShowMergeModal">
+                    Merge Dogs
+                </button>
+            }
             <ActionLink Action="Edit" Security="SecurityAccessLevel.Anonymous" Text="Add Dog"
                         ResourceKey="AddDog" Class="btn btn-primary" />
         </div>
@@ -149,6 +155,150 @@
 
         <p class="text-muted">Total: @dogs.Count dog(s)</p>
     }
+
+    @* Merge Dogs Modal *@
+    @if (showMergeModal)
+    {
+        <div class="modal fade show d-block" tabindex="-1" style="background-color: rgba(0,0,0,0.5);">
+            <div class="modal-dialog modal-lg">
+                <div class="modal-content">
+                    <div class="modal-header">
+                        <h5 class="modal-title">Merge Duplicate Dogs</h5>
+                        <button type="button" class="btn-close" @onclick="CloseMergeModal"></button>
+                    </div>
+                    <div class="modal-body">
+                        <p class="text-muted">
+                            Combines two records into one. Competition entries, Futurity
+                            participation, ownership history, and Finals results all move to
+                            the dog you keep. Any blank field on the dog you keep is filled in
+                            from the duplicate. The duplicate is deactivated afterward, not
+                            deleted outright. This cannot be undone from here.
+                        </p>
+
+                        <div class="row">
+                            <div class="col-md-6">
+                                <h6>Keep this dog</h6>
+                                @if (keepDog != null)
+                                {
+                                    <div class="border rounded p-2 mb-2">
+                                        <div><strong>@keepDog.Name</strong> (ID: @keepDog.DogId)</div>
+                                        <div class="text-muted small">
+                                            @(keepDog.Breed ?? "Breed not specified") &middot;
+                                            Owner: @(keepDog.OwnerName ?? "Not specified")
+                                        </div>
+                                        <button type="button" class="btn btn-sm btn-outline-secondary mt-1" @onclick="() => keepDog = null">
+                                            Change
+                                        </button>
+                                    </div>
+                                }
+                                else
+                                {
+                                    <div class="input-group mb-2">
+                                        <input class="form-control" placeholder="Search by name"
+                                               @bind="keepSearchTerm" @bind:event="oninput"
+                                               @onkeyup="@(async e => { if (e.Key == "Enter") await SearchForMerge(true); })" />
+                                        <button type="button" class="btn btn-outline-primary" @onclick="() => SearchForMerge(true)">Search</button>
+                                    </div>
+                                    @if (keepSearchResults != null)
+                                    {
+                                        @if (!keepSearchResults.Any())
+                                        {
+                                            <p class="text-muted mb-0"><em>No dogs found.</em></p>
+                                        }
+                                        else
+                                        {
+                                            <table class="table table-sm">
+                                                <tbody>
+                                                    @foreach (var d in keepSearchResults)
+                                                    {
+                                                        <tr>
+                                                            <td>@d.Name <span class="text-muted">(ID: @d.DogId)</span></td>
+                                                            <td class="text-end">
+                                                                <button type="button" class="btn btn-sm btn-primary" @onclick="() => keepDog = d">Select</button>
+                                                            </td>
+                                                        </tr>
+                                                    }
+                                                </tbody>
+                                            </table>
+                                        }
+                                    }
+                                }
+                            </div>
+                            <div class="col-md-6">
+                                <h6>Merge away this dog</h6>
+                                @if (mergeAwayDog != null)
+                                {
+                                    <div class="border rounded p-2 mb-2">
+                                        <div><strong>@mergeAwayDog.Name</strong> (ID: @mergeAwayDog.DogId)</div>
+                                        <div class="text-muted small">
+                                            @(mergeAwayDog.Breed ?? "Breed not specified") &middot;
+                                            Owner: @(mergeAwayDog.OwnerName ?? "Not specified")
+                                        </div>
+                                        <button type="button" class="btn btn-sm btn-outline-secondary mt-1" @onclick="() => mergeAwayDog = null">
+                                            Change
+                                        </button>
+                                    </div>
+                                }
+                                else
+                                {
+                                    <div class="input-group mb-2">
+                                        <input class="form-control" placeholder="Search by name"
+                                               @bind="mergeSearchTerm" @bind:event="oninput"
+                                               @onkeyup="@(async e => { if (e.Key == "Enter") await SearchForMerge(false); })" />
+                                        <button type="button" class="btn btn-outline-primary" @onclick="() => SearchForMerge(false)">Search</button>
+                                    </div>
+                                    @if (mergeSearchResults != null)
+                                    {
+                                        @if (!mergeSearchResults.Any())
+                                        {
+                                            <p class="text-muted mb-0"><em>No dogs found.</em></p>
+                                        }
+                                        else
+                                        {
+                                            <table class="table table-sm">
+                                                <tbody>
+                                                    @foreach (var d in mergeSearchResults)
+                                                    {
+                                                        <tr>
+                                                            <td>@d.Name <span class="text-muted">(ID: @d.DogId)</span></td>
+                                                            <td class="text-end">
+                                                                <button type="button" class="btn btn-sm btn-primary" @onclick="() => mergeAwayDog = d">Select</button>
+                                                            </td>
+                                                        </tr>
+                                                    }
+                                                </tbody>
+                                            </table>
+                                        }
+                                    }
+                                }
+                            </div>
+                        </div>
+
+                        @if (keepDog != null && mergeAwayDog != null && keepDog.DogId == mergeAwayDog.DogId)
+                        {
+                            <div class="alert alert-warning mt-2 mb-0">Pick two different dogs.</div>
+                        }
+
+                        @if (!string.IsNullOrEmpty(mergeError))
+                        {
+                            <div class="alert alert-danger mt-3 mb-0">@mergeError</div>
+                        }
+                        @if (!string.IsNullOrEmpty(mergeMessage))
+                        {
+                            <div class="alert alert-success mt-3 mb-0">@mergeMessage</div>
+                        }
+                    </div>
+                    <div class="modal-footer">
+                        <button type="button" class="btn btn-danger"
+                                disabled="@(!CanMerge || mergingDogs)" @onclick="ConfirmMerge">
+                            @(mergingDogs ? "Merging..." : "Merge")
+                        </button>
+                        <button type="button" class="btn btn-secondary" @onclick="CloseMergeModal">Close</button>
+                    </div>
+                </div>
+            </div>
+        </div>
+    }
 </div>
 
 @code {
@@ -161,6 +311,19 @@
     private string selectedStatus = "";
 
     private bool hasSearched = false;
+
+    private bool showMergeModal = false;
+    private string keepSearchTerm = "";
+    private string mergeSearchTerm = "";
+    private List<MSSA_Dog> keepSearchResults;
+    private List<MSSA_Dog> mergeSearchResults;
+    private MSSA_Dog keepDog;
+    private MSSA_Dog mergeAwayDog;
+    private bool mergingDogs = false;
+    private string mergeError = "";
+    private string mergeMessage = "";
+
+    private bool CanMerge => keepDog != null && mergeAwayDog != null && keepDog.DogId != mergeAwayDog.DogId;
 
     protected override Task OnInitializedAsync()
     {
@@ -222,5 +385,93 @@
         selectedStatus = "";
         dogs = null;
         hasSearched = false;
+    }
+
+    private void ShowMergeModal()
+    {
+        keepSearchTerm = "";
+        mergeSearchTerm = "";
+        keepSearchResults = null;
+        mergeSearchResults = null;
+        keepDog = null;
+        mergeAwayDog = null;
+        mergingDogs = false;
+        mergeError = "";
+        mergeMessage = "";
+        showMergeModal = true;
+    }
+
+    private void CloseMergeModal()
+    {
+        showMergeModal = false;
+    }
+
+    private async Task SearchForMerge(bool isKeep)
+    {
+        try
+        {
+            var term = isKeep ? keepSearchTerm : mergeSearchTerm;
+            var results = await DogService.SearchDogsAsync(term, null, null, false, ModuleState.ModuleId);
+
+            if (isKeep)
+            {
+                keepSearchResults = results;
+            }
+            else
+            {
+                mergeSearchResults = results;
+            }
+        }
+        catch (Exception ex)
+        {
+            await logger.LogError(ex, "Error searching for dogs to merge");
+            mergeError = "Error searching for dogs. Please try again.";
+        }
+    }
+
+    private async Task ConfirmMerge()
+    {
+        try
+        {
+            mergeError = "";
+            mergeMessage = "";
+
+            if (!CanMerge)
+            {
+                return;
+            }
+
+            mergingDogs = true;
+
+            var result = await DogService.MergeDogsAsync(new MergeDogsDto
+            {
+                KeepDogId = keepDog.DogId,
+                MergeDogId = mergeAwayDog.DogId
+            }, ModuleState.ModuleId);
+
+            if (result == null)
+            {
+                mergeError = "Merge failed - check that you're logged in as an Admin and both dogs still exist.";
+                return;
+            }
+
+            mergeMessage = $"Merged \"{mergeAwayDog.Name}\" into \"{result.Name}\".";
+            keepDog = null;
+            mergeAwayDog = null;
+
+            if (hasSearched)
+            {
+                await SearchDogs();
+            }
+        }
+        catch (Exception ex)
+        {
+            await logger.LogError(ex, "Error merging dogs");
+            mergeError = "Error merging dogs. Please try again.";
+        }
+        finally
+        {
+            mergingDogs = false;
+        }
     }
 }

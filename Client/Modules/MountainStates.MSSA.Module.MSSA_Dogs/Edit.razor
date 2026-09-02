@@ -224,27 +224,24 @@
             </div>
             <div class="card-body">
                 <div class="row">
-                    <div class="col-md-4">
+                    <div class="col-md-6">
                         <div class="form-check mb-2">
-                            <input id="isActive" type="checkbox" class="form-check-input" @bind="dog.IsActive" />
+                            <input id="isActive" type="checkbox" class="form-check-input"
+                                   checked="@dog.IsActive" @onchange="@(e => SetDogActive((bool)e.Value))" />
                             <label for="isActive" class="form-check-label">Active</label>
                         </div>
                     </div>
-                    <div class="col-md-4">
+                    <div class="col-md-6">
                         <div class="form-check mb-2">
-                            <input id="isDeceased" type="checkbox" class="form-check-input" @bind="dog.IsDeceased" />
+                            <input id="isDeceased" type="checkbox" class="form-check-input"
+                                   checked="@dog.IsDeceased" @onchange="@(e => SetDogDeceased((bool)e.Value))" />
                             <label for="isDeceased" class="form-check-label">Deceased</label>
-                        </div>
-                    </div>
-                    <div class="col-md-4">
-                        <div class="form-check mb-2">
-                            <input id="isSold" type="checkbox" class="form-check-input" @bind="dog.IsSold" />
-                            <label for="isSold" class="form-check-label">Sold</label>
                         </div>
                     </div>
                 </div>
                 <small class="form-text text-muted">
-                    Inactive, deceased, or sold dogs will be marked accordingly in search results
+                    Inactive or deceased dogs will be marked accordingly in search results.
+                    Ownership changes (sales) are recorded from the dog's Detail page instead.
                 </small>
             </div>
         </div>
@@ -315,6 +312,20 @@
             await logger.LogError(ex, "Error loading dog for edit");
             AddModuleMessage("Error loading dog", MessageType.Error);
         }
+    }
+
+    // A dog can't be both Active and Deceased - checking one clears the other.
+    // Unchecking both is still allowed (Inactive but not deceased, e.g. retired).
+    private void SetDogActive(bool value)
+    {
+        dog.IsActive = value;
+        if (value) dog.IsDeceased = false;
+    }
+
+    private void SetDogDeceased(bool value)
+    {
+        dog.IsDeceased = value;
+        if (value) dog.IsActive = false;
     }
 
     private async Task SaveDog()

@@ -1,6 +1,7 @@
 ﻿using Microsoft.EntityFrameworkCore;
 using MountainStates.MSSA.Module.MSSA_Dogs.Enums;
 using MountainStates.MSSA.Module.MSSA_Dogs.Models;
+using MountainStates.MSSA.Module.MSSA_Finals.Models;
 using MountainStates.MSSA.Module.MSSA_Handlers.Data;
 using Oqtane.Modules;
 using System;
@@ -33,8 +34,18 @@ namespace MountainStates.MSSA.Module.MSSA_Dogs.Repository
         {
             using var db = await _dbContextFactory.CreateDbContextAsync();
 
-            return await db.MSSA_Dogs
+            var dog = await db.MSSA_Dogs
                 .FirstOrDefaultAsync(d => d.DogId == dogId);
+
+            if (dog != null)
+            {
+                dog.OwnershipHistory = await db.MSSA_DogOwnershipHistory
+                    .Where(h => h.DogId == dogId)
+                    .OrderByDescending(h => h.TransferDate)
+                    .ToListAsync();
+            }
+
+            return dog;
         }
 
         public async Task<MSSA_Dog> AddDogAsync(MSSA_Dog dog)
@@ -60,6 +71,131 @@ namespace MountainStates.MSSA.Module.MSSA_Dogs.Repository
             await db.SaveChangesAsync();
 
             return dog;
+        }
+
+        // Narrow, self-service-safe update - touches only IsActive/IsDeceased, not the
+        // rest of the dog record (breed, registration, etc.), which stays behind the
+        // admin-gated Edit page.
+        public async Task<MSSA_Dog> UpdateDogStatusAsync(int dogId, bool isActive, bool isDeceased)
+        {
+            using var db = await _dbContextFactory.CreateDbContextAsync();
+
+            var dog = await db.MSSA_Dogs.FindAsync(dogId);
+            if (dog == null)
+            {
+                return null;
+            }
+
+            dog.IsActive = isActive;
+            dog.IsDeceased = isDeceased;
+            dog.ModifiedDate = DateTime.UtcNow;
+
+            await db.SaveChangesAsync();
+
+            return dog;
+        }
+
+        // Records a transfer: logs the outgoing owner to history, then updates the
+        // dog's current OwnerName. Self-service, same reasoning as UpdateDogStatusAsync.
+        public async Task<MSSA_Dog> TransferDogOwnershipAsync(int dogId, string newOwnerName)
+        {
+            using var db = await _dbContextFactory.CreateDbContextAsync();
+
+            var dog = await db.MSSA_Dogs.FindAsync(dogId);
+            if (dog == null)
+            {
+                return null;
+            }
+
+            var now = DateTime.UtcNow;
+
+            db.MSSA_DogOwnershipHistory.Add(new MSSA_DogOwnershipHistory
+            {
+                DogId = dogId,
+                PreviousOwnerName = dog.OwnerName,
+                NewOwnerName = newOwnerName,
+                TransferDate = now,
+                CreatedDate = now
+            });
+
+            dog.OwnerName = newOwnerName;
+            dog.ModifiedDate = now;
+
+            await db.SaveChangesAsync();
+
+            dog.OwnershipHistory = await db.MSSA_DogOwnershipHistory
+                .Where(h => h.DogId == dogId)
+                .OrderByDescending(h => h.TransferDate)
+                .ToListAsync();
+
+            return dog;
+        }
+
+        // Merges a duplicate dog record into the one being kept: fills in any blank
+        // fields on the keeper from the duplicate (never overwrites a value the
+        // keeper already has), repoints every table that references the duplicate's
+        // DogId, then soft-deactivates the duplicate - matching DeleteDogAsync's
+        // existing soft-delete convention rather than a hard row delete. MSSA_Finals
+        // (backed by MSSA_FinalsData) has no FK constraint tying it to MSSA_Dogs, but
+        // still needs repointing by hand or the merged dog's Finals history would stay
+        // split across both ids.
+        public async Task<MSSA_Dog> MergeDogsAsync(int keepDogId, int mergeDogId)
+        {
+            using var db = await _dbContextFactory.CreateDbContextAsync();
+            using var transaction = await db.Database.BeginTransactionAsync();
+
+            var keepDog = await db.MSSA_Dogs.FindAsync(keepDogId);
+            var mergeDog = await db.MSSA_Dogs.FindAsync(mergeDogId);
+
+            if (keepDog == null || mergeDog == null)
+            {
+                return null;
+            }
+
+            if (string.IsNullOrEmpty(keepDog.Breed)) keepDog.Breed = mergeDog.Breed;
+            if (!keepDog.DateOfBirth.HasValue) keepDog.DateOfBirth = mergeDog.DateOfBirth;
+            if (string.IsNullOrEmpty(keepDog.RegistrationNumber)) keepDog.RegistrationNumber = mergeDog.RegistrationNumber;
+            if (!keepDog.FirstCompetitionYear.HasValue) keepDog.FirstCompetitionYear = mergeDog.FirstCompetitionYear;
+            if (string.IsNullOrEmpty(keepDog.OwnerName)) keepDog.OwnerName = mergeDog.OwnerName;
+            if (string.IsNullOrEmpty(keepDog.NurseryDocumentFileName))
+            {
+                keepDog.NurseryDocumentFileName = mergeDog.NurseryDocumentFileName;
+                keepDog.NurseryDocumentPath = mergeDog.NurseryDocumentPath;
+                keepDog.NurseryDocumentUploadedDate = mergeDog.NurseryDocumentUploadedDate;
+            }
+            keepDog.ModifiedDate = DateTime.UtcNow;
+
+            var entries = await db.MSSA_Entries.Where(e => e.DogId == mergeDogId).ToListAsync();
+            foreach (var e in entries) e.DogId = keepDogId;
+
+            var futurity = await db.MSSA_DogFuturityParticipation.Where(f => f.DogId == mergeDogId).ToListAsync();
+            foreach (var f in futurity) f.DogId = keepDogId;
+
+            var ownershipHistory = await db.MSSA_DogOwnershipHistory.Where(h => h.DogId == mergeDogId).ToListAsync();
+            foreach (var h in ownershipHistory) h.DogId = keepDogId;
+
+            // ExecuteUpdateAsync (not a normal load-then-save) deliberately, because
+            // MSSA_FinalsData's declared key (FinalsResultId) doesn't actually exist as
+            // a column on the MSSA_Finals table - loading entities the normal way would
+            // make EF select a column that isn't there and throw. A bulk UPDATE avoids
+            // ever needing that key.
+            await db.MSSA_FinalsData
+                .Where(f => f.DogId == mergeDogId)
+                .ExecuteUpdateAsync(s => s.SetProperty(f => f.DogId, keepDogId));
+
+            mergeDog.IsActive = false;
+            mergeDog.Name = $"{mergeDog.Name} (merged into #{keepDogId})";
+            mergeDog.ModifiedDate = DateTime.UtcNow;
+
+            await db.SaveChangesAsync();
+            await transaction.CommitAsync();
+
+            keepDog.OwnershipHistory = await db.MSSA_DogOwnershipHistory
+                .Where(h => h.DogId == keepDogId)
+                .OrderByDescending(h => h.TransferDate)
+                .ToListAsync();
+
+            return keepDog;
         }
 
         public async Task DeleteDogAsync(int dogId)
