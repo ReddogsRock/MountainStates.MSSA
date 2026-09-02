@@ -295,7 +295,12 @@
             {
                 <div class="card mb-3">
                     <div class="card-header">
-                        <h5>@group.Key.ClassName @group.Key.SubClassName</h5>
+                        <h5>
+                            @group.Key.ClassName @group.Key.SubClassName
+                            <small class="text-muted">
+                                (Class ID: @(classes?.FirstOrDefault(c => c.ClassName == group.Key.ClassName && c.SubClassName == group.Key.SubClassName)?.ClassId.ToString() ?? "?"))
+                            </small>
+                        </h5>
                     </div>
                     <div class="card-body">
                         <table class="table table-sm table-striped">
