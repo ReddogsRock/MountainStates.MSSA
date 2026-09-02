@@ -49,6 +49,7 @@ else
                                 @if (!string.IsNullOrEmpty(evt.City))
                                 {
                                     <text>@evt.City, @evt.StateCode</text>
+                                    <a href="@GetMapUrl(evt)" target="_blank" rel="noopener" class="ms-2">View on Map</a>
                                 }
                                 else
                                 {
@@ -375,6 +376,14 @@ else
     private List<EntryListItem> _filteredEntries;
     private List<string> _availableClasses = new();
     private string _selectedClass = "";
+
+    // The event model only captures City/State, not a street address, so this just
+    // points at the general area rather than a precise venue pin.
+    private string GetMapUrl(MSSA_Event evt)
+    {
+        var query = Uri.EscapeDataString($"{evt.City}, {evt.StateCode}");
+        return $"https://www.google.com/maps/search/?api=1&query={query}";
+    }
     private bool _loadingEntries = false;
 
     private string FlyerDownloadUrl =>
