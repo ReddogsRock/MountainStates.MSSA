@@ -12,6 +12,7 @@ namespace MountainStates.MSSA.Module.MSSA_Events.Manager
         Task<MSSA_Event> GetEventAsync(int eventId, int moduleId);
         Task<MSSA_Event> AddEventAsync(MSSA_Event evt, int moduleId);
         Task<MSSA_Event> UpdateEventAsync(MSSA_Event evt, int moduleId);
+        Task<MSSA_Event> ApproveEventAsync(int eventId, int approvedByUserId, int moduleId);
         Task DeleteEventAsync(int eventId, int moduleId);
 
         Task<IEnumerable<MSSA_Event>> SearchEventsAsync(

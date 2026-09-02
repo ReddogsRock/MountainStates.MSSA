@@ -3,6 +3,7 @@ using System.Collections.Generic;
 using System.ComponentModel.DataAnnotations;
 using System.ComponentModel.DataAnnotations.Schema;
 using MountainStates.MSSA.Module.MSSA_Results.Enums;
+using MountainStates.MSSA.Module.MSSA_Events.Enums;
 
 namespace MountainStates.MSSA.Module.MSSA_Events.Models
 {
@@ -84,6 +85,15 @@ namespace MountainStates.MSSA.Module.MSSA_Events.Models
         public int? ResultsSubmittedByUserId { get; set; }
         public DateTime? ResultsApprovedDate { get; set; }
         public int? ResultsApprovedByUserId { get; set; }
+
+        // Event-creation approval workflow (see EventApprovalStatus) - separate from the
+        // Results approval above, which happens later and covers a different thing
+        // (sanctioning fee sign-off after the event has run). This one gates whether a
+        // newly-created event is visible at all beyond its creator and Admins.
+        [StringLength(20)]
+        public string ApprovalStatus { get; set; } = EventApprovalStatus.Approved;
+        public DateTime? ApprovedDate { get; set; }
+        public int? ApprovedByUserId { get; set; }
 
         // Navigation properties (not mapped to DB)
         [NotMapped]

@@ -37,6 +37,11 @@ namespace MountainStates.MSSA.Module.MSSA_Events.Manager
             return await _repository.UpdateEventAsync(evt);
         }
 
+        public async Task<MSSA_Event> ApproveEventAsync(int eventId, int approvedByUserId, int moduleId)
+        {
+            return await _repository.ApproveEventAsync(eventId, approvedByUserId);
+        }
+
         public async Task DeleteEventAsync(int eventId, int moduleId)
         {
             await _repository.DeleteEventAsync(eventId);

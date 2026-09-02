@@ -1,5 +1,6 @@
 ﻿@using MountainStates.MSSA.Module.MSSA_Events.Services
 @using MountainStates.MSSA.Module.MSSA_Events.Models
+@using MountainStates.MSSA.Module.MSSA_Events.Enums
 @using MountainStates.MSSA.Module.MSSA_Handlers.Services
 @using MountainStates.MSSA.Module.MSSA_Handlers.Models
 @using MountainStates.MSSA.Module.MSSA_Handlers.Enums
@@ -161,6 +162,7 @@
                         <th>Location</th>
                         <th>Trials</th>
                         <th>Sanctioned</th>
+                        <th>Status</th>
                         <th>Actions</th>
                     </tr>
                 </thead>
@@ -192,13 +194,29 @@
                                 }
                             </td>
                             <td>
+                                @if (evt.ApprovalStatus == EventApprovalStatus.Pending)
+                                {
+                                    <span class="badge bg-warning text-dark">Pending</span>
+                                }
+                                else
+                                {
+                                    <span class="badge bg-success">Approved</span>
+                                }
+                            </td>
+                            <td>
                                 <ActionLink Action="Detail" Parameters="@($"id={evt.EventId}")"
                                             Text="View" ResourceKey="ViewEvent" Class="btn btn-sm btn-info me-1" />
                                 @if (CanEdit(evt))
                                 {
                                     <ActionLink Action="Edit" Parameters="@($"id={evt.EventId}")"
                                                 Security="SecurityAccessLevel.Edit" Text="Edit"
-                                                ResourceKey="EditEvent" Class="btn btn-sm btn-primary" />
+                                                ResourceKey="EditEvent" Class="btn btn-sm btn-primary me-1" />
+                                }
+                                @if (evt.ApprovalStatus == EventApprovalStatus.Pending && UserSecurity.IsAuthorized(PageState.User, RoleNames.Admin))
+                                {
+                                    <button type="button" class="btn btn-sm btn-success" @onclick="() => ApproveEvent(evt)">
+                                        Approve
+                                    </button>
                                 }
                             </td>
                         </tr>
@@ -314,5 +332,28 @@
 
         return UserSecurity.IsAuthorized(PageState.User, MSSARoles.TrialSecretary)
             && evt.CreatedByUserId == PageState.User.UserId;
+    }
+
+    private async Task ApproveEvent(MSSA_Event evt)
+    {
+        try
+        {
+            await EventService.ApproveEventAsync(evt.EventId, ModuleState.ModuleId);
+            AddModuleMessage($"\"{evt.EventName}\" approved.", MessageType.Success);
+
+            if (!string.IsNullOrEmpty(searchTerm) || !string.IsNullOrEmpty(selectedState) || selectedYear.HasValue)
+            {
+                await SearchEvents();
+            }
+            else
+            {
+                await LoadEvents();
+            }
+        }
+        catch (Exception ex)
+        {
+            await logger.LogError(ex, "Error approving event {EventId}", evt.EventId);
+            AddModuleMessage("Error approving event", MessageType.Error);
+        }
     }
 }

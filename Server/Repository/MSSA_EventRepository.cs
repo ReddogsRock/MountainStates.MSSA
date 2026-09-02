@@ -1,6 +1,7 @@
 using Microsoft.EntityFrameworkCore;
 using MountainStates.MSSA.Module.MSSA_Entries.Models;
 using MountainStates.MSSA.Module.MSSA_Events.Models;
+using MountainStates.MSSA.Module.MSSA_Events.Enums;
 using MountainStates.MSSA.Module.MSSA_Handlers.Data;
 using Oqtane.Modules;
 using System;
@@ -212,6 +213,26 @@ namespace MountainStates.MSSA.Module.MSSA_Events.Repository
                 evt.ModifiedDate = DateTime.UtcNow;
                 await db.SaveChangesAsync();
             }
+        }
+
+        public async Task<MSSA_Event> ApproveEventAsync(int eventId, int approvedByUserId)
+        {
+            using var db = await _dbContextFactory.CreateDbContextAsync();
+
+            var evt = await db.MSSA_Events.FindAsync(eventId);
+            if (evt == null)
+            {
+                return null;
+            }
+
+            evt.ApprovalStatus = EventApprovalStatus.Approved;
+            evt.ApprovedDate = DateTime.UtcNow;
+            evt.ApprovedByUserId = approvedByUserId;
+            evt.ModifiedDate = DateTime.UtcNow;
+
+            await db.SaveChangesAsync();
+
+            return evt;
         }
 
         public async Task<IEnumerable<MSSA_Event>> SearchEventsAsync(

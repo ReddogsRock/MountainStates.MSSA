@@ -13,6 +13,7 @@ using System.IO;
 using System.Threading.Tasks;
 using MountainStates.MSSA.Module.MSSA_Events.Manager;
 using MountainStates.MSSA.Module.MSSA_Events.Models;
+using MountainStates.MSSA.Module.MSSA_Events.Enums;
 using MountainStates.MSSA.Module.MSSA_Handlers.Enums;
 using MountainStates.MSSA.Module.MSSA_Entries.Models;
 using MountainStates.MSSA.Module.MSSA_Results.Enums;
@@ -40,7 +41,8 @@ namespace MountainStates.MSSA.Module.MSSA_Events.Controllers
         {
             try
             {
-                return await _manager.GetEventsAsync(moduleId);
+                var events = await _manager.GetEventsAsync(moduleId);
+                return events.Where(IsEventVisible);
             }
             catch (System.Exception ex)
             {
@@ -56,7 +58,8 @@ namespace MountainStates.MSSA.Module.MSSA_Events.Controllers
         {
             try
             {
-                return await _manager.GetEventAsync(id, moduleId);
+                var evt = await _manager.GetEventAsync(id, moduleId);
+                return IsEventVisible(evt) ? evt : null;
             }
             catch (System.Exception ex)
             {
@@ -87,7 +90,7 @@ namespace MountainStates.MSSA.Module.MSSA_Events.Controllers
         {
             try
             {
-                return await _manager.SearchEventsAsync(
+                var events = await _manager.SearchEventsAsync(
                     searchTerm,
                     stateCode,
                     year,
@@ -103,6 +106,7 @@ namespace MountainStates.MSSA.Module.MSSA_Events.Controllers
                     novice,
                     junior,
                     moduleId);
+                return events.Where(IsEventVisible);
             }
             catch (System.Exception ex)
             {
@@ -214,6 +218,22 @@ namespace MountainStates.MSSA.Module.MSSA_Events.Controllers
 
                     // Owner is whoever creates the event - never trust a client-supplied value.
                     evt.CreatedByUserId = User.UserId();
+
+                    // Admin-created events are approved immediately; anything created by
+                    // a Trial Secretary starts Pending until an Admin approves it.
+                    if (User.IsInRole(RoleNames.Admin))
+                    {
+                        evt.ApprovalStatus = EventApprovalStatus.Approved;
+                        evt.ApprovedDate = DateTime.UtcNow;
+                        evt.ApprovedByUserId = User.UserId();
+                    }
+                    else
+                    {
+                        evt.ApprovalStatus = EventApprovalStatus.Pending;
+                        evt.ApprovedDate = null;
+                        evt.ApprovedByUserId = null;
+                    }
+
                     SaveFlyerIfPresent(evt);
                     evt = await _manager.AddEventAsync(evt, moduleId);
                     _logger.Log(LogLevel.Information, this, LogFunction.Create, "Event added {Event}", evt);
@@ -268,6 +288,39 @@ namespace MountainStates.MSSA.Module.MSSA_Events.Controllers
             catch (System.Exception ex)
             {
                 _logger.Log(LogLevel.Error, this, LogFunction.Update, ex, "Error updating event {EventId}", id);
+                throw;
+            }
+        }
+
+        // PUT: api/MSSA_Event/5/approve?moduleid=x
+        // Admin-only - approving a Trial Secretary's event is the sign-off that makes
+        // it visible beyond its creator.
+        [HttpPut("{id}/approve")]
+        [Authorize(Policy = PolicyNames.EditModule)]
+        public async Task<MSSA_Event> Approve(int id, int moduleId)
+        {
+            try
+            {
+                if (!User.IsInRole(RoleNames.Admin))
+                {
+                    _logger.Log(LogLevel.Error, this, LogFunction.Security, "Unauthorized event approve attempt");
+                    HttpContext.Response.StatusCode = (int)System.Net.HttpStatusCode.Forbidden;
+                    return null;
+                }
+
+                var evt = await _manager.ApproveEventAsync(id, User.UserId(), moduleId);
+                if (evt == null)
+                {
+                    HttpContext.Response.StatusCode = (int)System.Net.HttpStatusCode.NotFound;
+                    return null;
+                }
+
+                _logger.Log(LogLevel.Information, this, LogFunction.Update, "Event {EventId} approved", id);
+                return evt;
+            }
+            catch (System.Exception ex)
+            {
+                _logger.Log(LogLevel.Error, this, LogFunction.Update, ex, "Error approving event {EventId}", id);
                 throw;
             }
         }
@@ -391,6 +444,15 @@ namespace MountainStates.MSSA.Module.MSSA_Events.Controllers
                 && User.IsInRole(MSSARoles.TrialSecretary)
                 && existing.CreatedByUserId.HasValue
                 && existing.CreatedByUserId.Value == User.UserId();
+        }
+
+        // A Pending event is hidden from everyone except an Admin or the Trial
+        // Secretary who created it - same rule as who can edit it, so this just
+        // reuses IsAuthorizedForEvent. Approved events are visible to anyone with
+        // module view access, same as before this feature existed.
+        private bool IsEventVisible(MSSA_Event evt)
+        {
+            return evt != null && (evt.ApprovalStatus != EventApprovalStatus.Pending || IsAuthorizedForEvent(evt));
         }
     }
 }

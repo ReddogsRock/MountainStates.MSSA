@@ -38,6 +38,12 @@ namespace MountainStates.MSSA.Module.MSSA_Events.Services
             return await PutJsonAsync<MSSA_Event>(CreateAuthorizationPolicyUrl($"{ApiUrl}/{evt.EventId}?moduleid={moduleId}", EntityNames.Module, moduleId), evt);
         }
 
+        public async Task<MSSA_Event> ApproveEventAsync(int eventId, int moduleId)
+        {
+            return await PutJsonAsync<MSSA_Event>(
+                CreateAuthorizationPolicyUrl($"{ApiUrl}/{eventId}/approve?moduleid={moduleId}", EntityNames.Module, moduleId), null);
+        }
+
         public async Task DeleteEventAsync(int eventId, int moduleId)
         {
             await DeleteAsync(CreateAuthorizationPolicyUrl($"{ApiUrl}/{eventId}?moduleid={moduleId}", EntityNames.Module, moduleId));
