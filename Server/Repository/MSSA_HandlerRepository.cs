@@ -6,6 +6,7 @@ using Microsoft.EntityFrameworkCore;
 using Oqtane.Modules;
 using MountainStates.MSSA.Module.MSSA_Handlers.Models;
 using MountainStates.MSSA.Module.MSSA_Handlers.Data;
+using MountainStates.MSSA.Module.MSSA_Finals.Models;
 
 namespace MountainStates.MSSA.Module.MSSA_Handlers.Repository
 {
@@ -105,6 +106,80 @@ namespace MountainStates.MSSA.Module.MSSA_Handlers.Repository
                 handler.ModifiedDate = DateTime.UtcNow;
                 await db.SaveChangesAsync();
             }
+        }
+
+        // Merges a duplicate handler into the one being kept - same shape as
+        // MSSA_DogRepository.MergeDogsAsync: fills in any blank field on the keeper
+        // from the duplicate, repoints everything that references the duplicate's
+        // HandlerId, then soft-deactivates the duplicate rather than deleting it.
+        // MSSA_MembershipHandlers has a unique (MembershipId, HandlerId) index, so a
+        // membership link only gets repointed if the keeper isn't already on that same
+        // membership - otherwise the duplicate's link is just dropped (promoting its
+        // IsPrimary flag onto the keeper's existing link first, if it was set).
+        // MSSA_Finals (backed by MSSA_FinalsData) has no FK tying it to MSSA_Handlers,
+        // but still needs repointing by hand, same as it does for Dogs.
+        public async Task<MSSA_Handler> MergeHandlersAsync(int keepHandlerId, int mergeHandlerId)
+        {
+            using var db = await _dbContextFactory.CreateDbContextAsync();
+            using var transaction = await db.Database.BeginTransactionAsync();
+
+            var keepHandler = await db.MSSA_Handlers.FindAsync(keepHandlerId);
+            var mergeHandler = await db.MSSA_Handlers.FindAsync(mergeHandlerId);
+
+            if (keepHandler == null || mergeHandler == null)
+            {
+                return null;
+            }
+
+            if (string.IsNullOrEmpty(keepHandler.Email)) keepHandler.Email = mergeHandler.Email;
+            if (string.IsNullOrEmpty(keepHandler.Phone)) keepHandler.Phone = mergeHandler.Phone;
+            if (string.IsNullOrEmpty(keepHandler.AlternatePhone)) keepHandler.AlternatePhone = mergeHandler.AlternatePhone;
+            if (string.IsNullOrEmpty(keepHandler.Address)) keepHandler.Address = mergeHandler.Address;
+            if (string.IsNullOrEmpty(keepHandler.City)) keepHandler.City = mergeHandler.City;
+            if (string.IsNullOrEmpty(keepHandler.StateCode)) keepHandler.StateCode = mergeHandler.StateCode;
+            if (string.IsNullOrEmpty(keepHandler.ZipCode)) keepHandler.ZipCode = mergeHandler.ZipCode;
+            if (string.IsNullOrEmpty(keepHandler.HandlerLevel)) keepHandler.HandlerLevel = mergeHandler.HandlerLevel;
+            if (!keepHandler.LevelMoveUpDate.HasValue) keepHandler.LevelMoveUpDate = mergeHandler.LevelMoveUpDate;
+            keepHandler.PhotoReleaseConsent = keepHandler.PhotoReleaseConsent || mergeHandler.PhotoReleaseConsent;
+            keepHandler.ModifiedDate = DateTime.UtcNow;
+
+            var entries = await db.MSSA_Entries.Where(e => e.HandlerId == mergeHandlerId).ToListAsync();
+            foreach (var e in entries) e.HandlerId = keepHandlerId;
+
+            var mergeLinks = await db.MSSA_MembershipHandlers.Where(mh => mh.HandlerId == mergeHandlerId).ToListAsync();
+            foreach (var link in mergeLinks)
+            {
+                var existingKeepLink = await db.MSSA_MembershipHandlers
+                    .FirstOrDefaultAsync(mh => mh.MembershipId == link.MembershipId && mh.HandlerId == keepHandlerId);
+
+                if (existingKeepLink != null)
+                {
+                    if (link.IsPrimary)
+                    {
+                        existingKeepLink.IsPrimary = true;
+                    }
+                    db.MSSA_MembershipHandlers.Remove(link);
+                }
+                else
+                {
+                    link.HandlerId = keepHandlerId;
+                }
+            }
+
+            await db.MSSA_FinalsData
+                .Where(f => f.HandlerId == mergeHandlerId)
+                .ExecuteUpdateAsync(s => s.SetProperty(f => f.HandlerId, keepHandlerId));
+
+            mergeHandler.IsActive = false;
+            mergeHandler.LastName = $"{mergeHandler.LastName} (merged into #{keepHandlerId})";
+            mergeHandler.ModifiedDate = DateTime.UtcNow;
+
+            await db.SaveChangesAsync();
+            await transaction.CommitAsync();
+
+            keepHandler.Memberships = await LoadHandlerMembershipsAsync(db, keepHandlerId);
+
+            return keepHandler;
         }
 
         public async Task<IEnumerable<MSSA_Handler>> SearchHandlersAsync(

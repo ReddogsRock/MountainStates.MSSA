@@ -36,6 +36,12 @@ namespace MountainStates.MSSA.Module.MSSA_Handlers.Services
             return await PutJsonAsync<MSSA_Handler>(CreateAuthorizationPolicyUrl($"{ApiUrl}/{handler.HandlerId}?moduleid={moduleId}", EntityNames.Module, moduleId), handler);
         }
 
+        public async Task<MSSA_Handler> MergeHandlersAsync(MergeHandlersDto dto, int moduleId)
+        {
+            return await PostJsonAsync<MergeHandlersDto, MSSA_Handler>(
+                CreateAuthorizationPolicyUrl($"{ApiUrl}/merge?moduleid={moduleId}", EntityNames.Module, moduleId), dto);
+        }
+
         public async Task DeleteHandlerAsync(int handlerId, int moduleId)
         {
             await DeleteAsync(CreateAuthorizationPolicyUrl($"{ApiUrl}/{handlerId}?moduleid={moduleId}", EntityNames.Module, moduleId));

@@ -10,6 +10,7 @@ namespace MountainStates.MSSA.Module.MSSA_Handlers.Repository
         Task<MSSA_Handler> GetHandlerAsync(int handlerId);
         Task<MSSA_Handler> AddHandlerAsync(MSSA_Handler handler);
         Task<MSSA_Handler> UpdateHandlerAsync(MSSA_Handler handler);
+        Task<MSSA_Handler> MergeHandlersAsync(int keepHandlerId, int mergeHandlerId);
         Task DeleteHandlerAsync(int handlerId);
 
         // Search and filter

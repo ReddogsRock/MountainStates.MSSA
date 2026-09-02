@@ -141,6 +141,45 @@ namespace MountainStates.MSSA.Module.MSSA_Handlers.Controllers
 
         // DELETE: api/MSSA_Handler/5?moduleid=x
         // Left as Admin-only - not part of today's change.
+        // POST: api/MSSA_Handler/merge?moduleid=x
+        // Admin-only, same reasoning as MSSA_Dog's Merge - repoints Entries,
+        // Membership links, and Finals data, then deactivates a record.
+        [HttpPost("merge")]
+        [Authorize(Policy = PolicyNames.EditModule)]
+        public async Task<MSSA_Handler> Merge([FromBody] MergeHandlersDto dto, int moduleId)
+        {
+            try
+            {
+                if (!IsAuthorizedForRole(MSSARoles.Admin))
+                {
+                    _logger.Log(LogLevel.Error, this, LogFunction.Security, "Unauthorized handler merge attempt");
+                    HttpContext.Response.StatusCode = (int)System.Net.HttpStatusCode.Forbidden;
+                    return null;
+                }
+
+                if (dto == null || dto.KeepHandlerId <= 0 || dto.MergeHandlerId <= 0 || dto.KeepHandlerId == dto.MergeHandlerId)
+                {
+                    HttpContext.Response.StatusCode = (int)System.Net.HttpStatusCode.BadRequest;
+                    return null;
+                }
+
+                var handler = await _manager.MergeHandlersAsync(dto.KeepHandlerId, dto.MergeHandlerId, moduleId);
+                if (handler == null)
+                {
+                    HttpContext.Response.StatusCode = (int)System.Net.HttpStatusCode.NotFound;
+                    return null;
+                }
+
+                _logger.Log(LogLevel.Information, this, LogFunction.Update, "Handler {MergeHandlerId} merged into {KeepHandlerId}", dto.MergeHandlerId, dto.KeepHandlerId);
+                return handler;
+            }
+            catch (System.Exception ex)
+            {
+                _logger.Log(LogLevel.Error, this, LogFunction.Update, ex, "Error merging handler {MergeHandlerId} into {KeepHandlerId}", dto?.MergeHandlerId, dto?.KeepHandlerId);
+                throw;
+            }
+        }
+
         [HttpDelete("{id}")]
         [Authorize(Policy = PolicyNames.EditModule)]
         public async Task Delete(int id, int moduleId)

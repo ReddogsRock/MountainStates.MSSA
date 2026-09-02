@@ -474,7 +474,7 @@
             {
                 handler = await HandlerService.AddHandlerAsync(handler, ModuleState.ModuleId);
                 await logger.LogInformation("Handler added successfully");
-                NavigationManager.NavigateTo(NavigateUrl(PageState.Page.Path, "id=" + handler.HandlerId));
+                NavigationManager.NavigateTo(EditUrl("Detail", $"id={handler.HandlerId}"));
             }
             else
             {

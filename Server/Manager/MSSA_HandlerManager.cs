@@ -39,6 +39,11 @@ namespace MountainStates.MSSA.Module.MSSA_Handlers.Manager
             return await _repository.UpdateHandlerAsync(handler);
         }
 
+        public async Task<MSSA_Handler> MergeHandlersAsync(int keepHandlerId, int mergeHandlerId, int moduleId)
+        {
+            return await _repository.MergeHandlersAsync(keepHandlerId, mergeHandlerId);
+        }
+
         public async Task DeleteHandlerAsync(int handlerId, int moduleId)
         {
             await _repository.DeleteHandlerAsync(handlerId);
