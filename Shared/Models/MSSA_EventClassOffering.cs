@@ -28,8 +28,9 @@ namespace MountainStates.MSSA.Module.MSSA_Events.Models
         [StringLength(20)]
         public string Venue { get; set; } // Arena, Field
 
+        // No upper bound - trials have grown past the original arbitrary cap of 100.
         [Required]
-        [Range(1, 100)]
+        [Range(1, int.MaxValue)]
         public int PlannedRuns { get; set; }
 
         // Display helpers populated by the repository join - not persisted.
