@@ -206,7 +206,7 @@
                                             </td>
                                             <td>
                                                 <input type="number" class="form-control form-control-sm"
-                                                       @bind="offering.PlannedRuns" min="1" max="100" />
+                                                       @bind="offering.PlannedRuns" min="1" />
                                             </td>
                                             <td>
                                                 <button type="button" class="btn btn-sm btn-danger"
@@ -536,15 +536,24 @@
                 return;
             }
 
-            // Event Identifier is derived, not entered: <year>+<EventName with spaces removed>.
-            // Uses the Start Date's year so the identifier reflects when the event actually
-            // happens, not whenever it was created/edited. Falls back to today's year if no
-            // Start Date has been set yet.
-            var identifierYear = evt.StartDate?.Year ?? DateTime.Now.Year;
-            evt.EventIdentifier = $"{identifierYear}{evt.EventName.Replace(" ", "")}";
+            // Event Identifier and Point Year are derived only when an event is first
+            // created - both need to stay stable afterward. EventIdentifier is the
+            // natural key migrated events are matched against (Access re-imports key
+            // off it), and PointYear on a migrated event is stored 2-digit (e.g. 27)
+            // while CalculatePointYear returns 4-digit - recalculating on every edit
+            // would silently overwrite a stable value with a differently-formatted
+            // one. New events have neither set yet, so it's safe to derive them once.
+            if (eventId == -1)
+            {
+                // Event Identifier: <year>+<EventName with spaces removed>. Uses the
+                // Start Date's year so the identifier reflects when the event actually
+                // happens. Falls back to today's year if no Start Date has been set yet.
+                var identifierYear = evt.StartDate?.Year ?? DateTime.Now.Year;
+                evt.EventIdentifier = $"{identifierYear}{evt.EventName.Replace(" ", "")}";
 
-            // Point Year is calculated from Start Date (season runs May 1 - Apr 30), not entered.
-            evt.PointYear = CalculatePointYear(evt.StartDate);
+                // Point Year is calculated from Start Date (season runs May 1 - Apr 30).
+                evt.PointYear = CalculatePointYear(evt.StartDate);
+            }
 
             // This app only ever tracks the MSSA's own events, so every event is sanctioned.
             evt.IsMSSASanctioned = true;
@@ -585,7 +594,14 @@
     private void OnStartDateChanged(string value)
     {
         evt.StartDate = string.IsNullOrEmpty(value) ? null : DateTime.Parse(value);
-        evt.PointYear = CalculatePointYear(evt.StartDate);
+
+        // Only live-preview PointYear for a new event - see the comment in SaveEvent()
+        // for why an existing (especially migrated) event's PointYear must not be
+        // recalculated from StartDate.
+        if (eventId == -1)
+        {
+            evt.PointYear = CalculatePointYear(evt.StartDate);
+        }
     }
 
     // A native date input reports "" while a segment is mid-edit and not yet a valid

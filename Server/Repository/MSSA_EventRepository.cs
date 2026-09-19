@@ -157,7 +157,10 @@ namespace MountainStates.MSSA.Module.MSSA_Events.Repository
         // Stock/Venue by hand on every Trial. Within each Stock+Venue group, the target
         // count is the highest PlannedRuns among that group's offerings (not a sum, since
         // one Trial session can host runs for multiple classes that share the same
-        // Stock+Venue).
+        // Stock+Venue). Existing-trial count is by Stock only (see comment below) -
+        // an event with two different-Venue offerings for the same Stock can undercount
+        // against one of them, which just means fewer stub trials get generated than
+        // planned; harmless compared to the alternative of over-generating.
         //
         // Safe to call on both create and edit: only ADDS trials to catch up to a higher
         // planned-run count. Never removes or renumbers existing trials, so nothing
@@ -173,8 +176,13 @@ namespace MountainStates.MSSA.Module.MSSA_Events.Repository
                 var stock = group.Key.Stock;
                 var venue = group.Key.Venue;
 
+                // Counts by Stock only, not Stock+Venue - every migrated Trial has
+                // Venue = NULL (no migration script ever populated it), so requiring
+                // an exact Venue match always undercounted existing capacity for
+                // historical events to 0, generating a fresh junk trial per planned
+                // run on every single save of an already-populated event.
                 var existingCount = await db.MSSA_Trials
-                    .CountAsync(t => t.EventId == evt.EventId && t.Stock == stock && t.Venue == venue);
+                    .CountAsync(t => t.EventId == evt.EventId && t.Stock == stock);
 
                 for (int i = existingCount + 1; i <= targetCount; i++)
                 {
