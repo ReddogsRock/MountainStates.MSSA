@@ -93,8 +93,8 @@
                         <th>Rank</th>
                         <th>Dog</th>
                         <th>Dog ID</th>
-                        <th>Handler</th>
-                        <th>Handler ID</th>
+                        <th>@HandlerColumnLabel</th>
+                        <th>@(IsOwnerLevel ? "" : "Handler ID")</th>
                         <th>Total Points</th>
                         <th></th>
                     </tr>
@@ -159,7 +159,7 @@
                                         <th>Trial</th>
                                         <th>Date</th>
                                         <th>Stock</th>
-                                        <th>Handler</th>
+                                        <th>@HandlerColumnLabel</th>
                                         <th>Points</th>
                                     </tr>
                                 </thead>
@@ -218,6 +218,14 @@
     private bool ReadyToShow => !string.IsNullOrEmpty(selectedYearOption) && !string.IsNullOrEmpty(selectedLevel) && !string.IsNullOrEmpty(selectedSpecies);
 
     private bool IsFuturitySelected => string.Equals(selectedLevel, "Futurity", StringComparison.OrdinalIgnoreCase);
+
+    // Open and Nursery standings are scored to the dog's owner, not whoever handled
+    // it that day (correct, per the underlying data) - the column header needs to
+    // say so, or it reads as a Handler name to anyone not already aware of that rule.
+    private bool IsOwnerLevel => string.Equals(selectedLevel, "Open", StringComparison.OrdinalIgnoreCase)
+        || string.Equals(selectedLevel, "Nursery", StringComparison.OrdinalIgnoreCase);
+
+    private string HandlerColumnLabel => IsOwnerLevel ? "Owner" : "Handler";
 
     private async Task OnLevelChanged()
     {
