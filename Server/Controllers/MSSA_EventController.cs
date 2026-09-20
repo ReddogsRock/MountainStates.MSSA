@@ -273,6 +273,21 @@ namespace MountainStates.MSSA.Module.MSSA_Events.Controllers
                     // Ownership is set at creation and never changes via edit, regardless of
                     // what the submitted payload contains.
                     evt.CreatedByUserId = existing.CreatedByUserId;
+
+                    // Administrative Information (sanction fee, fee/results tracking) is
+                    // Admin-only - a Trial Secretary can edit their own event's other
+                    // fields, but these are locked to whatever's already in the DB
+                    // regardless of what the submitted payload contains, same as
+                    // CreatedByUserId above. The client already disables these inputs for
+                    // a Trial Secretary; this is the actual enforcement.
+                    if (!User.IsInRole(RoleNames.Admin))
+                    {
+                        evt.SanctionFee = existing.SanctionFee;
+                        evt.FeeReceivedDate = existing.FeeReceivedDate;
+                        evt.ResultsUploaded = existing.ResultsUploaded;
+                        evt.ResultsReceivedDate = existing.ResultsReceivedDate;
+                    }
+
                     SaveFlyerIfPresent(evt);
                     evt = await _manager.UpdateEventAsync(evt, moduleId);
                     _logger.Log(LogLevel.Information, this, LogFunction.Update, "Event updated {Event}", evt);

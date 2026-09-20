@@ -163,7 +163,6 @@
                         <th>Street Address</th>
                         <th>Location</th>
                         <th>Trials</th>
-                        <th>Sanctioned</th>
                         <th>Status</th>
                         <th>Actions</th>
                     </tr>
@@ -186,16 +185,6 @@
                             </td>
                             <td>
                                 <span class="badge bg-info">@evt.TrialCount trials</span>
-                            </td>
-                            <td>
-                                @if (evt.IsMSSASanctioned)
-                                {
-                                    <span class="badge bg-success">Yes</span>
-                                }
-                                else
-                                {
-                                    <span class="badge bg-secondary">No</span>
-                                }
                             </td>
                             <td>
                                 @if (evt.ApprovalStatus == EventApprovalStatus.Pending)
