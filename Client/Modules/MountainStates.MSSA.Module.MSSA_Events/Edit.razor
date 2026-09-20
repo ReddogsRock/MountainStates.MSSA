@@ -75,6 +75,17 @@
                 </div>
 
                 <div class="row mb-3">
+                    <div class="col-md-6">
+                        <label for="trialSite" class="form-label">Trial Site</label>
+                        <input id="trialSite" class="form-control" @bind="evt.TrialSite" maxlength="255" />
+                    </div>
+                    <div class="col-md-6">
+                        <label for="streetAddress" class="form-label">Street Address</label>
+                        <input id="streetAddress" class="form-control" @bind="evt.StreetAddress" maxlength="255" />
+                    </div>
+                </div>
+
+                <div class="row mb-3">
                     <div class="col-md-5">
                         <label for="city" class="form-label">City</label>
                         <input id="city" class="form-control" @bind="evt.City" maxlength="100" />

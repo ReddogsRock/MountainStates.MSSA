@@ -159,6 +159,8 @@
                     <tr>
                         <th>Event Name</th>
                         <th>Dates</th>
+                        <th>Trial Site</th>
+                        <th>Street Address</th>
                         <th>Location</th>
                         <th>Trials</th>
                         <th>Sanctioned</th>
@@ -177,6 +179,8 @@
                                 <small class="text-muted">@evt.EventIdentifier</small>
                             </td>
                             <td>@evt.DateRange</td>
+                            <td>@evt.TrialSite</td>
+                            <td>@evt.StreetAddress</td>
                             <td>
                                 @evt.City@(string.IsNullOrEmpty(evt.City) ? "" : ", ")@evt.StateCode
                             </td>

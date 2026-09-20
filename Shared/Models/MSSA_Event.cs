@@ -21,6 +21,12 @@ namespace MountainStates.MSSA.Module.MSSA_Events.Models
         public string EventName { get; set; }
 
         // Location
+        [StringLength(255)]
+        public string TrialSite { get; set; }
+
+        [StringLength(255)]
+        public string StreetAddress { get; set; }
+
         [StringLength(100)]
         public string City { get; set; }
 

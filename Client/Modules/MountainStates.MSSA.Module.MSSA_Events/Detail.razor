@@ -44,6 +44,12 @@ else
                             <dt class="col-sm-4">Dates:</dt>
                             <dd class="col-sm-8">@evt.DateRange</dd>
 
+                            <dt class="col-sm-4">Trial Site:</dt>
+                            <dd class="col-sm-8">@(evt.TrialSite ?? "Not specified")</dd>
+
+                            <dt class="col-sm-4">Street Address:</dt>
+                            <dd class="col-sm-8">@(evt.StreetAddress ?? "Not specified")</dd>
+
                             <dt class="col-sm-4">Location:</dt>
                             <dd class="col-sm-8">
                                 @if (!string.IsNullOrEmpty(evt.City))
@@ -377,11 +383,14 @@ else
     private List<string> _availableClasses = new();
     private string _selectedClass = "";
 
-    // The event model only captures City/State, not a street address, so this just
-    // points at the general area rather than a precise venue pin.
+    // Uses the Street Address when it's been entered, for a precise venue pin;
+    // otherwise falls back to City/State, which only points at the general area.
     private string GetMapUrl(MSSA_Event evt)
     {
-        var query = Uri.EscapeDataString($"{evt.City}, {evt.StateCode}");
+        var address = string.IsNullOrEmpty(evt.StreetAddress)
+            ? $"{evt.City}, {evt.StateCode}"
+            : $"{evt.StreetAddress}, {evt.City}, {evt.StateCode}";
+        var query = Uri.EscapeDataString(address);
         return $"https://www.google.com/maps/search/?api=1&query={query}";
     }
     private bool _loadingEntries = false;
