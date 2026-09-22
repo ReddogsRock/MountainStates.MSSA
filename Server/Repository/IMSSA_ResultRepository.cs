@@ -32,5 +32,13 @@ namespace MountainStates.MSSA.Module.MSSA_Results.Repository
 
         Task<byte[]> GenerateScoreSheetAsync(int trialId);
         Task<ScoreSheetImportResult> ImportScoreSheetAsync(int trialId, byte[] fileBytes, int userId);
+
+        // For a Trial Secretary who scored an entire trial in their own spreadsheet
+        // and never entered anything into the app first - creates new Entries rather
+        // than filling in scores on ones that already exist. Skips (and reports) any
+        // row whose Handler or Dog can't be matched, and any row that already has an
+        // Entry for that Trial+Dog+Handler+Class - never auto-creates a Handler/Dog
+        // or overwrites an existing Entry.
+        Task<ImportCompleteTrialResult> ImportCompleteTrialAsync(int trialId, byte[] fileBytes, int userId);
     }
 }

@@ -243,6 +243,40 @@ namespace MountainStates.MSSA.Module.MSSA_Results.Controllers
             }
         }
 
+        // POST api/MSSA_Result/trial/5/completetrial/import?moduleid=x
+        // For a Trial Secretary who scored an entire trial in their own spreadsheet -
+        // creates new Entries rather than filling in scores on ones that already
+        // exist. Reuses ImportScoreSheetDto (same FileName/ContentBase64 shape).
+        [HttpPost("trial/{trialId}/completetrial/import")]
+        [Authorize(Policy = PolicyNames.EditModule)]
+        public async Task<ActionResult<ImportCompleteTrialResult>> ImportCompleteTrial(int trialId, [FromBody] ImportScoreSheetDto dto, int moduleId)
+        {
+            try
+            {
+                if (!await IsAuthorizedForTrialAsync(trialId, moduleId))
+                {
+                    return StatusCode((int)System.Net.HttpStatusCode.Forbidden);
+                }
+
+                if (string.IsNullOrEmpty(dto?.ContentBase64))
+                {
+                    return BadRequest("No file uploaded.");
+                }
+
+                var bytes = System.Convert.FromBase64String(dto.ContentBase64);
+                var result = await _manager.ImportCompleteTrialAsync(trialId, bytes, moduleId, User.UserId());
+                _logger.Log(LogLevel.Information, this, LogFunction.Update,
+                    "Complete trial imported for trial {TrialId}: {Created} created, {SkippedExisting} already existed, {SkippedUnmatched} unmatched",
+                    trialId, result.RowsCreated, result.RowsSkippedExisting, result.RowsSkippedUnmatched);
+                return result;
+            }
+            catch (System.Exception ex)
+            {
+                _logger.Log(LogLevel.Error, this, LogFunction.Update, ex, "Error importing complete trial for trial {TrialId}", trialId);
+                throw;
+            }
+        }
+
         // Admin can act on any trial. A Trial Secretary only on a trial whose Event
         // they own. A Scorekeeper only on a trial they're explicitly assigned to -
         // unlike a Trial Secretary, they don't own an event, so assignment is the only

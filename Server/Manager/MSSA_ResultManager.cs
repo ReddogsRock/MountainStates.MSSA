@@ -74,5 +74,10 @@ namespace MountainStates.MSSA.Module.MSSA_Results.Manager
         {
             return await _repository.ImportScoreSheetAsync(trialId, fileBytes, userId);
         }
+
+        public async Task<ImportCompleteTrialResult> ImportCompleteTrialAsync(int trialId, byte[] fileBytes, int moduleId, int userId)
+        {
+            return await _repository.ImportCompleteTrialAsync(trialId, fileBytes, userId);
+        }
     }
 }

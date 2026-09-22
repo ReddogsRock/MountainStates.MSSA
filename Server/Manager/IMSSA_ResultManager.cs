@@ -22,5 +22,6 @@ namespace MountainStates.MSSA.Module.MSSA_Results.Manager
 
         Task<byte[]> GenerateScoreSheetAsync(int trialId, int moduleId);
         Task<ScoreSheetImportResult> ImportScoreSheetAsync(int trialId, byte[] fileBytes, int moduleId, int userId);
+        Task<ImportCompleteTrialResult> ImportCompleteTrialAsync(int trialId, byte[] fileBytes, int moduleId, int userId);
     }
 }

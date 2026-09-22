@@ -60,5 +60,11 @@ namespace MountainStates.MSSA.Module.MSSA_Results.Services
             return await PostJsonAsync<ImportScoreSheetDto, ScoreSheetImportResult>(
                 CreateAuthorizationPolicyUrl($"{ApiUrl}/trial/{trialId}/scoresheet/import?moduleid={moduleId}", EntityNames.Module, moduleId), dto);
         }
+
+        public async Task<ImportCompleteTrialResult> ImportCompleteTrialAsync(int trialId, ImportScoreSheetDto dto, int moduleId)
+        {
+            return await PostJsonAsync<ImportScoreSheetDto, ImportCompleteTrialResult>(
+                CreateAuthorizationPolicyUrl($"{ApiUrl}/trial/{trialId}/completetrial/import?moduleid={moduleId}", EntityNames.Module, moduleId), dto);
+        }
     }
 }

@@ -622,11 +622,11 @@ namespace MountainStates.MSSA.Module.MSSA_Results.Repository
 
                 if (timeCol.HasValue)
                 {
-                    entry.RunTime = TimeParsingHelper.ParseMinutesSeconds(ws.Cells[row, timeCol.Value].Value?.ToString());
+                    entry.RunTime = ReadTimeCell(ws, row, timeCol.Value);
                 }
                 if (tieTimeCol.HasValue)
                 {
-                    entry.TieBreakerTime = TimeParsingHelper.ParseMinutesSeconds(ws.Cells[row, tieTimeCol.Value].Value?.ToString());
+                    entry.TieBreakerTime = ReadTimeCell(ws, row, tieTimeCol.Value);
                 }
                 if (totalPointsCol.HasValue)
                 {
@@ -643,6 +643,314 @@ namespace MountainStates.MSSA.Module.MSSA_Results.Repository
 
             return result;
         }
+
+        public async Task<ImportCompleteTrialResult> ImportCompleteTrialAsync(int trialId, byte[] fileBytes, int userId)
+        {
+            var result = new ImportCompleteTrialResult();
+
+            using var db = await _dbContextFactory.CreateDbContextAsync();
+
+            var existingKeys = (await db.MSSA_Entries
+                .Where(e => e.TrialId == trialId)
+                .Select(e => new { e.HandlerId, e.DogId, e.ClassId })
+                .ToListAsync())
+                .Select(e => (e.HandlerId, e.DogId, e.ClassId))
+                .ToHashSet();
+
+            var handlersById = await db.MSSA_Handlers.ToDictionaryAsync(h => h.HandlerId);
+            var handlersByName = (await db.MSSA_Handlers.ToListAsync())
+                .GroupBy(h => NormalizeName(h.FullName))
+                .ToDictionary(g => g.Key, g => g.ToList());
+
+            var dogsById = await db.MSSA_Dogs.ToDictionaryAsync(d => d.DogId);
+            var dogsByName = (await db.MSSA_Dogs.ToListAsync())
+                .GroupBy(d => NormalizeName(d.Name))
+                .ToDictionary(g => g.Key, g => g.ToList());
+
+            var classesById = await db.MSSA_Classes.ToDictionaryAsync(c => c.ClassId);
+            // No Horseback signal in this file format, same as everywhere else this
+            // assumption is made (see TimeParsingHelper, the Access migration scripts) -
+            // matches On-foot only. A Horseback trial still needs entries added by hand.
+            var classesByName = (await db.MSSA_Classes.ToListAsync())
+                .Where(c => string.Equals(c.SubClassName, "On-foot", StringComparison.OrdinalIgnoreCase))
+                .GroupBy(c => NormalizeName(c.ClassName))
+                .ToDictionary(g => g.Key, g => g.First());
+
+            using var stream = new MemoryStream(fileBytes);
+            using var package = new ExcelPackage(stream);
+            var ws = package.Workbook.Worksheets.FirstOrDefault();
+
+            if (ws?.Dimension == null)
+            {
+                result.Warnings.Add("The file appears to be empty.");
+                return result;
+            }
+
+            int lastCol = ws.Dimension.End.Column;
+            int lastRow = ws.Dimension.End.Row;
+
+            var headerIndex = new Dictionary<string, int>();
+            for (int col = 1; col <= lastCol; col++)
+            {
+                var header = ws.Cells[1, col].Value?.ToString();
+                if (!string.IsNullOrWhiteSpace(header))
+                {
+                    headerIndex[NormalizeHeader(header)] = col;
+                }
+            }
+
+            int? ColOf(string name) => headerIndex.TryGetValue(NormalizeHeader(name), out var c) ? c : (int?)null;
+
+            // "ClassId" is accepted as a header even though real spreadsheets (a Trial
+            // Secretary's own template) often put the class NAME under it rather than
+            // a numeric ID - both are handled row by row below.
+            var classCol = ColOf("ClassId") ?? ColOf("ClassName") ?? ColOf("Class");
+            var handlerIdCol = ColOf("HandlerId");
+            var handlerNameCol = ColOf("HandlerName") ?? ColOf("Handler");
+            var dogIdCol = ColOf("DogId");
+            var dogNameCol = ColOf("DogName") ?? ColOf("Dog");
+            var timeCol = ColOf("Time") ?? ColOf("RunTime");
+            var tieTimeCol = ColOf("TieTime") ?? ColOf("TieBreakerTime");
+            var totalPointsCol = ColOf("TotalPoints") ?? ColOf("TotalScore") ?? ColOf("Score");
+
+            if (!classCol.HasValue || (!handlerIdCol.HasValue && !handlerNameCol.HasValue) || (!dogIdCol.HasValue && !dogNameCol.HasValue))
+            {
+                result.Warnings.Add("The file must include a Class column, a Handler (name or ID) column, and a Dog (name or ID) column.");
+                return result;
+            }
+
+            var newEntries = new List<MSSA_Entry>();
+            var unmatchedRows = new List<UnmatchedRow>();
+
+            for (int row = 2; row <= lastRow; row++)
+            {
+                bool rowHasData = false;
+                for (int col = 1; col <= lastCol; col++)
+                {
+                    if (ws.Cells[row, col].Value != null)
+                    {
+                        rowHasData = true;
+                        break;
+                    }
+                }
+                if (!rowHasData)
+                {
+                    continue;
+                }
+
+                result.RowsProcessed++;
+
+                // Captured once per row, regardless of outcome - reused for both the
+                // error-rows workbook and the plain-text warnings, and kept in the same
+                // shape as the input columns so an error row can be fixed and the same
+                // sheet re-uploaded as-is.
+                var rowData = new UnmatchedRow
+                {
+                    ClassCell = classCol.HasValue ? ws.Cells[row, classCol.Value].Value?.ToString() : null,
+                    HandlerIdCell = handlerIdCol.HasValue ? ws.Cells[row, handlerIdCol.Value].Value?.ToString() : null,
+                    HandlerNameCell = handlerNameCol.HasValue ? ws.Cells[row, handlerNameCol.Value].Value?.ToString() : null,
+                    DogIdCell = dogIdCol.HasValue ? ws.Cells[row, dogIdCol.Value].Value?.ToString() : null,
+                    DogNameCell = dogNameCol.HasValue ? ws.Cells[row, dogNameCol.Value].Value?.ToString() : null,
+                    TieTimeCell = tieTimeCol.HasValue ? ws.Cells[row, tieTimeCol.Value].Text : null,
+                    TotalPointsCell = totalPointsCol.HasValue ? ws.Cells[row, totalPointsCol.Value].Value?.ToString() : null,
+                    TimeCell = timeCol.HasValue ? ws.Cells[row, timeCol.Value].Text : null
+                };
+
+                var classCell = rowData.ClassCell;
+                MSSA_Class matchedClass = null;
+                if (int.TryParse(classCell, out var classIdNum))
+                {
+                    classesById.TryGetValue(classIdNum, out matchedClass);
+                }
+                if (matchedClass == null && !string.IsNullOrWhiteSpace(classCell))
+                {
+                    classesByName.TryGetValue(NormalizeName(classCell), out matchedClass);
+                }
+                if (matchedClass == null)
+                {
+                    rowData.Error = $"Class \"{classCell}\" not recognized.";
+                    unmatchedRows.Add(rowData);
+                    result.Warnings.Add($"Row {row}: {rowData.Error} - skipped.");
+                    result.RowsSkippedUnmatched++;
+                    continue;
+                }
+
+                var handler = ResolveByIdOrName(row, handlerIdCol, handlerNameCol, ws, handlersById, handlersByName, h => h.FullName);
+                if (handler == null)
+                {
+                    rowData.Error = $"Handler (ID \"{rowData.HandlerIdCell}\", name \"{rowData.HandlerNameCell}\") not found, or the ID and name point at different people.";
+                    unmatchedRows.Add(rowData);
+                    result.Warnings.Add($"Row {row}: {rowData.Error} Add this handler, then re-upload to pick up just this row.");
+                    result.RowsSkippedUnmatched++;
+                    continue;
+                }
+
+                var dog = ResolveByIdOrName(row, dogIdCol, dogNameCol, ws, dogsById, dogsByName, d => d.Name);
+                if (dog == null)
+                {
+                    rowData.Error = $"Dog (ID \"{rowData.DogIdCell}\", name \"{rowData.DogNameCell}\") not found, or the ID and name point at different dogs.";
+                    unmatchedRows.Add(rowData);
+                    result.Warnings.Add($"Row {row}: {rowData.Error} Add this dog, then re-upload to pick up just this row.");
+                    result.RowsSkippedUnmatched++;
+                    continue;
+                }
+
+                var key = (handler.HandlerId, dog.DogId, matchedClass.ClassId);
+                if (!existingKeys.Add(key))
+                {
+                    result.RowsSkippedExisting++;
+                    continue;
+                }
+
+                newEntries.Add(new MSSA_Entry
+                {
+                    TrialId = trialId,
+                    HandlerId = handler.HandlerId,
+                    DogId = dog.DogId,
+                    ClassId = matchedClass.ClassId,
+                    RunTime = timeCol.HasValue ? ReadTimeCell(ws, row, timeCol.Value) : null,
+                    TieBreakerTime = tieTimeCol.HasValue ? ReadTimeCell(ws, row, tieTimeCol.Value) : null,
+                    EnteredTotalScore = totalPointsCol.HasValue && decimal.TryParse(ws.Cells[row, totalPointsCol.Value].Value?.ToString(), out var score) ? score : (decimal?)null,
+                    HandlerIsMSSAMember = false, // same default as adding an Entry by hand - not inferable from the file
+                    CreatedDate = DateTime.UtcNow,
+                    ModifiedDate = DateTime.UtcNow,
+                    EnteredBy = userId,
+                    ModifiedBy = userId
+                });
+                result.RowsCreated++;
+            }
+
+            db.MSSA_Entries.AddRange(newEntries);
+            await db.SaveChangesAsync();
+
+            if (unmatchedRows.Any())
+            {
+                result.ErrorsFile = BuildUnmatchedRowsWorkbook(unmatchedRows);
+            }
+
+            return result;
+        }
+
+        // Carries one skipped row's original cell values (same shape as the input
+        // columns, so the file this becomes can be fixed and re-uploaded as-is) plus
+        // why it was skipped.
+        private class UnmatchedRow
+        {
+            public string ClassCell;
+            public string HandlerIdCell;
+            public string HandlerNameCell;
+            public string DogIdCell;
+            public string DogNameCell;
+            public string TieTimeCell;
+            public string TotalPointsCell;
+            public string TimeCell;
+            public string Error;
+        }
+
+        private static byte[] BuildUnmatchedRowsWorkbook(List<UnmatchedRow> rows)
+        {
+            using var package = new ExcelPackage();
+            var ws = package.Workbook.Worksheets.Add("Unmatched Rows");
+
+            string[] headers = { "ClassId", "HandlerName", "HandlerId", "DogName", "DogId", "TieTime", "TotalPoints", "Time", "Error" };
+            for (int col = 0; col < headers.Length; col++)
+            {
+                ws.Cells[1, col + 1].Value = headers[col];
+            }
+            using (var headerRange = ws.Cells[1, 1, 1, headers.Length])
+            {
+                headerRange.Style.Font.Bold = true;
+                headerRange.Style.Fill.PatternType = OfficeOpenXml.Style.ExcelFillStyle.Solid;
+                headerRange.Style.Fill.BackgroundColor.SetColor(System.Drawing.Color.LightGray);
+            }
+
+            int row = 2;
+            foreach (var r in rows)
+            {
+                ws.Cells[row, 1].Value = r.ClassCell;
+                ws.Cells[row, 2].Value = r.HandlerNameCell;
+                ws.Cells[row, 3].Value = r.HandlerIdCell;
+                ws.Cells[row, 4].Value = r.DogNameCell;
+                ws.Cells[row, 5].Value = r.DogIdCell;
+                ws.Cells[row, 6].Value = r.TieTimeCell;
+                ws.Cells[row, 7].Value = r.TotalPointsCell;
+                ws.Cells[row, 8].Value = r.TimeCell;
+                ws.Cells[row, 9].Value = r.Error;
+                row++;
+            }
+
+            if (ws.Dimension != null)
+            {
+                ws.Cells[ws.Dimension.Address].AutoFitColumns();
+            }
+
+            return package.GetAsByteArray();
+        }
+
+        // Matches by ID first, but only trusts it outright when there's no name to
+        // check it against, or the name matches the ID'd record - otherwise (a typo'd
+        // but still-valid ID, e.g. a transposed digit landing on someone else
+        // entirely) falls through to matching by name instead of silently attaching
+        // the row to the wrong person. An ambiguous name match (two records sharing a
+        // name) is treated as unmatched rather than guessing which one was meant.
+        private static T ResolveByIdOrName<T>(
+            int row, int? idCol, int? nameCol, ExcelWorksheet ws,
+            Dictionary<int, T> byId, Dictionary<string, List<T>> byName, Func<T, string> nameSelector)
+            where T : class
+        {
+            var rowName = nameCol.HasValue ? ws.Cells[row, nameCol.Value].Value?.ToString() : null;
+
+            if (idCol.HasValue)
+            {
+                var idText = ws.Cells[row, idCol.Value].Value?.ToString();
+                if (int.TryParse(idText, out var id) && byId.TryGetValue(id, out var byIdMatch))
+                {
+                    if (string.IsNullOrWhiteSpace(rowName) || NormalizeName(nameSelector(byIdMatch)) == NormalizeName(rowName))
+                    {
+                        return byIdMatch;
+                    }
+                }
+            }
+
+            if (!string.IsNullOrWhiteSpace(rowName) && byName.TryGetValue(NormalizeName(rowName), out var nameMatches) && nameMatches.Count == 1)
+            {
+                return nameMatches[0];
+            }
+
+            return null;
+        }
+
+        // Confirmed against a real Trial Secretary's spreadsheet (EPPlus 8.6.1):
+        //   - A cell formatted as a clock time (e.g. "h:mm") comes back as a genuine
+        //     DateTime, e.g. "1:52 AM" for an entered "1:52" - Excel read that as
+        //     1 HOUR 52 MINUTES, not 1 minute 52 seconds. Every run time in this sport
+        //     is well under an hour, so the intent is always minutes:seconds -
+        //     reinterpret hour-as-minutes, minute-as-seconds, exactly the same
+        //     short-time-entry ambiguity already corrected for the original Access
+        //     migration (see 03_InsertFromOriginal_v2.sql).
+        //   - A cell with no time formatting at all (plain "0.21") comes back as a
+        //     bare double - this is this app's own "M.SS" shorthand (TimeParsingHelper),
+        //     not a fraction of a day. Treating it as an Excel date serial (an earlier
+        //     version of this method did) produced multi-hour nonsense and, for at
+        //     least one real row, a value SQL Server's time column couldn't even hold.
+        //     Round-trips through the same string parser as plain text instead.
+        //   - Plain text ("1:52", "0.21") - unchanged, TimeParsingHelper as before.
+        private static TimeSpan? ReadTimeCell(ExcelWorksheet ws, int row, int col)
+        {
+            var raw = ws.Cells[row, col].Value;
+            if (raw is DateTime dt)
+            {
+                return new TimeSpan(0, 0, dt.Hour, dt.Minute, 0);
+            }
+            if (raw is double d)
+            {
+                return TimeParsingHelper.ParseMinutesSeconds(d.ToString(System.Globalization.CultureInfo.InvariantCulture));
+            }
+            return TimeParsingHelper.ParseMinutesSeconds(raw?.ToString());
+        }
+
+        private static string NormalizeName(string name) =>
+            string.IsNullOrWhiteSpace(name) ? "" : name.Trim().ToLowerInvariant();
 
         // Header matching ignores case, spaces, and punctuation - "Tie Time", "TieTime",
         // and "tie_time" all match the same column.

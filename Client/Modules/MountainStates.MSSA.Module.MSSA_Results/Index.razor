@@ -223,10 +223,19 @@
                     Upload Completed Score Sheet
                     <InputFile OnChange="OnScoreSheetSelected" style="display:none" accept=".xlsx" />
                 </label>
+                <label class="btn btn-outline-secondary btn-sm ms-2 mb-0">
+                    Import Complete Trial
+                    <InputFile OnChange="OnCompleteTrialSelected" style="display:none" accept=".xlsx" />
+                </label>
                 <br />
                 <small class="text-muted">
-                    Works with our template, or your own spreadsheet - as long as it has HandlerId, DogId, and
+                    <strong>Upload Completed Score Sheet</strong> fills in scores on entries already in this trial -
+                    works with our template, or your own spreadsheet, as long as it has HandlerId, DogId, and
                     ClassId columns (column order and extra columns don't matter).
+                    <strong>Import Complete Trial</strong> is for a trial scored entirely in your own spreadsheet,
+                    with no entries in the app yet - it creates the entries themselves. Needs a Class column
+                    (name or ID) and a Handler and Dog column each (name or ID) - Handler/Dog names must already
+                    exist in the system; unmatched rows are skipped and listed so you can add them and re-upload.
                 </small>
             </div>
         </div>
@@ -239,6 +248,44 @@
                 {
                     <ul class="mb-0">
                         @foreach (var warning in importResult.Warnings)
+                        {
+                            <li>@warning</li>
+                        }
+                    </ul>
+                }
+            </div>
+        }
+
+        @if (completeTrialResult != null)
+        {
+            <div class="alert @(completeTrialResult.RowsCreated > 0 ? "alert-success" : "alert-warning") mb-3">
+                <div>
+                    Created @completeTrialResult.RowsCreated of @completeTrialResult.RowsProcessed row(s).
+                    @if (completeTrialResult.RowsSkippedExisting > 0)
+                    {
+                        <text> @completeTrialResult.RowsSkippedExisting already existed.</text>
+                    }
+                    @if (completeTrialResult.RowsSkippedUnmatched > 0)
+                    {
+                        <text> @completeTrialResult.RowsSkippedUnmatched unmatched (see below).</text>
+                    }
+                </div>
+                @if (completeTrialResult.ErrorsFile != null)
+                {
+                    <div class="mb-2">
+                        <a class="btn btn-sm btn-outline-danger" href="@CompleteTrialErrorsFileUrl" download="UnmatchedRows.xlsx">
+                            Download Unmatched Rows
+                        </a>
+                        <small class="text-muted d-block mt-1">
+                            Fix the Handler/Dog spelling or ID in this file, then upload it back through
+                            "Import Complete Trial" - already-imported rows are skipped, so only the fixed ones go in.
+                        </small>
+                    </div>
+                }
+                @if (completeTrialResult.Warnings.Any())
+                {
+                    <ul class="mb-0">
+                        @foreach (var warning in completeTrialResult.Warnings)
                         {
                             <li>@warning</li>
                         }
@@ -336,6 +383,7 @@
 
     private readonly HashSet<int> savedEntryIds = new();
     private ScoreSheetImportResult importResult;
+    private ImportCompleteTrialResult completeTrialResult;
 
     private EventScoringSummary selectedEvent => events?.FirstOrDefault(e => e.EventId == selectedEventId);
 
@@ -484,6 +532,13 @@
     private string ScoreSheetDownloadUrl =>
         $"{PageState.Alias.BaseUrl}/api/MSSA_Result/trial/{selectedTrialId}/scoresheet?moduleid={ModuleState.ModuleId}";
 
+    // A data: URI rather than a server round-trip - the bytes are already in hand from
+    // the import response, and this is a small, one-off file (unmatched rows only).
+    private string CompleteTrialErrorsFileUrl =>
+        completeTrialResult?.ErrorsFile == null
+            ? null
+            : $"data:application/vnd.openxmlformats-officedocument.spreadsheetml.sheet;base64,{Convert.ToBase64String(completeTrialResult.ErrorsFile)}";
+
     private async Task OnScoreSheetSelected(InputFileChangeEventArgs e)
     {
         try
@@ -514,6 +569,40 @@
         catch (Exception ex)
         {
             await logger.LogError(ex, "Error importing score sheet for trial {TrialId}", selectedTrialId);
+            errorMessage = "Error importing that file. Please check it and try again.";
+        }
+    }
+
+    private async Task OnCompleteTrialSelected(InputFileChangeEventArgs e)
+    {
+        try
+        {
+            errorMessage = "";
+            successMessage = "";
+            completeTrialResult = null;
+
+            const long maxFileSize = 10 * 1024 * 1024; // 10 MB
+            await using var stream = e.File.OpenReadStream(maxFileSize);
+            using var memoryStream = new MemoryStream();
+            await stream.CopyToAsync(memoryStream);
+
+            var dto = new ImportScoreSheetDto
+            {
+                FileName = e.File.Name,
+                ContentBase64 = Convert.ToBase64String(memoryStream.ToArray())
+            };
+
+            completeTrialResult = await ResultService.ImportCompleteTrialAsync(selectedTrialId, dto, ModuleState.ModuleId);
+
+            var reloaded = await ResultService.GetTrialRunRowsAsync(selectedTrialId, ModuleState.ModuleId);
+            rows = reloaded.Any(r => r.Placing.HasValue) ? SortByClassAndPlacing(reloaded) : reloaded;
+            savedEntryIds.Clear();
+
+            await RefreshSelectedEventSummary();
+        }
+        catch (Exception ex)
+        {
+            await logger.LogError(ex, "Error importing complete trial for trial {TrialId}", selectedTrialId);
             errorMessage = "Error importing that file. Please check it and try again.";
         }
     }
