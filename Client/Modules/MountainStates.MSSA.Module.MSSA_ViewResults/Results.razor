@@ -1,0 +1,132 @@
+@using MountainStates.MSSA.Module.MSSA_Events.Services
+@using MountainStates.MSSA.Module.MSSA_Events.Models
+@using MountainStates.MSSA.Module.MSSA_Results.Services
+@using MountainStates.MSSA.Module.MSSA_Results.Models
+@using MountainStates.MSSA.Module.MSSA_Results.Enums
+@using MountainStates.MSSA.Module.MSSA_Entries.Enums
+@using Oqtane.Modules.Controls
+
+@namespace MountainStates.MSSA.Module.MSSA_ViewResults
+@inherits ModuleBase
+@inject IMSSA_EventService EventService
+@inject IMSSA_ResultService ResultService
+
+<div class="container-fluid">
+    @if (trial == null)
+    {
+        <p><em>Loading...</em></p>
+    }
+    else if (!resultsAvailable)
+    {
+        <div class="alert alert-warning">Results for this trial aren't available yet.</div>
+        <ActionLink Action="Index" Text="Back to Events" Class="btn btn-secondary" />
+    }
+    else
+    {
+        <div class="row mb-3">
+            <div class="col">
+                <h2>@trial.TrialName</h2>
+                <p class="text-muted mb-0">@evt?.EventName - @trial.TrialDate.ToString("MMM dd, yyyy") - @trial.Stock</p>
+            </div>
+            <div class="col-auto">
+                <ActionLink Action="Trials" Parameters="@($"id={trial.EventId}")" Text="Back to Trials" Class="btn btn-secondary" />
+            </div>
+        </div>
+
+        @if (rows == null)
+        {
+            <p><em>Loading results...</em></p>
+        }
+        else if (!rows.Any())
+        {
+            <p class="text-muted"><em>No results have been posted for this trial yet.</em></p>
+        }
+        else
+        {
+            <div class="table-responsive">
+                <table class="table table-sm table-bordered align-middle">
+                    <thead>
+                        <tr>
+                            <th>Class</th>
+                            <th>Handler</th>
+                            <th>Dog</th>
+                            <th style="width:100px">Time</th>
+                            <th style="width:100px">Tie Time</th>
+                            <th style="width:110px">Total Points</th>
+                            <th style="width:70px">Place</th>
+                            <th style="width:70px">Points</th>
+                        </tr>
+                    </thead>
+                    <tbody>
+                        @foreach (var row in rows)
+                        {
+                            <tr>
+                                <td>@row.ClassName @row.SubClassName</td>
+                                <td>@row.HandlerName</td>
+                                <td>@row.DogName</td>
+                                <td>@(row.RunTimeStr ?? "-")</td>
+                                <td>@(row.TieBreakerTimeStr ?? "-")</td>
+                                <td>@(row.TotalScore?.ToString("F2") ?? "-")</td>
+                                <td class="text-center">@(row.Placing?.ToString() ?? "-")</td>
+                                <td class="text-center">@(row.TrialPoints?.ToString() ?? "-")</td>
+                            </tr>
+                        }
+                    </tbody>
+                </table>
+            </div>
+        }
+    }
+</div>
+
+@code {
+    private MSSA_Trial trial;
+    private MSSA_Event evt;
+    private List<ResultRunRow> rows;
+    private bool resultsAvailable;
+
+    protected override async Task OnInitializedAsync()
+    {
+        try
+        {
+            var trialId = int.Parse(PageState.QueryString["id"]);
+            trial = await EventService.GetTrialAsync(trialId, ModuleState.ModuleId);
+
+            if (trial != null)
+            {
+                evt = await EventService.GetEventAsync(trial.EventId, ModuleState.ModuleId);
+
+                // Guards direct-URL access, too - a trial link is only meaningful once its
+                // event's results have cleared the approval workflow (same rule as the listing).
+                resultsAvailable = evt != null && evt.ResultsApprovalStatus == EventResultsStatus.Approved;
+
+                if (resultsAvailable)
+                {
+                    var loaded = await ResultService.GetTrialRunRowsAsync(trialId, ModuleState.ModuleId);
+                    rows = loaded.Any(r => r.Placing.HasValue) ? SortByClassAndPlacing(loaded) : SortByRunOrder(loaded);
+                }
+            }
+        }
+        catch (Exception ex)
+        {
+            await logger.LogError(ex, "Error loading results");
+            AddModuleMessage("Error loading results", MessageType.Error);
+        }
+    }
+
+    // A trial that's already been placed reads better in Class + Placing order; one
+    // that hasn't yet keeps run order, since that's the order dogs are called into the ring.
+    private static List<ResultRunRow> SortByClassAndPlacing(List<ResultRunRow> list)
+    {
+        return list
+            .OrderBy(r => ClassRunOrder.IndexOf(r.ClassName))
+            .ThenBy(r => r.ClassName)
+            .ThenBy(r => r.SubClassName)
+            .ThenBy(r => r.Placing ?? int.MaxValue)
+            .ToList();
+    }
+
+    private static List<ResultRunRow> SortByRunOrder(List<ResultRunRow> list)
+    {
+        return list.OrderBy(r => r.RunOrder ?? int.MaxValue).ToList();
+    }
+}

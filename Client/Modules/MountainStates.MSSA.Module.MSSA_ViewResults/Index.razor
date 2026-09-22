@@ -1,0 +1,92 @@
+@using MountainStates.MSSA.Module.MSSA_Events.Services
+@using MountainStates.MSSA.Module.MSSA_Events.Models
+@using Oqtane.Modules.Controls
+
+@namespace MountainStates.MSSA.Module.MSSA_ViewResults
+@inherits ModuleBase
+@inject IMSSA_EventService EventService
+
+<div class="container-fluid">
+    <div class="row mb-3">
+        <div class="col">
+            <h2>View Results</h2>
+        </div>
+    </div>
+
+    <div class="row mb-3">
+        <div class="col-md-6">
+            <label for="eventSearch" class="form-label">Search Event</label>
+            <input id="eventSearch" class="form-control" @bind="searchTerm" @bind:event="oninput"
+                   placeholder="Filter the list below by name" />
+        </div>
+    </div>
+
+    @if (events == null)
+    {
+        <p><em>Loading...</em></p>
+    }
+    else if (!events.Any())
+    {
+        <p class="text-muted"><em>No results have been posted yet.</em></p>
+    }
+    else if (!FilteredEvents.Any())
+    {
+        <p class="text-muted"><em>No events match "@searchTerm".</em></p>
+    }
+    else
+    {
+        <div class="table-responsive">
+            <table class="table table-striped align-middle">
+                <thead>
+                    <tr>
+                        <th>Event Name</th>
+                        <th>Dates</th>
+                        <th>Trial Site</th>
+                    </tr>
+                </thead>
+                <tbody>
+                    @foreach (var evt in FilteredEvents)
+                    {
+                        <tr>
+                            <td>
+                                <ActionLink Action="Trials" Parameters="@($"id={evt.EventId}")" Text="@evt.EventName" />
+                            </td>
+                            <td>@evt.DateRange</td>
+                            <td>@evt.TrialSite</td>
+                        </tr>
+                    }
+                </tbody>
+            </table>
+        </div>
+    }
+</div>
+
+@code {
+    private List<MSSA_Event> events;
+    private string searchTerm = "";
+
+    private IEnumerable<MSSA_Event> FilteredEvents
+    {
+        get
+        {
+            if (events == null) return Enumerable.Empty<MSSA_Event>();
+            if (string.IsNullOrWhiteSpace(searchTerm)) return events;
+
+            var term = searchTerm.Trim();
+            return events.Where(e => e.EventName != null && e.EventName.Contains(term, StringComparison.OrdinalIgnoreCase));
+        }
+    }
+
+    protected override async Task OnInitializedAsync()
+    {
+        try
+        {
+            events = await EventService.GetEventsWithApprovedResultsAsync(ModuleState.ModuleId);
+        }
+        catch (Exception ex)
+        {
+            await logger.LogError(ex, "Error loading events with approved results");
+            AddModuleMessage("Error loading events", MessageType.Error);
+        }
+    }
+}

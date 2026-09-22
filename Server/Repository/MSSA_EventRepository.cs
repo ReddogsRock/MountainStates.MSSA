@@ -3,6 +3,7 @@ using MountainStates.MSSA.Module.MSSA_Entries.Models;
 using MountainStates.MSSA.Module.MSSA_Events.Models;
 using MountainStates.MSSA.Module.MSSA_Events.Enums;
 using MountainStates.MSSA.Module.MSSA_Handlers.Data;
+using MountainStates.MSSA.Module.MSSA_Results.Enums;
 using Oqtane.Modules;
 using System;
 using System.Collections.Generic;
@@ -55,6 +56,18 @@ namespace MountainStates.MSSA.Module.MSSA_Events.Repository
             }
 
             return events;
+        }
+
+        // Lean listing for the public "View Results" page - just the fields that page
+        // shows, for events whose results have gone through the approval workflow.
+        public async Task<IEnumerable<MSSA_Event>> GetEventsWithApprovedResultsAsync()
+        {
+            using var db = await _dbContextFactory.CreateDbContextAsync();
+
+            return await db.MSSA_Events
+                .Where(e => e.IsActive && e.ResultsApprovalStatus == EventResultsStatus.Approved)
+                .OrderByDescending(e => e.StartDate)
+                .ToListAsync();
         }
 
         public async Task<MSSA_Event> GetEventAsync(int eventId)

@@ -188,6 +188,21 @@ namespace MountainStates.MSSA.Module.MSSA_Results.Repository
                 .Where(c => classIds.Contains(c.ClassId))
                 .ToDictionaryAsync(c => c.ClassId);
 
+            // MSSA_Entry.Year is [NotMapped] - it isn't loaded by the query above, so it
+            // has to be derived here the same way MSSA_EntryRepository does: from the
+            // trial's Event.PointYear, falling back to the Trial's date.
+            var trialYear = await db.MSSA_Trials
+                .Where(t => t.TrialId == trialId)
+                .Join(db.MSSA_Events, t => t.EventId, ev => ev.EventId, (t, ev) => ev.PointYear ?? t.TrialDate.Year)
+                .FirstOrDefaultAsync();
+            var normalizedYear = NormalizeYear(trialYear);
+
+            var futurityPairs = await db.MSSA_DogFuturityParticipation
+                .Where(f => f.Year == normalizedYear && dogIds.Contains(f.DogId))
+                .Select(f => f.DogId)
+                .ToListAsync();
+            var futuritySet = new HashSet<int>(futurityPairs);
+
             return entries
                 .OrderBy(e => e.RunOrder ?? int.MaxValue)
                 .ThenBy(e => classes.TryGetValue(e.ClassId, out var ci) ? ci.PrintOrder ?? int.MaxValue : int.MaxValue)
@@ -200,7 +215,8 @@ namespace MountainStates.MSSA.Module.MSSA_Results.Repository
                     ClassName = classes.TryGetValue(e.ClassId, out var c) ? c.ClassName : "",
                     SubClassName = classes.TryGetValue(e.ClassId, out var c2) ? c2.SubClassName : "",
                     HandlerName = handlers.TryGetValue(e.HandlerId, out var handlerName) ? handlerName : "Unknown",
-                    DogName = dogs.TryGetValue(e.DogId, out var dogName) ? dogName : "Unknown",
+                    DogName = (dogs.TryGetValue(e.DogId, out var dogName) ? dogName : "Unknown")
+                        + (futuritySet.Contains(e.DogId) ? "+" : ""),
                     RunTimeStr = TimeParsingHelper.Format(e.RunTime),
                     TieBreakerTimeStr = TimeParsingHelper.Format(e.TieBreakerTime),
                     TotalScore = EffectiveScore(e),
@@ -209,6 +225,10 @@ namespace MountainStates.MSSA.Module.MSSA_Results.Repository
                 })
                 .ToList();
         }
+
+        // Converts a possibly-2-digit legacy year (e.g. 24) to full 4-digit form (2024).
+        // Leaves already-4-digit years untouched. Matches MSSA_EntryRepository's rule.
+        private static int NormalizeYear(int year) => year < 100 ? 2000 + year : year;
 
         public async Task SaveResultRowAsync(SaveResultRowDto dto, int userId)
         {

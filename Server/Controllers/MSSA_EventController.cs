@@ -51,6 +51,23 @@ namespace MountainStates.MSSA.Module.MSSA_Events.Controllers
             }
         }
 
+        // GET: api/MSSA_Event/approved?moduleid=x - the public "View Results" listing.
+        [HttpGet("approved")]
+        [Authorize(Policy = PolicyNames.ViewModule)]
+        public async Task<IEnumerable<MSSA_Event>> GetApproved(int moduleId)
+        {
+            try
+            {
+                var events = await _manager.GetEventsWithApprovedResultsAsync();
+                return events.Where(IsEventVisible);
+            }
+            catch (System.Exception ex)
+            {
+                _logger.Log(LogLevel.Error, this, LogFunction.Read, ex, "Error getting events with approved results");
+                throw;
+            }
+        }
+
         // GET: api/MSSA_Event/5?moduleid=x
         [HttpGet("{id}")]
         [Authorize(Policy = PolicyNames.ViewModule)]

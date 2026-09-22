@@ -1,0 +1,89 @@
+@using MountainStates.MSSA.Module.MSSA_Events.Services
+@using MountainStates.MSSA.Module.MSSA_Events.Models
+@using MountainStates.MSSA.Module.MSSA_Results.Enums
+@using Oqtane.Modules.Controls
+
+@namespace MountainStates.MSSA.Module.MSSA_ViewResults
+@inherits ModuleBase
+@inject IMSSA_EventService EventService
+
+<div class="container-fluid">
+    @if (evt == null)
+    {
+        <p><em>Loading...</em></p>
+    }
+    else if (evt.ResultsApprovalStatus != EventResultsStatus.Approved)
+    {
+        <div class="alert alert-warning">Results for this event aren't available yet.</div>
+        <ActionLink Action="Index" Text="Back to Events" Class="btn btn-secondary" />
+    }
+    else
+    {
+        <div class="row mb-3">
+            <div class="col">
+                <h2>@evt.EventName</h2>
+                <p class="text-muted mb-0">@evt.DateRange - @evt.TrialSite</p>
+            </div>
+            <div class="col-auto">
+                <ActionLink Action="Index" Text="Back to Events" Class="btn btn-secondary" />
+            </div>
+        </div>
+
+        @if (trials == null)
+        {
+            <p><em>Loading trials...</em></p>
+        }
+        else if (!trials.Any())
+        {
+            <p class="text-muted"><em>No trials found for this event.</em></p>
+        }
+        else
+        {
+            <div class="table-responsive">
+                <table class="table table-striped align-middle">
+                    <thead>
+                        <tr>
+                            <th>Date</th>
+                            <th>Trial</th>
+                            <th>Stock</th>
+                            <th></th>
+                        </tr>
+                    </thead>
+                    <tbody>
+                        @foreach (var trial in trials.OrderBy(t => t.TrialDate))
+                        {
+                            <tr>
+                                <td>@trial.TrialDate.ToString("MMM dd, yyyy")</td>
+                                <td>@trial.TrialName</td>
+                                <td>@trial.Stock</td>
+                                <td>
+                                    <ActionLink Action="Results" Parameters="@($"id={trial.TrialId}")" Text="View" Class="btn btn-primary btn-sm" />
+                                </td>
+                            </tr>
+                        }
+                    </tbody>
+                </table>
+            </div>
+        }
+    }
+</div>
+
+@code {
+    private MSSA_Event evt;
+    private List<MSSA_Trial> trials;
+
+    protected override async Task OnInitializedAsync()
+    {
+        try
+        {
+            var eventId = int.Parse(PageState.QueryString["id"]);
+            evt = await EventService.GetEventAsync(eventId, ModuleState.ModuleId);
+            trials = await EventService.GetEventTrialsAsync(eventId, ModuleState.ModuleId);
+        }
+        catch (Exception ex)
+        {
+            await logger.LogError(ex, "Error loading trials");
+            AddModuleMessage("Error loading trials", MessageType.Error);
+        }
+    }
+}

@@ -22,6 +22,11 @@ namespace MountainStates.MSSA.Module.MSSA_Events.Manager
             return await _repository.GetEventsAsync(moduleId);
         }
 
+        public async Task<IEnumerable<MSSA_Event>> GetEventsWithApprovedResultsAsync()
+        {
+            return await _repository.GetEventsWithApprovedResultsAsync();
+        }
+
         public async Task<MSSA_Event> GetEventAsync(int eventId, int moduleId)
         {
             return await _repository.GetEventAsync(eventId);

@@ -7,7 +7,7 @@ namespace MountainStates.MSSA.Module.MSSA_Results
     {
         public ModuleDefinition ModuleDefinition => new ModuleDefinition
         {
-            Name = "MSSA Results",
+            Name = "MSSA Enter Results",
             Description = "Score entry and results approval for MSSA herding trials",
             Version = "1.0.0",
             ServerManagerType = "MountainStates.MSSA.Module.MSSA_Results.Manager.MSSA_ResultManager, MountainStates.MSSA.Server.Oqtane",
