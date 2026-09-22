@@ -687,6 +687,22 @@ namespace MountainStates.MSSA.Module.MSSA_Results.Repository
                 .GroupBy(d => NormalizeName(d.Name))
                 .ToDictionary(g => g.Key, g => g.ToList());
 
+            // Membership status isn't in the spreadsheet, so it's looked up here instead
+            // of defaulting to non-member for every imported row (which is fine for the
+            // one-at-a-time Add Entry form, where staff can just check a box, but silently
+            // zeroed out points for an entire trial's worth of entries the one time this
+            // path ran). Same "currently active" rule as MSSA_Membership.IsCurrentlyActive,
+            // duplicated here since this runs as a translated query, not against
+            // already-materialized entities.
+            var currentYear = DateTime.Today.Year;
+            var activeMemberHandlerIds = (await db.MSSA_MembershipHandlers
+                .Join(db.MSSA_Memberships, mh => mh.MembershipId, m => m.MembershipId, (mh, m) => new { mh.HandlerId, m.StartYear, m.EndYear })
+                .Where(x => x.StartYear <= currentYear && (x.EndYear == null || x.EndYear >= currentYear))
+                .Select(x => x.HandlerId)
+                .Distinct()
+                .ToListAsync())
+                .ToHashSet();
+
             var classesById = await db.MSSA_Classes.ToDictionaryAsync(c => c.ClassId);
             // No Horseback signal in this file format, same as everywhere else this
             // assumption is made (see TimeParsingHelper, the Access migration scripts) -
@@ -831,7 +847,7 @@ namespace MountainStates.MSSA.Module.MSSA_Results.Repository
                     RunTime = timeCol.HasValue ? ReadTimeCell(ws, row, timeCol.Value) : null,
                     TieBreakerTime = tieTimeCol.HasValue ? ReadTimeCell(ws, row, tieTimeCol.Value) : null,
                     EnteredTotalScore = totalPointsCol.HasValue && decimal.TryParse(ws.Cells[row, totalPointsCol.Value].Value?.ToString(), out var score) ? score : (decimal?)null,
-                    HandlerIsMSSAMember = false, // same default as adding an Entry by hand - not inferable from the file
+                    HandlerIsMSSAMember = activeMemberHandlerIds.Contains(handler.HandlerId),
                     CreatedDate = DateTime.UtcNow,
                     ModifiedDate = DateTime.UtcNow,
                     EnteredBy = userId,
