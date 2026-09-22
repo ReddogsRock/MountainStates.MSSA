@@ -38,13 +38,6 @@ namespace MountainStates.MSSA.Module.MSSA_YearEndStandings.Repository
             bool isFuturity = string.Equals(level, FuturityLevel, StringComparison.OrdinalIgnoreCase);
             var lookupClassName = isFuturity ? "Nursery" : level;
 
-            // Futurity is Nursery/Cattle only - overrides whatever species was passed in,
-            // regardless of what the UI sends, so this can never accidentally include Sheep.
-            if (isFuturity)
-            {
-                species = "Cattle";
-            }
-
             var matchingClasses = await db.MSSA_Classes
                 .Where(c => c.ClassName == lookupClassName)
                 .ToListAsync();
@@ -164,11 +157,6 @@ namespace MountainStates.MSSA.Module.MSSA_YearEndStandings.Repository
 
             bool isFuturity = string.Equals(level, FuturityLevel, StringComparison.OrdinalIgnoreCase);
             var lookupClassName = isFuturity ? "Nursery" : level;
-
-            if (isFuturity)
-            {
-                species = "Cattle";
-            }
 
             var classIds = await db.MSSA_Classes
                 .Where(c => c.ClassName == lookupClassName)

@@ -45,8 +45,7 @@
                 </div>
                 <div class="col-md-3">
                     <label for="speciesSelect" class="form-label">Species</label>
-                    <select id="speciesSelect" class="form-select" @bind="selectedSpecies" @bind:after="LoadStandings"
-                            disabled="@IsFuturitySelected">
+                    <select id="speciesSelect" class="form-select" @bind="selectedSpecies" @bind:after="LoadStandings">
                         <option value="">-- Select Species --</option>
                         @foreach (var stock in StockType.All)
                         {
@@ -54,10 +53,6 @@
                         }
                         <option value="All">All</option>
                     </select>
-                    @if (IsFuturitySelected)
-                    {
-                        <small class="form-text text-muted">Futurity is Cattle only.</small>
-                    }
                 </div>
                 <div class="col-md-3">
                     <label for="dogSearch" class="form-label">Search Dog (name or ID)</label>
@@ -217,8 +212,6 @@
 
     private bool ReadyToShow => !string.IsNullOrEmpty(selectedYearOption) && !string.IsNullOrEmpty(selectedLevel) && !string.IsNullOrEmpty(selectedSpecies);
 
-    private bool IsFuturitySelected => string.Equals(selectedLevel, "Futurity", StringComparison.OrdinalIgnoreCase);
-
     // Open and Nursery standings are scored to the dog's owner, not whoever handled
     // it that day (correct, per the underlying data) - the column header needs to
     // say so, or it reads as a Handler name to anyone not already aware of that rule.
@@ -229,13 +222,6 @@
 
     private async Task OnLevelChanged()
     {
-        if (IsFuturitySelected)
-        {
-            // Futurity is Nursery/Cattle only - lock Species so the dropdown can't show
-            // a selection that doesn't actually apply (backend enforces this too).
-            selectedSpecies = "Cattle";
-        }
-
         await LoadStandings();
     }
 
