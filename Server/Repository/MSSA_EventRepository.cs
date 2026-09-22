@@ -162,11 +162,26 @@ namespace MountainStates.MSSA.Module.MSSA_Events.Repository
         // against one of them, which just means fewer stub trials get generated than
         // planned; harmless compared to the alternative of over-generating.
         //
+        // Only runs for an event that hasn't happened yet (StartDate null or in the
+        // future) - this is meant for forward planning (a Trial Secretary raising
+        // PlannedRuns from 3 to 5 on an upcoming event, wanting 2 more blank slots).
+        // For an already-run/migrated event, PlannedRuns instead holds the *historical
+        // entry count* for that class, which is never close to the real number of
+        // trial sessions (one trial hosts many entries, not one trial per entry) - so
+        // this "catch up to PlannedRuns" logic would manufacture dozens of junk trials
+        // on every save. Confirmed live 2026-09-22 (Ozark Empire Fair 2026, editing
+        // Offerings only - no Trial edited - still spawned 20 blank trials).
+        //
         // Safe to call on both create and edit: only ADDS trials to catch up to a higher
         // planned-run count. Never removes or renumbers existing trials, so nothing
         // already scheduled/scored gets disturbed if a count goes down or stays the same.
         private static async Task EnsureTrialsForOfferingsAsync(MSSADbContext db, MSSA_Event evt, List<MSSA_EventClassOffering> offerings)
         {
+            if (evt.StartDate.HasValue && evt.StartDate.Value.Date < DateTime.UtcNow.Date)
+            {
+                return;
+            }
+
             var baseDate = evt.StartDate ?? DateTime.Today;
 
             var groups = offerings.GroupBy(o => new { o.Stock, o.Venue });
