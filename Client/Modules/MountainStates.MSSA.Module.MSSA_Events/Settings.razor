@@ -1,0 +1,71 @@
+@using Oqtane.Modules
+@using Oqtane.Services
+@using Oqtane.Shared
+@namespace MountainStates.MSSA.Module.MSSA_Events
+@inherits ModuleBase
+@inject ISettingService SettingService
+@inject NavigationManager NavigationManager
+
+<div class="container">
+    <div class="row mb-3">
+        <div class="col-sm-9 offset-sm-3 form-check">
+            <input type="checkbox" class="form-check-input" id="limitToRecent" @bind="@_limitToRecent" />
+            <label class="form-check-label" for="limitToRecent">Only show recent &amp; upcoming events</label>
+        </div>
+    </div>
+    <div class="row mb-3">
+        <label class="col-sm-3">Days in the Past to Include:</label>
+        <div class="col-sm-9">
+            <input type="number" class="form-control" @bind="@_daysInPast" min="0" disabled="@(!_limitToRecent)" />
+            <div class="form-text">Events that started more than this many days ago are hidden. Upcoming events always show.</div>
+        </div>
+    </div>
+    <div class="row mb-3">
+        <div class="col-sm-9 offset-sm-3">
+            <button type="button" class="btn btn-primary" @onclick="SaveSettings">Save</button>
+            <button type="button" class="btn btn-secondary" @onclick="Cancel">Cancel</button>
+        </div>
+    </div>
+</div>
+
+@code {
+    public override SecurityAccessLevel SecurityAccessLevel => SecurityAccessLevel.Edit;
+
+    private bool _limitToRecent = false;
+    private int _daysInPast = 7;
+
+    protected override async Task OnInitializedAsync()
+    {
+        try
+        {
+            _limitToRecent = bool.Parse(SettingService.GetSetting(ModuleState.Settings, "LimitToRecent", "false"));
+            _daysInPast = int.Parse(SettingService.GetSetting(ModuleState.Settings, "DaysInPast", "7"));
+        }
+        catch (Exception ex)
+        {
+            await logger.LogError(ex, "Error loading settings");
+        }
+    }
+
+    private async Task SaveSettings()
+    {
+        try
+        {
+            var settings = await SettingService.GetModuleSettingsAsync(ModuleState.ModuleId);
+            SettingService.SetSetting(settings, "LimitToRecent", _limitToRecent.ToString());
+            SettingService.SetSetting(settings, "DaysInPast", _daysInPast.ToString());
+            await SettingService.UpdateModuleSettingsAsync(settings, ModuleState.ModuleId);
+
+            NavigationManager.NavigateTo(NavigateUrl());
+        }
+        catch (Exception ex)
+        {
+            await logger.LogError(ex, "Error saving settings");
+        }
+    }
+
+    private void Cancel()
+    {
+        NavigationManager.NavigateTo(NavigateUrl());
+    }
+}

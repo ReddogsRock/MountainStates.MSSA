@@ -5,12 +5,14 @@
 @using MountainStates.MSSA.Module.MSSA_Handlers.Models
 @using MountainStates.MSSA.Module.MSSA_Handlers.Enums
 @using Oqtane.Modules.Controls
+@using Oqtane.Services
 
 @namespace MountainStates.MSSA.Module.MSSA_Events
 @inherits ModuleBase
 @inject IMSSA_EventService EventService
 @inject IMSSA_StateService StateService
 @inject NavigationManager NavigationManager
+@inject ISettingService SettingService
 
 <div class="container-fluid">
     <div class="row mb-3">
@@ -243,10 +245,16 @@
     private bool filterNovice = false;
     private bool filterJunior = false;
 
+    private bool _limitToRecent = false;
+    private int _daysInPast = 7;
+
     protected override async Task OnInitializedAsync()
     {
         try
         {
+            _limitToRecent = bool.Parse(SettingService.GetSetting(ModuleState.Settings, "LimitToRecent", "false"));
+            _daysInPast = int.Parse(SettingService.GetSetting(ModuleState.Settings, "DaysInPast", "7"));
+
             states = await StateService.GetStatesAsync(ModuleState.ModuleId);
             await LoadEvents();
         }
@@ -260,6 +268,7 @@
     private async Task LoadEvents()
     {
         events = await EventService.GetEventsAsync(ModuleState.ModuleId);
+        ApplyRecencyFilter();
     }
 
     private async Task SearchEvents()
@@ -283,12 +292,26 @@
                 filterJunior ? true : null,
                 ModuleState.ModuleId
             );
+            ApplyRecencyFilter();
         }
         catch (Exception ex)
         {
             await logger.LogError(ex, "Error searching events");
             AddModuleMessage("Error searching events", MessageType.Error);
         }
+    }
+
+    // Only applied when this module instance's settings turn it on (e.g. the public
+    // Calendar placement), so the Manage-tab placement of the same module is unaffected.
+    private void ApplyRecencyFilter()
+    {
+        if (!_limitToRecent || events == null)
+        {
+            return;
+        }
+
+        var cutoff = DateTime.Today.AddDays(-_daysInPast);
+        events = events.Where(e => e.StartDate.HasValue && e.StartDate.Value.Date >= cutoff).ToList();
     }
 
     private async Task ClearFilters()
