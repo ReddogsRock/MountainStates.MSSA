@@ -228,13 +228,17 @@ namespace MountainStates.MSSA.Module.MSSA_Dogs.Repository
                 query = query.Where(d => d.IsActive);
             }
 
-            // Apply search term (name or owner search)
+            // Apply search term (name, owner, or exact DogId - lets a numeric search
+            // double as an ID lookup, e.g. to check a spreadsheet's DogId against
+            // what's actually in the system).
             if (!string.IsNullOrWhiteSpace(searchTerm))
             {
-                searchTerm = searchTerm.ToLower();
+                var term = searchTerm.ToLower();
+                bool isId = int.TryParse(searchTerm, out var idMatch);
                 query = query.Where(d =>
-                    d.Name.ToLower().Contains(searchTerm) ||
-                    (d.OwnerName != null && d.OwnerName.ToLower().Contains(searchTerm)));
+                    d.Name.ToLower().Contains(term) ||
+                    (d.OwnerName != null && d.OwnerName.ToLower().Contains(term)) ||
+                    (isId && d.DogId == idMatch));
             }
 
             // Filter by breed

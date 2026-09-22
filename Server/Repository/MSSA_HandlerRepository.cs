@@ -191,14 +191,18 @@ namespace MountainStates.MSSA.Module.MSSA_Handlers.Repository
 
             var query = db.MSSA_Handlers.Where(h => h.IsActive);
 
-            // Apply search term (name search)
+            // Apply search term (name, or exact HandlerId - lets a numeric search
+            // double as an ID lookup, e.g. to check a spreadsheet's HandlerId against
+            // what's actually in the system).
             if (!string.IsNullOrWhiteSpace(searchTerm))
             {
-                searchTerm = searchTerm.ToLower();
+                var term = searchTerm.ToLower();
+                bool isId = int.TryParse(searchTerm, out var idMatch);
                 query = query.Where(h =>
-                    h.FirstName.ToLower().Contains(searchTerm) ||
-                    h.LastName.ToLower().Contains(searchTerm) ||
-                    (h.FirstName + " " + h.LastName).ToLower().Contains(searchTerm));
+                    h.FirstName.ToLower().Contains(term) ||
+                    h.LastName.ToLower().Contains(term) ||
+                    (h.FirstName + " " + h.LastName).ToLower().Contains(term) ||
+                    (isId && h.HandlerId == idMatch));
             }
 
             // Filter by state

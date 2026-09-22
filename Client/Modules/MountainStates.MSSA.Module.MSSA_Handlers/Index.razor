@@ -29,9 +29,9 @@
     @* Search/Filter Section *@
     <div class="row mb-3">
         <div class="col-md-3">
-            <label for="searchTerm" class="form-label">Search Name</label>
+            <label for="searchTerm" class="form-label">Search Name/ID</label>
             <input id="searchTerm" class="form-control" @bind="searchTerm"
-                   @bind:event="oninput" placeholder="First or Last Name" />
+                   @bind:event="oninput" placeholder="First or Last Name, or Handler ID" />
         </div>
         <div class="col-md-2">
             <label for="stateFilter" class="form-label">State</label>

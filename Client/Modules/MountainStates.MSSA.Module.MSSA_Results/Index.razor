@@ -150,15 +150,14 @@
 
     <div class="row mb-3">
         <div class="col-md-6">
-            <label for="eventSelect" class="form-label">Select Event</label>
+            <label for="eventSearch" class="form-label">Search Event</label>
+            <input id="eventSearch" class="form-control mb-1" @bind="eventSearchTerm" @bind:event="oninput"
+                   placeholder="Filter the list below by name" />
             <select id="eventSelect" class="form-select" @bind="selectedEventId" @bind:after="OnEventChanged">
                 <option value="0">-- Select Event --</option>
-                @if (events != null)
+                @foreach (var evt in FilteredEvents)
                 {
-                    @foreach (var evt in events)
-                    {
-                        <option value="@evt.EventId">@evt.EventName - @evt.DateRange (@evt.ScoredRuns/@evt.TotalRuns scored)</option>
-                    }
+                    <option value="@evt.EventId">@evt.EventName - @evt.DateRange (@evt.ScoredRuns/@evt.TotalRuns scored)</option>
                 }
             </select>
         </div>
@@ -374,6 +373,20 @@
     private List<EventScoringSummary> pendingEvents;
     private List<MSSA_Trial> trials;
     private List<ResultRunRow> rows;
+
+    private string eventSearchTerm = "";
+
+    private IEnumerable<EventScoringSummary> FilteredEvents
+    {
+        get
+        {
+            if (events == null) return Enumerable.Empty<EventScoringSummary>();
+            if (string.IsNullOrWhiteSpace(eventSearchTerm)) return events;
+
+            var term = eventSearchTerm.Trim();
+            return events.Where(e => e.EventName != null && e.EventName.Contains(term, StringComparison.OrdinalIgnoreCase));
+        }
+    }
 
     private int selectedEventId = 0;
     private int selectedTrialId = 0;

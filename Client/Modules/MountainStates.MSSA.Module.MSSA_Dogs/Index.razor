@@ -28,9 +28,9 @@
     @* Search/Filter Section *@
     <div class="row mb-3">
         <div class="col-md-3">
-            <label for="searchTerm" class="form-label">Search Name/Owner</label>
+            <label for="searchTerm" class="form-label">Search Name/Owner/ID</label>
             <input id="searchTerm" class="form-control" @bind="searchTerm"
-                   @bind:event="oninput" placeholder="Dog or Owner Name" />
+                   @bind:event="oninput" placeholder="Dog or Owner Name, or Dog ID" />
         </div>
         <div class="col-md-2">
             <label for="breedFilter" class="form-label">Breed</label>
