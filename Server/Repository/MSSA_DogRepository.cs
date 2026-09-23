@@ -3,6 +3,7 @@ using MountainStates.MSSA.Module.MSSA_Dogs.Enums;
 using MountainStates.MSSA.Module.MSSA_Dogs.Models;
 using MountainStates.MSSA.Module.MSSA_Finals.Models;
 using MountainStates.MSSA.Module.MSSA_Handlers.Data;
+using MountainStates.MSSA.Module.MSSA_Results.Enums;
 using Oqtane.Modules;
 using System;
 using System.Collections.Generic;
@@ -359,7 +360,7 @@ namespace MountainStates.MSSA.Module.MSSA_Dogs.Repository
                                 join ev in db.MSSA_Events on t.EventId equals ev.EventId
                                 join h in db.MSSA_Handlers on e.HandlerId equals h.HandlerId
                                 join c in db.MSSA_Classes on e.ClassId equals c.ClassId
-                                where e.DogId == dogId
+                                where e.DogId == dogId && ev.ResultsApprovalStatus == EventResultsStatus.Approved
                                 select new MSSA_DogEntry
                                 {
                                     EntryId = e.EntryId,

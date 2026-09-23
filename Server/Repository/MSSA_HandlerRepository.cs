@@ -7,6 +7,7 @@ using Oqtane.Modules;
 using MountainStates.MSSA.Module.MSSA_Handlers.Models;
 using MountainStates.MSSA.Module.MSSA_Handlers.Data;
 using MountainStates.MSSA.Module.MSSA_Finals.Models;
+using MountainStates.MSSA.Module.MSSA_Results.Enums;
 
 namespace MountainStates.MSSA.Module.MSSA_Handlers.Repository
 {
@@ -249,7 +250,7 @@ namespace MountainStates.MSSA.Module.MSSA_Handlers.Repository
                                  join ev in db.MSSA_Events on t.EventId equals ev.EventId
                                  join d in db.MSSA_Dogs on e.DogId equals d.DogId
                                  join c in db.MSSA_Classes on e.ClassId equals c.ClassId
-                                 where e.HandlerId == handlerId
+                                 where e.HandlerId == handlerId && ev.ResultsApprovalStatus == EventResultsStatus.Approved
                                  select new MSSA_HandlerEntry
                                  {
                                      EntryId = e.EntryId,

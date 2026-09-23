@@ -48,7 +48,7 @@ namespace MountainStates.MSSA.Module.MSSA_TopScores.Repository
                                         && c.ClassName == parameters.ClassName
                                         && c.IsActive
                                         && e.TrialPoints.HasValue
-                                        && ev.ResultsApprovalStatus != EventResultsStatus.PendingApproval
+                                        && ev.ResultsApprovalStatus == EventResultsStatus.Approved
                                      group e by new { d.DogId, d.Name, d.OwnerName } into g
                                      orderby g.Sum(x => x.TrialPoints.Value) descending
                                      select new TopScoreResult
@@ -86,7 +86,7 @@ namespace MountainStates.MSSA.Module.MSSA_TopScores.Repository
                                         && c.ClassName == parameters.ClassName
                                         && c.IsActive
                                         && e.TrialPoints.HasValue
-                                        && ev.ResultsApprovalStatus != EventResultsStatus.PendingApproval
+                                        && ev.ResultsApprovalStatus == EventResultsStatus.Approved
                                      group e by new { d.DogId, d.Name, h.HandlerId, h.FullName } into g
                                      orderby g.Sum(x => x.TrialPoints.Value) descending
                                      select new TopScoreResult

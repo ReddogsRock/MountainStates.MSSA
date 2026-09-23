@@ -1,5 +1,6 @@
 using Microsoft.EntityFrameworkCore;
 using MountainStates.MSSA.Module.MSSA_Handlers.Data;
+using MountainStates.MSSA.Module.MSSA_Results.Enums;
 using MountainStates.MSSA.Module.MSSA_YearEndStandings.Models;
 using Oqtane.Modules;
 using System;
@@ -53,7 +54,7 @@ namespace MountainStates.MSSA.Module.MSSA_YearEndStandings.Repository
             var baseQuery = from e in db.MSSA_Entries
                              join t in db.MSSA_Trials on e.TrialId equals t.TrialId
                              join ev in db.MSSA_Events on t.EventId equals ev.EventId
-                             where classIds.Contains(e.ClassId) && e.TrialPoints.HasValue
+                             where classIds.Contains(e.ClassId) && e.TrialPoints.HasValue && ev.ResultsApprovalStatus == EventResultsStatus.Approved
                              select new { e.DogId, e.HandlerId, e.TrialPoints, ev.PointYear, t.Stock };
 
             // "All" combines Cattle + Sheep - skip the Stock filter entirely rather
@@ -167,7 +168,7 @@ namespace MountainStates.MSSA.Module.MSSA_YearEndStandings.Repository
                         join t in db.MSSA_Trials on e.TrialId equals t.TrialId
                         join ev in db.MSSA_Events on t.EventId equals ev.EventId
                         join h in db.MSSA_Handlers on e.HandlerId equals h.HandlerId
-                        where classIds.Contains(e.ClassId) && e.TrialPoints.HasValue && e.DogId == dogId
+                        where classIds.Contains(e.ClassId) && e.TrialPoints.HasValue && e.DogId == dogId && ev.ResultsApprovalStatus == EventResultsStatus.Approved
                         select new { e, t, ev, h };
 
             if (!string.IsNullOrEmpty(species) && !string.Equals(species, "All", StringComparison.OrdinalIgnoreCase))
