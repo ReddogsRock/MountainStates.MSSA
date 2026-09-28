@@ -16,6 +16,12 @@ namespace MountainStates.MSSA.Module.MSSA_Dogs.Manager
         // the MembershipId so the webhook can find its way back to the right record.
         Task<string> CreateMembershipCheckoutSessionAsync(int membershipId, string membershipType, string successUrl, string cancelUrl);
 
+        // Creates a Checkout Session for an event's sanctioning fee ($ per run, sanctioned
+        // + unsanctioned) and returns the URL to redirect the browser to. Unlike the other
+        // two flows, quantity varies per event rather than always being 1. The Session's
+        // metadata carries the EventId so the webhook can find its way back to the record.
+        Task<string> CreateSanctioningFeeCheckoutSessionAsync(int eventId, int quantity, string successUrl, string cancelUrl);
+
         // Verifies the Stripe-Signature header and parses the event. Throws if the
         // signature doesn't check out - never process a webhook body without this.
         Event ConstructWebhookEvent(string json, string stripeSignatureHeader);

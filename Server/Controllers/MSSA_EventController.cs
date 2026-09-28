@@ -17,6 +17,7 @@ using MountainStates.MSSA.Module.MSSA_Events.Enums;
 using MountainStates.MSSA.Module.MSSA_Handlers.Enums;
 using MountainStates.MSSA.Module.MSSA_Entries.Models;
 using MountainStates.MSSA.Module.MSSA_Results.Enums;
+using MountainStates.MSSA.Module.MSSA_Results.Manager;
 using System.Linq;
 
 namespace MountainStates.MSSA.Module.MSSA_Events.Controllers
@@ -26,12 +27,14 @@ namespace MountainStates.MSSA.Module.MSSA_Events.Controllers
     {
         private readonly IMSSA_EventManager _manager;
         private readonly IWebHostEnvironment _hostEnvironment;
+        private readonly IMSSA_ResultManager _resultManager;
 
-        public MSSA_EventController(IMSSA_EventManager manager, IWebHostEnvironment hostEnvironment, ILogManager logger, IHttpContextAccessor httpContextAccessor)
+        public MSSA_EventController(IMSSA_EventManager manager, IWebHostEnvironment hostEnvironment, IMSSA_ResultManager resultManager, ILogManager logger, IHttpContextAccessor httpContextAccessor)
             : base(logger, httpContextAccessor)
         {
             _manager = manager;
             _hostEnvironment = hostEnvironment;
+            _resultManager = resultManager;
         }
 
         // GET: api/MSSA_Event?moduleid=x
@@ -159,6 +162,57 @@ namespace MountainStates.MSSA.Module.MSSA_Events.Controllers
             catch (System.Exception ex)
             {
                 _logger.Log(LogLevel.Error, this, LogFunction.Read, ex, "Error getting trial entries for {TrialId}", trialId);
+                throw;
+            }
+        }
+
+        // POST: api/MSSA_Event/5/sanctionfee/checkout?moduleid=x
+        // Admin only - real money, and the association's sanctioning-fee accounting isn't
+        // something a Trial Secretary should be able to trigger. Sanctioned Runs is always
+        // recomputed here from actual scored entries, never trusted from the client -
+        // only Unsanctioned Runs (inherently honor-system) comes from the request body.
+        [HttpPost("{eventId}/sanctionfee/checkout")]
+        [Authorize(Policy = PolicyNames.EditModule)]
+        public async Task<ActionResult<SanctionFeeCheckoutResult>> CreateSanctionFeeCheckout(int eventId, [FromBody] CreateSanctionFeeCheckoutDto dto, int moduleId)
+        {
+            try
+            {
+                if (dto == null || dto.EventId != eventId || dto.UnsanctionedRuns < 0
+                    || string.IsNullOrEmpty(dto.SuccessUrl) || string.IsNullOrEmpty(dto.CancelUrl))
+                {
+                    return BadRequest();
+                }
+
+                var evt = await _manager.GetEventAsync(eventId, moduleId);
+                if (evt == null)
+                {
+                    return NotFound();
+                }
+
+                // Admin can pay for any event; a Trial Secretary only the ones they
+                // created - same rule as editing the event, so self-service pay is
+                // limited to the person who'd know the run counts are right.
+                if (!IsAuthorizedForEvent(evt))
+                {
+                    return Forbid();
+                }
+
+                var sanctionedRuns = await _resultManager.GetScoredRunCountAsync(eventId, moduleId);
+                var quantity = sanctionedRuns + dto.UnsanctionedRuns;
+                if (quantity <= 0)
+                {
+                    return BadRequest("No runs to charge a sanctioning fee for.");
+                }
+
+                var checkoutUrl = await _manager.CreateSanctioningFeeCheckoutSessionAsync(eventId, quantity, dto.SuccessUrl, dto.CancelUrl, moduleId);
+                _logger.Log(LogLevel.Information, this, LogFunction.Create,
+                    "Sanctioning fee checkout session created for event {EventId}, quantity {Quantity}", eventId, quantity);
+
+                return new SanctionFeeCheckoutResult { CheckoutUrl = checkoutUrl };
+            }
+            catch (System.Exception ex)
+            {
+                _logger.Log(LogLevel.Error, this, LogFunction.Create, ex, "Error creating sanctioning fee checkout session for event {EventId}", eventId);
                 throw;
             }
         }

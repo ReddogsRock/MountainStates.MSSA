@@ -18,6 +18,11 @@ namespace MountainStates.MSSA.Module.MSSA_Results.Repository
         Task<int?> GetEventOwnerAsync(int eventId);
         Task<int?> GetTrialScorekeeperUserIdAsync(int trialId);
 
+        // Count of scored runs (RunTime + a computed total score present) across every
+        // trial in the event - the "sanctioned runs" total for the sanctioning fee
+        // checkout, regardless of the event's results-approval status.
+        Task<int> GetScoredRunCountAsync(int eventId);
+
         Task<List<ResultRunRow>> GetTrialRunRowsAsync(int trialId);
         Task SaveResultRowAsync(SaveResultRowDto dto, int userId);
 

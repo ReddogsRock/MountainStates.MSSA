@@ -7,6 +7,7 @@ using Stripe;
 using Stripe.Checkout;
 using MountainStates.MSSA.Module.MSSA_Dogs.Manager;
 using MountainStates.MSSA.Module.MSSA_Handlers.Manager;
+using MountainStates.MSSA.Module.MSSA_Events.Manager;
 
 namespace MountainStates.MSSA.Module.MSSA_Dogs.Startup
 {
@@ -20,7 +21,7 @@ namespace MountainStates.MSSA.Module.MSSA_Dogs.Startup
     // what the signature proves.
     public static class StripeWebhookHandler
     {
-        public static async Task HandleAsync(HttpContext context, IStripeService stripeService, IMSSA_DogManager dogManager, IMSSA_HandlerManager handlerManager, ILogger logger)
+        public static async Task HandleAsync(HttpContext context, IStripeService stripeService, IMSSA_DogManager dogManager, IMSSA_HandlerManager handlerManager, IMSSA_EventManager eventManager, ILogger logger)
         {
             string json;
             using (var reader = new StreamReader(context.Request.Body, leaveOpen: true))
@@ -45,7 +46,7 @@ namespace MountainStates.MSSA.Module.MSSA_Dogs.Startup
                 if (stripeEvent.Type == "checkout.session.completed")
                 {
                     var session = stripeEvent.Data.Object as Session;
-                    await HandleCheckoutCompletedAsync(session, dogManager, handlerManager, logger);
+                    await HandleCheckoutCompletedAsync(session, dogManager, handlerManager, eventManager, logger);
                 }
 
                 context.Response.StatusCode = StatusCodes.Status200OK;
@@ -58,7 +59,7 @@ namespace MountainStates.MSSA.Module.MSSA_Dogs.Startup
             }
         }
 
-        private static async Task HandleCheckoutCompletedAsync(Session session, IMSSA_DogManager dogManager, IMSSA_HandlerManager handlerManager, ILogger logger)
+        private static async Task HandleCheckoutCompletedAsync(Session session, IMSSA_DogManager dogManager, IMSSA_HandlerManager handlerManager, IMSSA_EventManager eventManager, ILogger logger)
         {
             if (session?.Metadata == null || !session.Metadata.TryGetValue("Purpose", out var purpose))
             {
@@ -72,6 +73,9 @@ namespace MountainStates.MSSA.Module.MSSA_Dogs.Startup
                     break;
                 case "MembershipPurchase":
                     await HandleMembershipPurchaseAsync(session, handlerManager, logger);
+                    break;
+                case "SanctioningFee":
+                    await HandleSanctioningFeeAsync(session, eventManager, logger);
                     break;
             }
         }
@@ -119,6 +123,29 @@ namespace MountainStates.MSSA.Module.MSSA_Dogs.Startup
             else
             {
                 logger.LogInformation("Membership {MembershipId} marked Paid via Stripe session {SessionId}", membershipId, session.Id);
+            }
+        }
+
+        private static async Task HandleSanctioningFeeAsync(Session session, IMSSA_EventManager eventManager, ILogger logger)
+        {
+            if (!session.Metadata.TryGetValue("EventId", out var eventIdText)
+                || !int.TryParse(eventIdText, out var eventId))
+            {
+                logger.LogError("Sanctioning fee checkout session {SessionId} completed with no valid EventId in metadata", session.Id);
+                return;
+            }
+
+            // AmountTotal is in the smallest currency unit (cents for USD).
+            var amount = (session.AmountTotal ?? 0) / 100m;
+
+            var updated = await eventManager.MarkSanctionFeePaidAsync(eventId, session.PaymentIntentId, amount, moduleId: 0);
+            if (updated == null)
+            {
+                logger.LogError("Event {EventId} not found - could not mark sanctioning fee Paid", eventId);
+            }
+            else
+            {
+                logger.LogInformation("Event {EventId} sanctioning fee marked Paid via Stripe session {SessionId}", eventId, session.Id);
             }
         }
     }

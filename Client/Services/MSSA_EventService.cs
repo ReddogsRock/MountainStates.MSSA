@@ -29,6 +29,12 @@ namespace MountainStates.MSSA.Module.MSSA_Events.Services
             return events?.OrderByDescending(e => e.StartDate).ToList();
         }
 
+        public async Task<SanctionFeeCheckoutResult> CreateSanctionFeeCheckoutAsync(int eventId, CreateSanctionFeeCheckoutDto dto, int moduleId)
+        {
+            return await PostJsonAsync<CreateSanctionFeeCheckoutDto, SanctionFeeCheckoutResult>(
+                CreateAuthorizationPolicyUrl($"{ApiUrl}/{eventId}/sanctionfee/checkout?moduleid={moduleId}", EntityNames.Module, moduleId), dto);
+        }
+
         public async Task<MSSA_Event> GetEventAsync(int eventId, int moduleId)
         {
             return await GetJsonAsync<MSSA_Event>(CreateAuthorizationPolicyUrl($"{ApiUrl}/{eventId}?moduleid={moduleId}", EntityNames.Module, moduleId));

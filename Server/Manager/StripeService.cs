@@ -70,7 +70,22 @@ namespace MountainStates.MSSA.Module.MSSA_Dogs.Manager
             });
         }
 
-        private async Task<string> CreateCheckoutSessionAsync(string productId, string successUrl, string cancelUrl, Dictionary<string, string> metadata)
+        public async Task<string> CreateSanctioningFeeCheckoutSessionAsync(int eventId, int quantity, string successUrl, string cancelUrl)
+        {
+            var productId = _configuration["Stripe:SanctioningFeeProductId"];
+            if (string.IsNullOrEmpty(productId))
+            {
+                throw new InvalidOperationException("No Stripe product configured for sanctioning fees (Stripe:SanctioningFeeProductId).");
+            }
+
+            return await CreateCheckoutSessionAsync(productId, successUrl, cancelUrl, new Dictionary<string, string>
+            {
+                { "Purpose", "SanctioningFee" },
+                { "EventId", eventId.ToString() }
+            }, quantity);
+        }
+
+        private async Task<string> CreateCheckoutSessionAsync(string productId, string successUrl, string cancelUrl, Dictionary<string, string> metadata, int quantity = 1)
         {
             var priceId = await ResolveActivePriceIdAsync(productId);
 
@@ -87,7 +102,7 @@ namespace MountainStates.MSSA.Module.MSSA_Dogs.Manager
                     new SessionLineItemOptions
                     {
                         Price = priceId,
-                        Quantity = 1
+                        Quantity = quantity
                     }
                 },
                 SuccessUrl = successUrl,

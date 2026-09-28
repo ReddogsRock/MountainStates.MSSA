@@ -54,6 +54,24 @@ namespace MountainStates.MSSA.Module.MSSA_Results.Controllers
             }
         }
 
+        // GET api/MSSA_Result/event/{eventId}/scoredruncount?moduleid=x
+        // Count of scored runs across every trial in the event - feeds the "Sanctioned
+        // Runs" total on the Event Detail page's sanctioning fee checkout.
+        [HttpGet("event/{eventId}/scoredruncount")]
+        [Authorize(Policy = PolicyNames.ViewModule)]
+        public async Task<ActionResult<int>> GetScoredRunCount(int eventId, int moduleId)
+        {
+            try
+            {
+                return await _manager.GetScoredRunCountAsync(eventId, moduleId);
+            }
+            catch (System.Exception ex)
+            {
+                _logger.Log(LogLevel.Error, this, LogFunction.Read, ex, "Error getting scored run count for event {EventId}", eventId);
+                throw;
+            }
+        }
+
         // GET api/MSSA_Result/pending?moduleid=x  (Admin only - the approval queue)
         [HttpGet("pending")]
         [Authorize(Policy = PolicyNames.ViewModule)]

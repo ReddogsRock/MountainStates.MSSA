@@ -8,6 +8,7 @@ namespace MountainStates.MSSA.Module.MSSA_Results.Services
     {
         Task<List<EventScoringSummary>> GetScoringEventsAsync(int moduleId);
         Task<List<EventScoringSummary>> GetPendingApprovalEventsAsync(int moduleId);
+        Task<int> GetScoredRunCountAsync(int eventId, int moduleId);
 
         Task<List<ResultRunRow>> GetTrialRunRowsAsync(int trialId, int moduleId);
         Task SaveResultRowAsync(int trialId, SaveResultRowDto dto, int moduleId);

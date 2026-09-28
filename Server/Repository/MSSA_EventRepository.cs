@@ -70,6 +70,29 @@ namespace MountainStates.MSSA.Module.MSSA_Events.Repository
                 .ToListAsync();
         }
 
+        // "Paid" status is already signaled by FeeReceivedDate being set (previously only
+        // ever set manually by an Admin) - this just fills in the same SanctionFee/
+        // FeeReceivedDate fields the admin's manual edit uses, plus the Stripe payment
+        // intent id, same pattern as MarkMembershipPaymentReceivedAsync.
+        public async Task<MSSA_Event> MarkSanctionFeePaidAsync(int eventId, string stripePaymentIntentId, decimal amount)
+        {
+            using var db = await _dbContextFactory.CreateDbContextAsync();
+
+            var evt = await db.MSSA_Events.FindAsync(eventId);
+            if (evt == null)
+            {
+                return null;
+            }
+
+            evt.SanctionFee = amount;
+            evt.StripePaymentIntentId = stripePaymentIntentId;
+            evt.FeeReceivedDate = DateTime.UtcNow.Date;
+            evt.ModifiedDate = DateTime.UtcNow;
+
+            await db.SaveChangesAsync();
+            return evt;
+        }
+
         public async Task<MSSA_Event> GetEventAsync(int eventId)
         {
             using var db = await _dbContextFactory.CreateDbContextAsync();

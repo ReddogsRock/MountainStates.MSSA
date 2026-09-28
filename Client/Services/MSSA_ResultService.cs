@@ -25,6 +25,12 @@ namespace MountainStates.MSSA.Module.MSSA_Results.Services
                 CreateAuthorizationPolicyUrl($"{ApiUrl}/pending?moduleid={moduleId}", EntityNames.Module, moduleId));
         }
 
+        public async Task<int> GetScoredRunCountAsync(int eventId, int moduleId)
+        {
+            return await GetJsonAsync<int>(
+                CreateAuthorizationPolicyUrl($"{ApiUrl}/event/{eventId}/scoredruncount?moduleid={moduleId}", EntityNames.Module, moduleId));
+        }
+
         public async Task<List<ResultRunRow>> GetTrialRunRowsAsync(int trialId, int moduleId)
         {
             return await GetJsonAsync<List<ResultRunRow>>(

@@ -4,16 +4,19 @@ using Oqtane.Modules;
 using MountainStates.MSSA.Module.MSSA_Events.Repository;
 using MountainStates.MSSA.Module.MSSA_Events.Models;
 using MountainStates.MSSA.Module.MSSA_Entries.Models;
+using MountainStates.MSSA.Module.MSSA_Dogs.Manager;
 
 namespace MountainStates.MSSA.Module.MSSA_Events.Manager
 {
     public class MSSA_EventManager : IMSSA_EventManager, ITransientService
     {
         private readonly IMSSA_EventRepository _repository;
+        private readonly IStripeService _stripeService;
 
-        public MSSA_EventManager(IMSSA_EventRepository repository)
+        public MSSA_EventManager(IMSSA_EventRepository repository, IStripeService stripeService)
         {
             _repository = repository;
+            _stripeService = stripeService;
         }
 
         // Events
@@ -25,6 +28,16 @@ namespace MountainStates.MSSA.Module.MSSA_Events.Manager
         public async Task<IEnumerable<MSSA_Event>> GetEventsWithApprovedResultsAsync()
         {
             return await _repository.GetEventsWithApprovedResultsAsync();
+        }
+
+        public async Task<string> CreateSanctioningFeeCheckoutSessionAsync(int eventId, int quantity, string successUrl, string cancelUrl, int moduleId)
+        {
+            return await _stripeService.CreateSanctioningFeeCheckoutSessionAsync(eventId, quantity, successUrl, cancelUrl);
+        }
+
+        public async Task<MSSA_Event> MarkSanctionFeePaidAsync(int eventId, string stripePaymentIntentId, decimal amount, int moduleId)
+        {
+            return await _repository.MarkSanctionFeePaidAsync(eventId, stripePaymentIntentId, amount);
         }
 
         public async Task<MSSA_Event> GetEventAsync(int eventId, int moduleId)

@@ -163,6 +163,18 @@ namespace MountainStates.MSSA.Module.MSSA_Results.Repository
                 .FirstOrDefaultAsync();
         }
 
+        public async Task<int> GetScoredRunCountAsync(int eventId)
+        {
+            using var db = await _dbContextFactory.CreateDbContextAsync();
+
+            var entries = await (from e in db.MSSA_Entries
+                                  join t in db.MSSA_Trials on e.TrialId equals t.TrialId
+                                  where t.EventId == eventId
+                                  select e).ToListAsync();
+
+            return entries.Count(IsScored);
+        }
+
         public async Task<List<ResultRunRow>> GetTrialRunRowsAsync(int trialId)
         {
             using var db = await _dbContextFactory.CreateDbContextAsync();

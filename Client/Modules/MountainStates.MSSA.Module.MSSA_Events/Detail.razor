@@ -2,11 +2,13 @@
 @using MountainStates.MSSA.Module.MSSA_Events.Services
 @using MountainStates.MSSA.Module.MSSA_Events.Models
 @using MountainStates.MSSA.Module.MSSA_Handlers.Enums
+@using MountainStates.MSSA.Module.MSSA_Results.Services
 @using Oqtane.Modules.Controls
 
 @namespace MountainStates.MSSA.Module.MSSA_Events
 @inherits ModuleBase
 @inject IMSSA_EventService EventService
+@inject IMSSA_ResultService ResultService
 @inject NavigationManager NavigationManager
 
 @if (evt == null)
@@ -31,6 +33,23 @@ else
                 }
             </div>
         </div>
+
+        @if (PageState.QueryString.ContainsKey("sanctionfee"))
+        {
+            @if (PageState.QueryString["sanctionfee"] == "success")
+            {
+                <div class="alert alert-success">
+                    Payment received - thank you! The sanctioning fee will show as paid here
+                    shortly once Stripe confirms the charge.
+                </div>
+            }
+            else if (PageState.QueryString["sanctionfee"] == "cancelled")
+            {
+                <div class="alert alert-warning">
+                    The sanctioning fee wasn't paid. Use the button below to try again.
+                </div>
+            }
+        }
 
         @* Event Information *@
         <div class="card mb-3">
@@ -212,6 +231,46 @@ else
                     <dt class="col-sm-3">Fee Received:</dt>
                     <dd class="col-sm-9">@(evt.FeeReceivedDate?.ToString("MMM dd, yyyy") ?? "Not received")</dd>
                 </dl>
+
+                @if (CanEdit())
+                {
+                    <hr />
+                    <h5>Pay Sanctioning Fee</h5>
+                    <p class="text-muted">
+                        $5 per run - every scored run in this event, plus any unsanctioned runs
+                        held (still insured, so still owed) that never went through the app.
+                    </p>
+
+                    @if (!string.IsNullOrEmpty(feeError))
+                    {
+                        <div class="alert alert-danger">@feeError</div>
+                    }
+
+                    <div class="row mb-2">
+                        <label class="col-sm-3 col-form-label">Sanctioned Runs:</label>
+                        <div class="col-sm-9 col-form-label">
+                            @(sanctionedRunCount?.ToString() ?? "Loading...")
+                        </div>
+                    </div>
+                    <div class="row mb-2">
+                        <label for="unsanctionedRuns" class="col-sm-3 col-form-label">Unsanctioned Runs:</label>
+                        <div class="col-sm-3">
+                            <input id="unsanctionedRuns" type="number" min="0" class="form-control"
+                                   @bind="unsanctionedRuns" />
+                        </div>
+                    </div>
+                    <div class="row mb-3">
+                        <label class="col-sm-3 col-form-label">Total Runs:</label>
+                        <div class="col-sm-9 col-form-label">
+                            <strong>@((sanctionedRunCount ?? 0) + unsanctionedRuns)</strong>
+                        </div>
+                    </div>
+
+                    <button class="btn btn-primary" @onclick="PaySanctionFee"
+                            disabled="@(payingFee || sanctionedRunCount == null || (sanctionedRunCount + unsanctionedRuns) <= 0)">
+                        @(payingFee ? "Redirecting to Stripe..." : "Pay Sanctioning Fee")
+                    </button>
+                }
             </div>
         </div>
 
@@ -395,6 +454,12 @@ else
     }
     private bool _loadingEntries = false;
 
+    // Sanctioning fee
+    private int? sanctionedRunCount;
+    private int unsanctionedRuns = 0;
+    private bool payingFee = false;
+    private string feeError;
+
     private string FlyerDownloadUrl =>
         $"{PageState.Alias.BaseUrl}/api/MSSA_Event/{evt.EventId}/flyer?moduleid={ModuleState.ModuleId}";
 
@@ -417,11 +482,60 @@ else
             int eventId = int.Parse(PageState.QueryString["id"]);
             evt = await EventService.GetEventAsync(eventId, ModuleState.ModuleId);
             trials = await EventService.GetEventTrialsAsync(eventId, ModuleState.ModuleId);
+
+            if (CanEdit())
+            {
+                sanctionedRunCount = await ResultService.GetScoredRunCountAsync(eventId, ModuleState.ModuleId);
+            }
         }
         catch (Exception ex)
         {
             await logger.LogError(ex, "Error loading event details");
             AddModuleMessage("Error loading event details", MessageType.Error);
+        }
+    }
+
+    private async Task PaySanctionFee()
+    {
+        try
+        {
+            feeError = null;
+
+            if (evt.FeeReceivedDate.HasValue)
+            {
+                var confirmed = await JSRuntime.InvokeAsync<bool>("confirm",
+                    $"A sanctioning fee was already received for this event on {evt.FeeReceivedDate:MMM dd, yyyy} ({evt.SanctionFee:C}). Pay again?");
+                if (!confirmed)
+                {
+                    return;
+                }
+            }
+
+            payingFee = true;
+
+            // Stripe Checkout requires absolute URLs to redirect back to.
+            var successUrl = NavigationManager.ToAbsoluteUri(EditUrl("Detail", $"id={evt.EventId}&sanctionfee=success")).ToString();
+            var cancelUrl = NavigationManager.ToAbsoluteUri(EditUrl("Detail", $"id={evt.EventId}&sanctionfee=cancelled")).ToString();
+
+            var checkout = await EventService.CreateSanctionFeeCheckoutAsync(
+                evt.EventId,
+                new CreateSanctionFeeCheckoutDto
+                {
+                    EventId = evt.EventId,
+                    UnsanctionedRuns = unsanctionedRuns,
+                    SuccessUrl = successUrl,
+                    CancelUrl = cancelUrl
+                },
+                ModuleState.ModuleId);
+
+            await logger.LogInformation("Redirecting to Stripe checkout for event {EventId} sanctioning fee", evt.EventId);
+            await JSRuntime.InvokeVoidAsync("window.location.assign", checkout.CheckoutUrl);
+        }
+        catch (Exception ex)
+        {
+            await logger.LogError(ex, "Error creating sanctioning fee checkout for event {EventId}", evt.EventId);
+            feeError = "Error starting the payment. Please try again.";
+            payingFee = false;
         }
     }
 

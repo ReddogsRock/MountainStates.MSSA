@@ -40,6 +40,11 @@ namespace MountainStates.MSSA.Module.MSSA_Results.Manager
             return await _repository.GetTrialScorekeeperUserIdAsync(trialId);
         }
 
+        public async Task<int> GetScoredRunCountAsync(int eventId, int moduleId)
+        {
+            return await _repository.GetScoredRunCountAsync(eventId);
+        }
+
         public async Task<List<ResultRunRow>> GetTrialRunRowsAsync(int trialId, int moduleId)
         {
             return await _repository.GetTrialRunRowsAsync(trialId);

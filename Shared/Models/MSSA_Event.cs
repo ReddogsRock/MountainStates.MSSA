@@ -66,6 +66,9 @@ namespace MountainStates.MSSA.Module.MSSA_Events.Models
         public decimal? SanctionFee { get; set; }
         public DateTime? FeeReceivedDate { get; set; }
 
+        [StringLength(255)]
+        public string StripePaymentIntentId { get; set; }
+
         // Planning
         public int? NumberOfRuns { get; set; }
         public string Notes { get; set; }
