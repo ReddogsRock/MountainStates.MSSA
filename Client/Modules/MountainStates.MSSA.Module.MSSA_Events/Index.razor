@@ -247,6 +247,7 @@
 
     private bool _limitToRecent = false;
     private int _daysInPast = 7;
+    private bool _sortDescending = true;
 
     protected override async Task OnInitializedAsync()
     {
@@ -254,6 +255,7 @@
         {
             _limitToRecent = bool.Parse(SettingService.GetSetting(ModuleState.Settings, "LimitToRecent", "false"));
             _daysInPast = int.Parse(SettingService.GetSetting(ModuleState.Settings, "DaysInPast", "7"));
+            _sortDescending = bool.Parse(SettingService.GetSetting(ModuleState.Settings, "SortDescending", "true"));
 
             states = await StateService.GetStatesAsync(ModuleState.ModuleId);
             await LoadEvents();
@@ -269,6 +271,7 @@
     {
         events = await EventService.GetEventsAsync(ModuleState.ModuleId);
         ApplyRecencyFilter();
+        ApplySortOrder();
     }
 
     private async Task SearchEvents()
@@ -293,6 +296,7 @@
                 ModuleState.ModuleId
             );
             ApplyRecencyFilter();
+            ApplySortOrder();
         }
         catch (Exception ex)
         {
@@ -312,6 +316,20 @@
 
         var cutoff = DateTime.Today.AddDays(-_daysInPast);
         events = events.Where(e => e.StartDate.HasValue && e.StartDate.Value.Date >= cutoff).ToList();
+    }
+
+    // Per-instance setting (default matches the list's historical order) so the
+    // Calendar and Manage-tab placements of this module can each order it differently.
+    private void ApplySortOrder()
+    {
+        if (events == null)
+        {
+            return;
+        }
+
+        events = _sortDescending
+            ? events.OrderByDescending(e => e.StartDate).ToList()
+            : events.OrderBy(e => e.StartDate).ToList();
     }
 
     private async Task ClearFilters()
