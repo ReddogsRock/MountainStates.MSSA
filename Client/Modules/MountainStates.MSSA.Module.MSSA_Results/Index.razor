@@ -589,8 +589,11 @@
     // Stock (a Cattle trial and a Sheep trial in the same Class both count toward the
     // same competitor's total) - not an actual average despite the label; "Weekend
     // Average" is just the name staff already use for this report. Grouped by Class,
-    // ranked the same way individual-run placing is (see CalculatePlacingAndPointsAsync):
-    // highest combined points first, lowest combined time as the tiebreaker.
+    // ranked by run count first - someone who competed in every trial always outranks
+    // someone who competed in fewer, regardless of points/time, since summed totals
+    // otherwise unfairly favor fewer runs (less time added up, usually fewer points
+    // too). Within the same run count, highest combined points, lowest combined time
+    // as the tiebreaker (the same order individual-run placing uses).
     private async Task ExportWeekendCombinedPdf()
     {
         if (selectedEventId <= 0)
@@ -640,7 +643,8 @@
                             TotalTime = cg.Aggregate(TimeSpan.Zero, (sum, r) => sum + (TimeParsingHelper.ParseMinutesSeconds(r.RunTimeStr) ?? TimeSpan.Zero)),
                             RunCount = cg.Count()
                         })
-                        .OrderByDescending(c => c.TotalPoints)
+                        .OrderByDescending(c => c.RunCount)
+                        .ThenByDescending(c => c.TotalPoints)
                         .ThenBy(c => c.TotalTime)
                         .Select(c => new[]
                         {
