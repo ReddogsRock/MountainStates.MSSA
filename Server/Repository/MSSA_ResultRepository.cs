@@ -555,6 +555,14 @@ namespace MountainStates.MSSA.Module.MSSA_Results.Repository
                 return result;
             }
 
+            // Only the first sheet/tab is ever read - a common way for this to bite
+            // someone is combining multiple pages into one workbook (e.g. a tab per
+            // class), where every tab after the first is silently skipped.
+            if (package.Workbook.Worksheets.Count > 1)
+            {
+                result.Warnings.Add($"This file has {package.Workbook.Worksheets.Count} sheets/tabs - only the first one (\"{ws.Name}\") was read. If results are split across tabs, save each as its own file and upload them one at a time.");
+            }
+
             int lastCol = ws.Dimension.End.Column;
             int lastRow = ws.Dimension.End.Row;
 
@@ -732,6 +740,14 @@ namespace MountainStates.MSSA.Module.MSSA_Results.Repository
             {
                 result.Warnings.Add("The file appears to be empty.");
                 return result;
+            }
+
+            // Only the first sheet/tab is ever read - a common way for this to bite
+            // someone is combining multiple pages into one workbook (e.g. a tab per
+            // class), where every tab after the first is silently skipped.
+            if (package.Workbook.Worksheets.Count > 1)
+            {
+                result.Warnings.Add($"This file has {package.Workbook.Worksheets.Count} sheets/tabs - only the first one (\"{ws.Name}\") was read. If results are split across tabs, save each as its own file and upload them one at a time.");
             }
 
             int lastCol = ws.Dimension.End.Column;
