@@ -13,6 +13,7 @@ wwwroot/Modules/
 Content/Tenants/
 App_Data/
 Logs/
+Server/Content/Log/
 *.db
 *.mdf
 *.ldf
