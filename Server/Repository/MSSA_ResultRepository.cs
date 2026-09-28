@@ -985,13 +985,27 @@ namespace MountainStates.MSSA.Module.MSSA_Results.Repository
         //   - Plain text ("1:52", "0.21") - unchanged, TimeParsingHelper as before.
         private static TimeSpan? ReadTimeCell(ExcelWorksheet ws, int row, int col)
         {
-            var raw = ws.Cells[row, col].Value;
+            var cell = ws.Cells[row, col];
+            var raw = cell.Value;
             if (raw is DateTime dt)
             {
                 return new TimeSpan(0, 0, dt.Hour, dt.Minute, 0);
             }
             if (raw is double d)
             {
+                // A cell formatted as an Excel time/duration (e.g. "[m]:ss.00") stores its
+                // value as a fraction of a day, not literally "minutes.seconds" - running
+                // that fraction through the human-typed-text parser below produced garbage
+                // (and, for some fraction values whose decimal expansion happens to be
+                // short, a bogus seconds count large enough to overflow SQL's Time column -
+                // see the Diamond W trial import crash). A formatted duration cell always
+                // renders with a ':' in its displayed text; a plain number typed directly
+                // per the "2.35" convention above does not, so that's what distinguishes
+                // the two cases.
+                if (cell.Text.Contains(':'))
+                {
+                    return TimeSpan.FromTicks((long)Math.Round(d * TimeSpan.TicksPerDay));
+                }
                 return TimeParsingHelper.ParseMinutesSeconds(d.ToString(System.Globalization.CultureInfo.InvariantCulture));
             }
             return TimeParsingHelper.ParseMinutesSeconds(raw?.ToString());
