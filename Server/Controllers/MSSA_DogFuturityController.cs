@@ -9,6 +9,7 @@ using Oqtane.Shared;
 using System;
 using System.Collections.Generic;
 using System.IO;
+using System.Linq;
 using System.Threading.Tasks;
 using MountainStates.MSSA.Module.MSSA_Dogs.Manager;
 using MountainStates.MSSA.Module.MSSA_Dogs.Models;
@@ -19,6 +20,11 @@ namespace MountainStates.MSSA.Module.MSSA_Dogs.Controllers
     [Route(ControllerRoutes.ApiRoute)]
     public class MSSA_DogFuturityController : ModuleControllerBase
     {
+        // Age documentation (Futurity enrollment, Nursery eligibility) accepts a PDF or
+        // a photo of the paperwork - kept in sync with MSSA_DogController's copy and the
+        // client's accept filter in Dogs/Edit.razor.
+        private static readonly string[] DocumentAllowedExtensions = { ".pdf", ".jpg", ".jpeg", ".png", ".heic" };
+
         private readonly IMSSA_DogManager _manager;
         private readonly IWebHostEnvironment _hostEnvironment;
 
@@ -150,6 +156,15 @@ namespace MountainStates.MSSA.Module.MSSA_Dogs.Controllers
                 // transient fields, so we don't run full ModelState validation here
                 // (DogId/Year required-field rules don't apply to this endpoint).
                 if (string.IsNullOrEmpty(participation.UploadContentBase64))
+                {
+                    HttpContext.Response.StatusCode = (int)System.Net.HttpStatusCode.BadRequest;
+                    return null;
+                }
+
+                // PDF-or-image is enforced client-side via the file picker's accept
+                // filter, but re-checked here too since a client-side filter can always
+                // be bypassed - this endpoint is anonymous, so it's the only real check.
+                if (!DocumentAllowedExtensions.Contains(Path.GetExtension(participation.UploadFileName), StringComparer.OrdinalIgnoreCase))
                 {
                     HttpContext.Response.StatusCode = (int)System.Net.HttpStatusCode.BadRequest;
                     return null;

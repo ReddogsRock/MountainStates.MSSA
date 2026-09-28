@@ -171,9 +171,9 @@
                     {
                         <div class="mb-2">
                             <label for="futurityDoc" class="form-label">
-                                Age Documentation <span class="text-danger">*</span> <small class="text-muted">(required to enroll; PDF only)</small>
+                                Age Documentation <span class="text-danger">*</span> <small class="text-muted">(required to enroll; PDF or image)</small>
                             </label>
-                            <InputFile id="futurityDoc" class="form-control" accept=".pdf" OnChange="OnFuturityDocumentSelected" />
+                            <InputFile id="futurityDoc" class="form-control" accept="@DocumentAcceptFilter" OnChange="OnFuturityDocumentSelected" />
                             @if (futurityDocument != null)
                             {
                                 <small class="form-text text-muted">Selected: @futurityDocument.Name</small>
@@ -202,9 +202,9 @@
                 else
                 {
                     <label for="nurseryDoc" class="form-label">
-                        Age Documentation <small class="text-muted">(PDF only)</small>
+                        Age Documentation <small class="text-muted">(PDF or image)</small>
                     </label>
-                    <InputFile id="nurseryDoc" class="form-control" accept=".pdf" OnChange="OnNurseryDocumentSelected" />
+                    <InputFile id="nurseryDoc" class="form-control" accept="@DocumentAcceptFilter" OnChange="OnNurseryDocumentSelected" />
                     @if (selectedNurseryDocument != null)
                     {
                         <small class="form-text text-muted">Selected: @selectedNurseryDocument.Name</small>
@@ -280,6 +280,13 @@
     private bool enrollInFuturity = false;
     private IBrowserFile futurityDocument;
     private IBrowserFile selectedNurseryDocument;
+
+    // Age documentation (Futurity enrollment, Nursery eligibility) accepts a PDF or a
+    // photo of the paperwork - many handlers just snap a picture of the registration
+    // papers rather than scanning to PDF. Re-checked server-side too (a client-side
+    // filter can always be bypassed).
+    private static readonly string[] DocumentAllowedExtensions = { ".pdf", ".jpg", ".jpeg", ".png", ".heic" };
+    private const string DocumentAcceptFilter = ".pdf,.jpg,.jpeg,.png,.heic";
 
     // Competition year runs May 1 - Apr 30, named for the year it ends in.
     // E.g. Aug 2026 falls in the season that ends Apr 2027, so it's "2027".
@@ -416,14 +423,22 @@
 
     private void OnFuturityDocumentSelected(InputFileChangeEventArgs e)
     {
+        if (!DocumentAllowedExtensions.Contains(Path.GetExtension(e.File.Name), StringComparer.OrdinalIgnoreCase))
+        {
+            errorMessage = "Futurity documentation must be a PDF or image file (JPG, PNG, or HEIC).";
+            futurityDocument = null;
+            return;
+        }
+
+        errorMessage = "";
         futurityDocument = e.File;
     }
 
     private void OnNurseryDocumentSelected(InputFileChangeEventArgs e)
     {
-        if (!e.File.Name.EndsWith(".pdf", StringComparison.OrdinalIgnoreCase))
+        if (!DocumentAllowedExtensions.Contains(Path.GetExtension(e.File.Name), StringComparer.OrdinalIgnoreCase))
         {
-            errorMessage = "Nursery documentation must be a PDF file.";
+            errorMessage = "Nursery documentation must be a PDF or image file (JPG, PNG, or HEIC).";
             selectedNurseryDocument = null;
             return;
         }

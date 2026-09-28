@@ -9,6 +9,7 @@ using Oqtane.Shared;
 using System;
 using System.Collections.Generic;
 using System.IO;
+using System.Linq;
 using System.Threading.Tasks;
 using MountainStates.MSSA.Module.MSSA_Dogs.Manager;
 using MountainStates.MSSA.Module.MSSA_Dogs.Models;
@@ -19,6 +20,11 @@ namespace MountainStates.MSSA.Module.MSSA_Dogs.Controllers
     [Route(ControllerRoutes.ApiRoute)]
     public class MSSA_DogController : ModuleControllerBase
     {
+        // Age documentation (Futurity enrollment, Nursery eligibility) accepts a PDF or
+        // a photo of the paperwork - kept in sync with MSSA_DogFuturityController's copy
+        // and the client's accept filter in Dogs/Edit.razor.
+        private static readonly string[] DocumentAllowedExtensions = { ".pdf", ".jpg", ".jpeg", ".png", ".heic" };
+
         private readonly IMSSA_DogManager _manager;
         private readonly IWebHostEnvironment _hostEnvironment;
 
@@ -278,9 +284,9 @@ namespace MountainStates.MSSA.Module.MSSA_Dogs.Controllers
         }
 
         // Writes an uploaded Nursery age-eligibility document to disk and sets
-        // NurseryDocumentFileName/Path on the dog. PDF-only is enforced client-side via
-        // the file picker's accept filter, but re-checked here too since a client-side
-        // filter can always be bypassed.
+        // NurseryDocumentFileName/Path on the dog. PDF-or-image is enforced client-side
+        // via the file picker's accept filter, but re-checked here too since a
+        // client-side filter can always be bypassed.
         private void SaveNurseryDocumentIfPresent(MSSA_Dog dog)
         {
             if (string.IsNullOrEmpty(dog.UploadNurseryDocContentBase64))
@@ -288,9 +294,9 @@ namespace MountainStates.MSSA.Module.MSSA_Dogs.Controllers
                 return;
             }
 
-            if (!string.Equals(Path.GetExtension(dog.UploadNurseryDocFileName), ".pdf", StringComparison.OrdinalIgnoreCase))
+            if (!DocumentAllowedExtensions.Contains(Path.GetExtension(dog.UploadNurseryDocFileName), StringComparer.OrdinalIgnoreCase))
             {
-                throw new InvalidOperationException("Nursery documentation must be a PDF file.");
+                throw new InvalidOperationException("Nursery documentation must be a PDF or image file (JPG, PNG, or HEIC).");
             }
 
             var bytes = Convert.FromBase64String(dog.UploadNurseryDocContentBase64);
