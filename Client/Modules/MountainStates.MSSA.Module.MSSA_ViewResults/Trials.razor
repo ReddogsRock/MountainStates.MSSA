@@ -61,6 +61,15 @@
                                 </td>
                             </tr>
                         }
+                        <tr>
+                            <td colspan="3">
+                                <strong>Weekend Average</strong>
+                                <small class="text-muted">(all trials combined, by competitor)</small>
+                            </td>
+                            <td>
+                                <ActionLink Action="WeekendAverage" Parameters="@($"id={evt.EventId}")" Text="View" Class="btn btn-primary btn-sm" />
+                            </td>
+                        </tr>
                     </tbody>
                 </table>
             </div>

@@ -1,0 +1,156 @@
+@using MountainStates.MSSA.Module.MSSA_Events.Services
+@using MountainStates.MSSA.Module.MSSA_Events.Models
+@using MountainStates.MSSA.Module.MSSA_Results.Services
+@using MountainStates.MSSA.Module.MSSA_Results.Models
+@using MountainStates.MSSA.Module.MSSA_Results.Enums
+@using MountainStates.MSSA.Module.MSSA_Results.Utilities
+@using MountainStates.MSSA.Module.MSSA_Entries.Enums
+@using Oqtane.Modules.Controls
+
+@namespace MountainStates.MSSA.Module.MSSA_ViewResults
+@inherits ModuleBase
+@inject IMSSA_EventService EventService
+@inject IMSSA_ResultService ResultService
+
+<div class="container-fluid">
+    @if (evt == null)
+    {
+        <p><em>Loading...</em></p>
+    }
+    else if (evt.ResultsApprovalStatus != EventResultsStatus.Approved)
+    {
+        <div class="alert alert-warning">Results for this event aren't available yet.</div>
+        <ActionLink Action="Index" Text="Back to Events" Class="btn btn-secondary" />
+    }
+    else
+    {
+        <div class="row mb-3">
+            <div class="col">
+                <h2>Weekend Average</h2>
+                <p class="text-muted mb-0">@evt.EventName - @evt.DateRange</p>
+            </div>
+            <div class="col-auto">
+                <ActionLink Action="Trials" Parameters="@($"id={evt.EventId}")" Text="Back to Trials" Class="btn btn-secondary" />
+            </div>
+        </div>
+
+        @if (sections == null)
+        {
+            <p><em>Loading results...</em></p>
+        }
+        else if (!sections.Any())
+        {
+            <p class="text-muted"><em>No scored runs have been posted for this event yet.</em></p>
+        }
+        else
+        {
+            @foreach (var section in sections)
+            {
+                <h4 class="mt-3">@section.ClassName</h4>
+                <div class="table-responsive">
+                    <table class="table table-sm table-bordered align-middle">
+                        <thead>
+                            <tr>
+                                <th>Handler</th>
+                                <th>Dog</th>
+                                <th style="width:110px">Total Points</th>
+                                <th style="width:120px">Total Time</th>
+                                <th style="width:80px">Runs</th>
+                            </tr>
+                        </thead>
+                        <tbody>
+                            @foreach (var competitor in section.Competitors)
+                            {
+                                <tr>
+                                    <td>@competitor.HandlerName</td>
+                                    <td>@competitor.DogName</td>
+                                    <td>@competitor.TotalPoints.ToString("F2")</td>
+                                    <td>@TimeParsingHelper.Format(competitor.TotalTime)</td>
+                                    <td class="text-center">@competitor.RunCount</td>
+                                </tr>
+                            }
+                        </tbody>
+                    </table>
+                </div>
+            }
+        }
+    }
+</div>
+
+@code {
+    private MSSA_Event evt;
+    private List<ClassSection> sections;
+
+    // For each competitor (Handler+Dog) within a Class, their combined total across
+    // every trial in the event regardless of Stock (a Cattle trial and a Sheep trial
+    // in the same Class both count toward the same total) - not an actual average
+    // despite the name; "Weekend Average" is just what staff already call this report.
+    // Ranked the same way individual-run placing is (see
+    // MSSA_ResultRepository.CalculatePlacingAndPointsAsync): highest combined points
+    // first, lowest combined time as the tiebreaker. Same aggregation as the "Weekend
+    // Average" PDF export on the Results Entry page, just displayed inline here
+    // instead of exported.
+    private class ClassSection
+    {
+        public string ClassName { get; set; }
+        public List<Competitor> Competitors { get; set; }
+    }
+
+    private class Competitor
+    {
+        public string HandlerName { get; set; }
+        public string DogName { get; set; }
+        public decimal TotalPoints { get; set; }
+        public TimeSpan TotalTime { get; set; }
+        public int RunCount { get; set; }
+    }
+
+    protected override async Task OnInitializedAsync()
+    {
+        try
+        {
+            var eventId = int.Parse(PageState.QueryString["id"]);
+            evt = await EventService.GetEventAsync(eventId, ModuleState.ModuleId);
+
+            if (evt != null && evt.ResultsApprovalStatus == EventResultsStatus.Approved)
+            {
+                var trials = await EventService.GetEventTrialsAsync(eventId, ModuleState.ModuleId);
+
+                var allRows = new List<ResultRunRow>();
+                foreach (var trial in trials)
+                {
+                    allRows.AddRange(await ResultService.GetTrialRunRowsAsync(trial.TrialId, ModuleState.ModuleId));
+                }
+
+                sections = allRows
+                    .Where(r => r.IsScored)
+                    .GroupBy(r => r.ClassName)
+                    .OrderBy(g => ClassRunOrder.IndexOf(g.Key))
+                    .ThenBy(g => g.Key)
+                    .Select(g => new ClassSection
+                    {
+                        ClassName = g.Key,
+                        Competitors = g
+                            .GroupBy(r => new { r.HandlerName, r.DogName })
+                            .Select(cg => new Competitor
+                            {
+                                HandlerName = cg.Key.HandlerName,
+                                DogName = cg.Key.DogName,
+                                TotalPoints = cg.Sum(r => r.TotalScore ?? 0),
+                                TotalTime = cg.Aggregate(TimeSpan.Zero, (sum, r) => sum + (TimeParsingHelper.ParseMinutesSeconds(r.RunTimeStr) ?? TimeSpan.Zero)),
+                                RunCount = cg.Count()
+                            })
+                            .OrderByDescending(c => c.TotalPoints)
+                            .ThenBy(c => c.TotalTime)
+                            .ToList()
+                    })
+                    .ToList();
+            }
+        }
+        catch (Exception ex)
+        {
+            await logger.LogError(ex, "Error loading weekend average results");
+            AddModuleMessage("Error loading results", MessageType.Error);
+        }
+    }
+}

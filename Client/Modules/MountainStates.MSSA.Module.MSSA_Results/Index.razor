@@ -1,6 +1,7 @@
 @using MountainStates.MSSA.Module.MSSA_Results.Services
 @using MountainStates.MSSA.Module.MSSA_Results.Models
 @using MountainStates.MSSA.Module.MSSA_Results.Enums
+@using MountainStates.MSSA.Module.MSSA_Results.Utilities
 @using MountainStates.MSSA.Module.MSSA_Entries.Enums
 @using MountainStates.MSSA.Module.MSSA_Events.Services
 @using MountainStates.MSSA.Module.MSSA_Events.Models
@@ -31,9 +32,35 @@
         });
     };
 
+    // Fetches the org logo once and caches it as a data URL (jsPDF's addImage needs a
+    // data URL or Image element, not a bare src) - every export after the first reuses
+    // the cached copy instead of re-fetching. Own copy of the same helper in
+    // Entries/Index.razor - a separate component's embedded <script> isn't guaranteed
+    // to have run yet if that page hasn't been visited this session.
+    window.mssaResultsGetLogoDataUrl = async (logoUrl) => {
+        if (window.__mssaLogoDataUrl) {
+            return window.__mssaLogoDataUrl;
+        }
+        try {
+            const response = await fetch(logoUrl);
+            const blob = await response.blob();
+            window.__mssaLogoDataUrl = await new Promise((resolve, reject) => {
+                const reader = new FileReader();
+                reader.onload = () => resolve(reader.result);
+                reader.onerror = reject;
+                reader.readAsDataURL(blob);
+            });
+            return window.__mssaLogoDataUrl;
+        } catch (e) {
+            return null; // missing/unreachable logo shouldn't block the export
+        }
+    };
+
     // One results sheet per Class, each its own gridlined table, under a shared
-    // letterhead (org name, Event, Trial, Date) - built for posting to social media.
-    window.mssaExportResultsPdf = async (fileName, headerLines, sections) => {
+    // letterhead (logo, org name, Event, Trial, Date) - built for posting to social
+    // media. tableHead is the column header row, so this same builder serves both the
+    // per-run Export Results PDF and the per-competitor Weekend Average PDF.
+    window.mssaExportResultsPdf = async (fileName, headerLines, sections, tableHead, logoUrl) => {
         if (!window.jspdf) {
             await window.mssaResultsLoadScript('https://cdnjs.cloudflare.com/ajax/libs/jspdf/2.5.1/jspdf.umd.min.js');
         }
@@ -41,20 +68,29 @@
             await window.mssaResultsLoadScript('https://cdnjs.cloudflare.com/ajax/libs/jspdf-autotable/3.8.4/jspdf.plugin.autotable.min.js');
         }
 
+        const logoDataUrl = await window.mssaResultsGetLogoDataUrl(logoUrl);
+
         const { jsPDF } = window.jspdf;
         const doc = new jsPDF();
         let y = 16;
 
+        // Logo is 311x241 (~1.29:1) - sized to roughly match the header text block to
+        // its right, not the tables further down the page.
+        if (logoDataUrl) {
+            doc.addImage(logoDataUrl, 'JPEG', 14, 10, 20, 15.5);
+        }
+        const textX = logoDataUrl ? 40 : 14;
+
         doc.setFontSize(14);
-        doc.text(headerLines[0], 14, y);
+        doc.text(headerLines[0], textX, y);
         y += 8;
 
         doc.setFontSize(11);
         for (let i = 1; i < headerLines.length; i++) {
-            doc.text(headerLines[i], 14, y);
+            doc.text(headerLines[i], textX, y);
             y += 6;
         }
-        y += 4;
+        y = Math.max(y + 4, logoDataUrl ? 30 : 0);
 
         for (const section of sections) {
             if (y > 260) {
@@ -67,7 +103,7 @@
             y += 4;
 
             doc.autoTable({
-                head: [['Handler', 'Dog', 'Time', 'Tie Time', 'Total Points', 'Place', 'Points']],
+                head: [tableHead],
                 body: section.rows,
                 startY: y,
                 theme: 'grid',
@@ -188,12 +224,17 @@
                         @StatusLabel(selectedEvent.ResultsApprovalStatus)
                     </span>
                 </div>
-                @if (selectedEvent.ResultsApprovalStatus != EventResultsStatus.Approved && canSubmitForApproval)
-                {
-                    <button class="btn btn-primary" @onclick="SubmitForApproval">
-                        Submit Event for Approval
+                <div class="d-flex gap-2">
+                    <button class="btn btn-outline-secondary" @onclick="ExportWeekendCombinedPdf" disabled="@(selectedEvent.ScoredRuns == 0)">
+                        Weekend Average
                     </button>
-                }
+                    @if (selectedEvent.ResultsApprovalStatus != EventResultsStatus.Approved && canSubmitForApproval)
+                    {
+                        <button class="btn btn-primary" @onclick="SubmitForApproval">
+                            Submit Event for Approval
+                        </button>
+                    }
+                </div>
             </div>
         </div>
     }
@@ -532,12 +573,96 @@
                 .ToArray();
 
             var fileName = $"Results_{trial?.TrialIdentifier ?? "Trial"}_{DateTime.Now:yyyyMMdd}.pdf";
+            var tableHead = new[] { "Handler", "Dog", "Time", "Tie Time", "Total Points", "Place", "Points" };
+            var logoUrl = $"{PageState.Alias.BaseUrl}/images/mssa-logo.jpg";
 
-            await JSRuntime.InvokeVoidAsync("mssaExportResultsPdf", fileName, headerLines, sections);
+            await JSRuntime.InvokeVoidAsync("mssaExportResultsPdf", fileName, headerLines, sections, tableHead, logoUrl);
         }
         catch (Exception ex)
         {
             await logger.LogError(ex, "Error exporting results PDF for trial {TrialId}", selectedTrialId);
+            errorMessage = "Error creating the PDF. Please try again.";
+        }
+    }
+
+    // Per-competitor combined total across every trial in the event, regardless of
+    // Stock (a Cattle trial and a Sheep trial in the same Class both count toward the
+    // same competitor's total) - not an actual average despite the label; "Weekend
+    // Average" is just the name staff already use for this report. Grouped by Class,
+    // ranked the same way individual-run placing is (see CalculatePlacingAndPointsAsync):
+    // highest combined points first, lowest combined time as the tiebreaker.
+    private async Task ExportWeekendCombinedPdf()
+    {
+        if (selectedEventId <= 0)
+        {
+            return;
+        }
+
+        try
+        {
+            var eventTrials = await EventService.GetEventTrialsAsync(selectedEventId, ModuleState.ModuleId);
+
+            var allRows = new List<ResultRunRow>();
+            foreach (var trial in eventTrials)
+            {
+                allRows.AddRange(await ResultService.GetTrialRunRowsAsync(trial.TrialId, ModuleState.ModuleId));
+            }
+
+            var scoredRows = allRows.Where(r => r.IsScored).ToList();
+            if (!scoredRows.Any())
+            {
+                errorMessage = "No scored runs found for this event yet.";
+                return;
+            }
+
+            var headerLines = new[]
+            {
+                "MSSA - Mountain States Stockdog Association",
+                selectedEvent?.EventName ?? "",
+                "Weekend Average",
+                selectedEvent?.DateRange ?? ""
+            };
+
+            var sections = scoredRows
+                .GroupBy(r => r.ClassName)
+                .OrderBy(g => ClassRunOrder.IndexOf(g.Key))
+                .ThenBy(g => g.Key)
+                .Select(g => new
+                {
+                    className = g.Key,
+                    rows = g
+                        .GroupBy(r => new { r.HandlerName, r.DogName })
+                        .Select(cg => new
+                        {
+                            cg.Key.HandlerName,
+                            cg.Key.DogName,
+                            TotalPoints = cg.Sum(r => r.TotalScore ?? 0),
+                            TotalTime = cg.Aggregate(TimeSpan.Zero, (sum, r) => sum + (TimeParsingHelper.ParseMinutesSeconds(r.RunTimeStr) ?? TimeSpan.Zero)),
+                            RunCount = cg.Count()
+                        })
+                        .OrderByDescending(c => c.TotalPoints)
+                        .ThenBy(c => c.TotalTime)
+                        .Select(c => new[]
+                        {
+                            c.HandlerName,
+                            c.DogName,
+                            c.TotalPoints.ToString("F2"),
+                            TimeParsingHelper.Format(c.TotalTime),
+                            c.RunCount.ToString()
+                        })
+                        .ToArray()
+                })
+                .ToArray();
+
+            var fileName = $"WeekendAverage_{selectedEvent?.EventName?.Replace(" ", "") ?? "Event"}_{DateTime.Now:yyyyMMdd}.pdf";
+            var tableHead = new[] { "Handler", "Dog", "Total Points", "Total Time", "Runs" };
+            var logoUrl = $"{PageState.Alias.BaseUrl}/images/mssa-logo.jpg";
+
+            await JSRuntime.InvokeVoidAsync("mssaExportResultsPdf", fileName, headerLines, sections, tableHead, logoUrl);
+        }
+        catch (Exception ex)
+        {
+            await logger.LogError(ex, "Error exporting weekend combined PDF for event {EventId}", selectedEventId);
             errorMessage = "Error creating the PDF. Please try again.";
         }
     }
