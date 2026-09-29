@@ -185,6 +185,11 @@
         {
             var all = await EventService.GetEventsAsync(ModuleState.ModuleId);
             events = all
+                // Only events that have already happened - a future event can't have
+                // received results or a fee yet, so it's not "outstanding," just not
+                // due. An event with no StartDate at all can't be confirmed past
+                // either, so it's excluded too rather than assumed.
+                .Where(e => e.StartDate.HasValue && e.StartDate.Value.Date <= DateTime.Today)
                 .Where(e => !e.ResultsReceivedDate.HasValue || !e.FeeReceivedDate.HasValue)
                 .OrderByDescending(e => e.StartDate)
                 .ToList();
