@@ -611,7 +611,11 @@
                 allRows.AddRange(await ResultService.GetTrialRunRowsAsync(trial.TrialId, ModuleState.ModuleId));
             }
 
-            var scoredRows = allRows.Where(r => r.IsScored).ToList();
+            // TotalScore alone, not IsScored (which also requires RunTime) - older/
+            // migrated trials were scored on points only, with no time ever recorded,
+            // and those runs still belong in this report. A missing time just
+            // contributes 0 to that competitor's time sum below.
+            var scoredRows = allRows.Where(r => r.TotalScore.HasValue).ToList();
             if (!scoredRows.Any())
             {
                 errorMessage = "No scored runs found for this event yet.";
