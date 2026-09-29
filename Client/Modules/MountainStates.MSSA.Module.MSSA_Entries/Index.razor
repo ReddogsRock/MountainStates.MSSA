@@ -152,7 +152,7 @@
             y += 4;
 
             doc.autoTable({
-                head: [['Handler', 'Dog', 'Total Score', 'Placing', 'Points']],
+                head: [['Handler', 'Dog', 'Time', 'Tie Time', 'Total Points', 'Place', 'Points']],
                 body: section.rows,
                 startY: y,
                 theme: 'grid',
@@ -758,9 +758,9 @@
 
         var headers = new[]
         {
-            "Class", "Run Order", "Handler", "Dog", "Time", "Tie Time",
+            "Class", "Run Order", "Handler", "Dog", "Tie Time",
             "#1", "#2", "#3", "#4", "#5", "#6", "#7", "#8", "#9",
-            "Total Score", "Placing", "Points"
+            "Total Score", "Time", "Placing", "Points"
         };
         var rows = ordered.Select(e =>
         {
@@ -778,7 +778,6 @@
                 e.RunOrder?.ToString() ?? "",
                 e.HandlerName,
                 e.DogName,
-                FormatTime(e.RunTime),
                 FormatTime(e.TieBreakerTime),
                 e.ObstacleScore1?.ToString() ?? "",
                 e.ObstacleScore2?.ToString() ?? "",
@@ -790,6 +789,7 @@
                 e.ObstacleScore8?.ToString() ?? "",
                 e.ObstacleScore9?.ToString() ?? "",
                 hasAnyScore ? e.TotalScore?.ToString("F2") ?? "" : "",
+                FormatTime(e.RunTime),
                 e.Placing?.ToString() ?? "",
                 e.TrialPoints?.ToString() ?? ""
             };
@@ -850,6 +850,8 @@
                         {
                             e.HandlerName,
                             e.DogName,
+                            FormatTime(e.RunTime),
+                            FormatTime(e.TieBreakerTime),
                             hasAnyScore ? e.TotalScore?.ToString("F2") ?? "" : "",
                             e.Placing?.ToString() ?? "",
                             e.TrialPoints?.ToString() ?? ""
