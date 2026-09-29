@@ -60,7 +60,10 @@
     // letterhead (logo, org name, Event, Trial, Date) - built for posting to social
     // media. tableHead is the column header row, so this same builder serves both the
     // per-run Export Results PDF and the per-competitor Weekend Average PDF.
-    window.mssaExportResultsPdf = async (fileName, headerLines, sections, tableHead, logoUrl) => {
+    // pageBreakPerSection forces every section onto its own page (used by Export
+    // Results PDF); otherwise a section only breaks to a new page when it wouldn't fit
+    // on the current one.
+    window.mssaExportResultsPdf = async (fileName, headerLines, sections, tableHead, logoUrl, pageBreakPerSection) => {
         if (!window.jspdf) {
             await window.mssaResultsLoadScript('https://cdnjs.cloudflare.com/ajax/libs/jspdf/2.5.1/jspdf.umd.min.js');
         }
@@ -92,11 +95,13 @@
         }
         y = Math.max(y + 4, logoDataUrl ? 30 : 0);
 
+        let firstSection = true;
         for (const section of sections) {
-            if (y > 260) {
+            if ((pageBreakPerSection && !firstSection) || y > 260) {
                 doc.addPage();
                 y = 16;
             }
+            firstSection = false;
 
             doc.setFontSize(12);
             doc.text(section.className, 14, y);
@@ -576,7 +581,7 @@
             var tableHead = new[] { "Handler", "Dog", "Time", "Tie Time", "Total Points", "Place", "Points" };
             var logoUrl = $"{PageState.Alias.BaseUrl}/images/mssa-logo.jpg";
 
-            await JSRuntime.InvokeVoidAsync("mssaExportResultsPdf", fileName, headerLines, sections, tableHead, logoUrl);
+            await JSRuntime.InvokeVoidAsync("mssaExportResultsPdf", fileName, headerLines, sections, tableHead, logoUrl, true);
         }
         catch (Exception ex)
         {
@@ -666,7 +671,7 @@
             var tableHead = new[] { "Handler", "Dog", "Total Points", "Total Time", "Runs" };
             var logoUrl = $"{PageState.Alias.BaseUrl}/images/mssa-logo.jpg";
 
-            await JSRuntime.InvokeVoidAsync("mssaExportResultsPdf", fileName, headerLines, sections, tableHead, logoUrl);
+            await JSRuntime.InvokeVoidAsync("mssaExportResultsPdf", fileName, headerLines, sections, tableHead, logoUrl, false);
         }
         catch (Exception ex)
         {
