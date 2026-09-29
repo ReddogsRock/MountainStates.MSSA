@@ -275,6 +275,26 @@ namespace MountainStates.MSSA.Module.MSSA_Results.Repository
                 return;
             }
 
+            // Points depend on membership as of the trial's own date, checked live here
+            // rather than trusting each entry's stored HandlerIsMSSAMember flag - that
+            // flag is a manual checkbox (unchecked by default on the one-at-a-time Add
+            // Entry form) that's easy to miss, which is exactly what zeroed out points
+            // for an entire trial more than once (see
+            // 19_FixTripleCrownMembershipFlags.sql, 20_FixTrial1773MembershipFlags.sql).
+            // The trial's year, not today's - membership years are calendar years (see
+            // MSSA_Membership.IsCurrentlyActive), so a December trial not calculated
+            // until January must still check against the year it was actually run in,
+            // not the year it happens to get calculated in.
+            var trial = await db.MSSA_Trials.FirstOrDefaultAsync(t => t.TrialId == trialId);
+            var trialYear = trial?.TrialDate.Year ?? DateTime.Today.Year;
+            var activeMemberHandlerIds = (await db.MSSA_MembershipHandlers
+                .Join(db.MSSA_Memberships, mh => mh.MembershipId, m => m.MembershipId, (mh, m) => new { mh.HandlerId, m.StartYear, m.EndYear })
+                .Where(x => x.StartYear <= trialYear && (x.EndYear == null || x.EndYear >= trialYear))
+                .Select(x => x.HandlerId)
+                .Distinct()
+                .ToListAsync())
+                .ToHashSet();
+
             foreach (var classGroup in entries.GroupBy(e => e.ClassId))
             {
                 // Rank: score desc, then run time asc, then tie-breaker time asc. Missing
@@ -310,7 +330,7 @@ namespace MountainStates.MSSA.Module.MSSA_Results.Repository
                         slotValues.Add(Math.Max(basePoints - (r - 1) * 100, 0));
                     }
 
-                    var memberCount = tiedGroup.Count(e => e.HandlerIsMSSAMember);
+                    var memberCount = tiedGroup.Count(e => activeMemberHandlerIds.Contains(e.HandlerId));
                     int? sharedPoints = (groupSize > 1 && memberCount > 0)
                         ? (int)Math.Round(slotValues.Sum() / (decimal)memberCount, MidpointRounding.AwayFromZero)
                         : (int?)null;
@@ -318,6 +338,10 @@ namespace MountainStates.MSSA.Module.MSSA_Results.Repository
                     foreach (var entry in tiedGroup)
                     {
                         entry.Placing = rank;
+
+                        // Keeps the stored flag truthful too (it's still shown/editable
+                        // on the Entry form), even though points no longer depend on it.
+                        entry.HandlerIsMSSAMember = activeMemberHandlerIds.Contains(entry.HandlerId);
 
                         if (!entry.HandlerIsMSSAMember)
                         {
