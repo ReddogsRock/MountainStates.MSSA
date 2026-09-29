@@ -1,0 +1,275 @@
+@using MountainStates.MSSA.Module.MSSA_Events.Services
+@using MountainStates.MSSA.Module.MSSA_Events.Models
+@using Oqtane.Modules.Controls
+
+@namespace MountainStates.MSSA.Module.MSSA_Events
+@inherits ModuleBase
+@inject IMSSA_EventService EventService
+@inject NavigationManager NavigationManager
+
+<script suppress-error="BL9992">
+    window.mssaOutstandingLoadScript = (src) => {
+        if (document.querySelector(`script[src="${src}"]`)) {
+            return Promise.resolve();
+        }
+        return new Promise((resolve, reject) => {
+            const script = document.createElement('script');
+            script.src = src;
+            script.onload = () => resolve();
+            script.onerror = () => reject(new Error('Failed to load ' + src));
+            document.head.appendChild(script);
+        });
+    };
+
+    window.mssaOutstandingGetLogoDataUrl = async (logoUrl) => {
+        if (window.__mssaLogoDataUrl) {
+            return window.__mssaLogoDataUrl;
+        }
+        try {
+            const response = await fetch(logoUrl);
+            const blob = await response.blob();
+            window.__mssaLogoDataUrl = await new Promise((resolve, reject) => {
+                const reader = new FileReader();
+                reader.onload = () => resolve(reader.result);
+                reader.onerror = reject;
+                reader.readAsDataURL(blob);
+            });
+            return window.__mssaLogoDataUrl;
+        } catch (e) {
+            return null;
+        }
+    };
+
+    window.mssaExportOutstandingPdf = async (fileName, title, rows, logoUrl) => {
+        if (!window.jspdf) {
+            await window.mssaOutstandingLoadScript('https://cdnjs.cloudflare.com/ajax/libs/jspdf/2.5.1/jspdf.umd.min.js');
+        }
+        if (!window.jspdf.jsPDF.API.autoTable) {
+            await window.mssaOutstandingLoadScript('https://cdnjs.cloudflare.com/ajax/libs/jspdf-autotable/3.8.4/jspdf.plugin.autotable.min.js');
+        }
+
+        const logoDataUrl = await window.mssaOutstandingGetLogoDataUrl(logoUrl);
+
+        const { jsPDF } = window.jspdf;
+        const doc = new jsPDF();
+
+        if (logoDataUrl) {
+            doc.addImage(logoDataUrl, 'JPEG', 14, 10, 20, 15.5);
+        }
+        const textX = logoDataUrl ? 40 : 14;
+
+        doc.setFontSize(11);
+        doc.text('Mountain States Stockdog Association', textX, 14);
+        doc.setFontSize(14);
+        doc.text(title, textX, 22);
+
+        doc.autoTable({
+            head: [['Event', 'Dates', 'Results Received', 'Fee Paid']],
+            body: rows,
+            startY: logoDataUrl ? 30 : 27,
+            theme: 'grid',
+            styles: { fontSize: 9, lineWidth: 0.1, lineColor: [0, 0, 0] },
+            headStyles: { fillColor: [230, 230, 230], textColor: [0, 0, 0] }
+        });
+
+        doc.save(fileName);
+    };
+</script>
+
+<div class="container-fluid">
+    <div class="row mb-3">
+        <div class="col">
+            <h2>Outstanding Report</h2>
+            <p class="text-muted mb-0">Events still missing a received-results date, a received-fee date, or both.</p>
+        </div>
+        <div class="col-auto">
+            <ActionLink Action="Index" Text="Back to Events" Class="btn btn-secondary" />
+        </div>
+    </div>
+
+    @if (!UserSecurity.IsAuthorized(PageState.User, RoleNames.Admin))
+    {
+        <div class="alert alert-warning">This report is only available to Administrators.</div>
+    }
+    else if (!string.IsNullOrEmpty(errorMessage))
+    {
+        <div class="alert alert-danger">@errorMessage</div>
+    }
+    else if (events == null)
+    {
+        <p><em>Loading...</em></p>
+    }
+    else if (!events.Any())
+    {
+        <p class="text-muted"><em>Nothing outstanding - every active event has both a results-received and a fee-received date.</em></p>
+    }
+    else
+    {
+        <div class="row mb-3">
+            <div class="col-auto">
+                <button class="btn btn-outline-secondary btn-sm" @onclick="ExportPdf">Export PDF</button>
+            </div>
+            <div class="col-auto ms-auto">
+                <span class="text-muted">@events.Count outstanding</span>
+            </div>
+        </div>
+
+        <div class="table-responsive">
+            <table class="table table-sm table-bordered align-middle">
+                <thead>
+                    <tr>
+                        <th>Event</th>
+                        <th>Dates</th>
+                        <th style="width:220px">Results Received</th>
+                        <th style="width:220px">Fee Paid</th>
+                    </tr>
+                </thead>
+                <tbody>
+                    @foreach (var evt in events)
+                    {
+                        <tr>
+                            <td>
+                                <ActionLink Action="Detail" Parameters="@($"id={evt.EventId}")" Text="@evt.EventName" ResourceKey="ViewEventName" />
+                            </td>
+                            <td>@evt.DateRange</td>
+                            <td>
+                                @if (evt.ResultsReceivedDate.HasValue)
+                                {
+                                    <span class="badge bg-success">@evt.ResultsReceivedDate.Value.ToString("MMM dd, yyyy")</span>
+                                }
+                                else
+                                {
+                                    <button class="btn btn-sm btn-outline-success" @onclick="() => MarkResultsReceived(evt)" disabled="@busyEventIds.Contains(evt.EventId)">
+                                        Mark Received
+                                    </button>
+                                }
+                            </td>
+                            <td>
+                                @if (evt.FeeReceivedDate.HasValue)
+                                {
+                                    <span class="badge bg-success">@evt.FeeReceivedDate.Value.ToString("MMM dd, yyyy")</span>
+                                }
+                                else
+                                {
+                                    <button class="btn btn-sm btn-outline-success" @onclick="() => MarkFeePaid(evt)" disabled="@busyEventIds.Contains(evt.EventId)">
+                                        Mark Paid
+                                    </button>
+                                }
+                            </td>
+                        </tr>
+                    }
+                </tbody>
+            </table>
+        </div>
+    }
+</div>
+
+@code {
+    private List<MSSA_Event> events;
+    private string errorMessage = "";
+    private readonly HashSet<int> busyEventIds = new();
+
+    protected override async Task OnInitializedAsync()
+    {
+        if (!UserSecurity.IsAuthorized(PageState.User, RoleNames.Admin))
+        {
+            return;
+        }
+
+        await LoadEvents();
+    }
+
+    private async Task LoadEvents()
+    {
+        try
+        {
+            var all = await EventService.GetEventsAsync(ModuleState.ModuleId);
+            events = all
+                .Where(e => !e.ResultsReceivedDate.HasValue || !e.FeeReceivedDate.HasValue)
+                .OrderByDescending(e => e.StartDate)
+                .ToList();
+        }
+        catch (Exception ex)
+        {
+            await logger.LogError(ex, "Error loading outstanding events report");
+            errorMessage = "Error loading the report. Please try again.";
+        }
+    }
+
+    // Marks in place and drops the event off the list only once nothing about it is
+    // outstanding anymore - marking just one of the two fields keeps it listed so the
+    // other one isn't forgotten.
+    private async Task MarkResultsReceived(MSSA_Event evt)
+    {
+        busyEventIds.Add(evt.EventId);
+        try
+        {
+            evt.ResultsReceivedDate = DateTime.Today;
+            var saved = await EventService.UpdateEventAsync(evt, ModuleState.ModuleId);
+
+            if (saved.FeeReceivedDate.HasValue)
+            {
+                events.Remove(evt);
+            }
+        }
+        catch (Exception ex)
+        {
+            await logger.LogError(ex, "Error marking results received for event {EventId}", evt.EventId);
+            errorMessage = $"Error marking \"{evt.EventName}\" as received. Please try again.";
+            evt.ResultsReceivedDate = null;
+        }
+        finally
+        {
+            busyEventIds.Remove(evt.EventId);
+        }
+    }
+
+    private async Task MarkFeePaid(MSSA_Event evt)
+    {
+        busyEventIds.Add(evt.EventId);
+        try
+        {
+            evt.FeeReceivedDate = DateTime.Today;
+            var saved = await EventService.UpdateEventAsync(evt, ModuleState.ModuleId);
+
+            if (saved.ResultsReceivedDate.HasValue)
+            {
+                events.Remove(evt);
+            }
+        }
+        catch (Exception ex)
+        {
+            await logger.LogError(ex, "Error marking fee paid for event {EventId}", evt.EventId);
+            errorMessage = $"Error marking \"{evt.EventName}\" as paid. Please try again.";
+            evt.FeeReceivedDate = null;
+        }
+        finally
+        {
+            busyEventIds.Remove(evt.EventId);
+        }
+    }
+
+    private async Task ExportPdf()
+    {
+        try
+        {
+            var rows = events.Select(e => new[]
+            {
+                e.EventName,
+                e.DateRange,
+                e.ResultsReceivedDate?.ToString("MMM dd, yyyy") ?? "Not received",
+                e.FeeReceivedDate?.ToString("MMM dd, yyyy") ?? "Not received"
+            }).ToArray();
+
+            var fileName = $"OutstandingReport_{DateTime.Now:yyyyMMdd}.pdf";
+            var logoUrl = $"{PageState.Alias.BaseUrl}/images/mssa-logo.jpg";
+
+            await JSRuntime.InvokeVoidAsync("mssaExportOutstandingPdf", fileName, "Outstanding Report", rows, logoUrl);
+        }
+        catch (Exception ex)
+        {
+            await logger.LogError(ex, "Error exporting outstanding report PDF");
+            errorMessage = "Error creating the PDF. Please try again.";
+        }
+    }
+}

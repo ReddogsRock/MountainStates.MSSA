@@ -27,6 +27,13 @@
                             ResourceKey="AddEvent" Class="btn btn-primary" />
             </div>
         }
+        @if (UserSecurity.IsAuthorized(PageState.User, RoleNames.Admin))
+        {
+            <div class="col-auto">
+                <ActionLink Action="OutstandingReport" Text="Outstanding Report"
+                            ResourceKey="OutstandingReport" Class="btn btn-outline-secondary" />
+            </div>
+        }
     </div>
 
     @* Search/Filter Section *@
