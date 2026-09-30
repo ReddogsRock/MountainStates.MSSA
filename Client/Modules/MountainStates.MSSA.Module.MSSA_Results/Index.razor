@@ -599,6 +599,12 @@
     // otherwise unfairly favor fewer runs (less time added up, usually fewer points
     // too). Within the same run count, highest combined points, lowest combined time
     // as the tiebreaker (the same order individual-run placing uses).
+    //
+    // An event that mixes Stock types (e.g. both Cattle and Sheep trials) gets three
+    // of these: the all-Stock "Weekend Combined" above, plus one per Stock actually
+    // present ("Cattle Combined", "Sheep Combined", ...) - each scoped to only that
+    // Stock's runs. A single-Stock event only gets the one, since a per-Stock
+    // breakdown would just duplicate it.
     private async Task ExportWeekendCombinedPdf()
     {
         if (selectedEventId <= 0)
@@ -609,6 +615,7 @@
         try
         {
             var eventTrials = await EventService.GetEventTrialsAsync(selectedEventId, ModuleState.ModuleId);
+            var trialStockById = eventTrials.ToDictionary(t => t.TrialId, t => t.Stock);
 
             var allRows = new List<ResultRunRow>();
             foreach (var trial in eventTrials)
@@ -635,49 +642,70 @@
                 selectedEvent?.DateRange ?? ""
             };
 
-            var sections = scoredRows
-                .GroupBy(r => r.ClassName)
-                .OrderBy(g => ClassRunOrder.IndexOf(g.Key))
-                .ThenBy(g => g.Key)
-                .Select(g => new
+            var sections = new List<object>();
+            sections.AddRange(BuildWeekendCombinedSections(scoredRows, "Weekend Combined"));
+
+            var stocksInEvent = eventTrials.Select(t => t.Stock).Where(s => !string.IsNullOrEmpty(s)).Distinct().ToList();
+            if (stocksInEvent.Count > 1)
+            {
+                foreach (var stock in stocksInEvent.OrderBy(s => s))
                 {
-                    className = g.Key,
-                    rows = g
-                        .GroupBy(r => new { r.HandlerName, r.DogName })
-                        .Select(cg => new
-                        {
-                            cg.Key.HandlerName,
-                            cg.Key.DogName,
-                            TotalPoints = cg.Sum(r => r.TotalScore ?? 0),
-                            TotalTime = cg.Aggregate(TimeSpan.Zero, (sum, r) => sum + (TimeParsingHelper.ParseMinutesSeconds(r.RunTimeStr) ?? TimeSpan.Zero)),
-                            RunCount = cg.Count()
-                        })
-                        .OrderByDescending(c => c.RunCount)
-                        .ThenByDescending(c => c.TotalPoints)
-                        .ThenBy(c => c.TotalTime)
-                        .Select(c => new[]
-                        {
-                            c.HandlerName,
-                            c.DogName,
-                            c.TotalPoints.ToString("F2"),
-                            TimeParsingHelper.Format(c.TotalTime),
-                            c.RunCount.ToString()
-                        })
-                        .ToArray()
-                })
-                .ToArray();
+                    var stockRows = scoredRows.Where(r => trialStockById.TryGetValue(r.TrialId, out var s) && s == stock).ToList();
+                    if (stockRows.Any())
+                    {
+                        sections.AddRange(BuildWeekendCombinedSections(stockRows, $"{stock} Combined"));
+                    }
+                }
+            }
 
             var fileName = $"WeekendAverage_{selectedEvent?.EventName?.Replace(" ", "") ?? "Event"}_{DateTime.Now:yyyyMMdd}.pdf";
             var tableHead = new[] { "Handler", "Dog", "Total Points", "Total Time", "Runs" };
             var logoUrl = $"{PageState.Alias.BaseUrl}/images/mssa-logo.jpg";
 
-            await JSRuntime.InvokeVoidAsync("mssaExportResultsPdf", fileName, headerLines, sections, tableHead, logoUrl, false);
+            await JSRuntime.InvokeVoidAsync("mssaExportResultsPdf", fileName, headerLines, sections.ToArray(), tableHead, logoUrl, false);
         }
         catch (Exception ex)
         {
             await logger.LogError(ex, "Error exporting weekend combined PDF for event {EventId}", selectedEventId);
             errorMessage = "Error creating the PDF. Please try again.";
         }
+    }
+
+    // One PDF section per Class within the given rows, labeled "<reportLabel> - <Class>"
+    // so a multi-Stock PDF can tell "Weekend Combined - Open" apart from
+    // "Cattle Combined - Open".
+    private static IEnumerable<object> BuildWeekendCombinedSections(IEnumerable<ResultRunRow> rows, string reportLabel)
+    {
+        return rows
+            .GroupBy(r => r.ClassName)
+            .OrderBy(g => ClassRunOrder.IndexOf(g.Key))
+            .ThenBy(g => g.Key)
+            .Select(g => new
+            {
+                className = $"{reportLabel} - {g.Key}",
+                rows = g
+                    .GroupBy(r => new { r.HandlerName, r.DogName })
+                    .Select(cg => new
+                    {
+                        cg.Key.HandlerName,
+                        cg.Key.DogName,
+                        TotalPoints = cg.Sum(r => r.TotalScore ?? 0),
+                        TotalTime = cg.Aggregate(TimeSpan.Zero, (sum, r) => sum + (TimeParsingHelper.ParseMinutesSeconds(r.RunTimeStr) ?? TimeSpan.Zero)),
+                        RunCount = cg.Count()
+                    })
+                    .OrderByDescending(c => c.RunCount)
+                    .ThenByDescending(c => c.TotalPoints)
+                    .ThenBy(c => c.TotalTime)
+                    .Select(c => new[]
+                    {
+                        c.HandlerName,
+                        c.DogName,
+                        c.TotalPoints.ToString("F2"),
+                        TimeParsingHelper.Format(c.TotalTime),
+                        c.RunCount.ToString()
+                    })
+                    .ToArray()
+            });
     }
 
     private string ScoreSheetDownloadUrl =>

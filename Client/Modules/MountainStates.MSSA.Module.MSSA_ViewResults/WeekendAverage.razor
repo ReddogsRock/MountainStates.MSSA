@@ -34,44 +34,48 @@
             </div>
         </div>
 
-        @if (sections == null)
+        @if (groups == null)
         {
             <p><em>Loading results...</em></p>
         }
-        else if (!sections.Any())
+        else if (!groups.Any())
         {
             <p class="text-muted"><em>No scored runs have been posted for this event yet.</em></p>
         }
         else
         {
-            @foreach (var section in sections)
+            @foreach (var group in groups)
             {
-                <h4 class="mt-3">@section.ClassName</h4>
-                <div class="table-responsive">
-                    <table class="table table-sm table-bordered align-middle">
-                        <thead>
-                            <tr>
-                                <th>Handler</th>
-                                <th>Dog</th>
-                                <th style="width:110px">Total Points</th>
-                                <th style="width:120px">Total Time</th>
-                                <th style="width:80px">Runs</th>
-                            </tr>
-                        </thead>
-                        <tbody>
-                            @foreach (var competitor in section.Competitors)
-                            {
+                <h3 class="mt-4">@group.Title</h3>
+                @foreach (var section in group.Sections)
+                {
+                    <h4 class="mt-3">@section.ClassName</h4>
+                    <div class="table-responsive">
+                        <table class="table table-sm table-bordered align-middle">
+                            <thead>
                                 <tr>
-                                    <td>@competitor.HandlerName</td>
-                                    <td>@competitor.DogName</td>
-                                    <td>@competitor.TotalPoints.ToString("F2")</td>
-                                    <td>@TimeParsingHelper.Format(competitor.TotalTime)</td>
-                                    <td class="text-center">@competitor.RunCount</td>
+                                    <th>Handler</th>
+                                    <th>Dog</th>
+                                    <th style="width:110px">Total Points</th>
+                                    <th style="width:120px">Total Time</th>
+                                    <th style="width:80px">Runs</th>
                                 </tr>
-                            }
-                        </tbody>
-                    </table>
-                </div>
+                            </thead>
+                            <tbody>
+                                @foreach (var competitor in section.Competitors)
+                                {
+                                    <tr>
+                                        <td>@competitor.HandlerName</td>
+                                        <td>@competitor.DogName</td>
+                                        <td>@competitor.TotalPoints.ToString("F2")</td>
+                                        <td>@TimeParsingHelper.Format(competitor.TotalTime)</td>
+                                        <td class="text-center">@competitor.RunCount</td>
+                                    </tr>
+                                }
+                            </tbody>
+                        </table>
+                    </div>
+                }
             }
         }
     }
@@ -79,7 +83,7 @@
 
 @code {
     private MSSA_Event evt;
-    private List<ClassSection> sections;
+    private List<ReportGroup> groups;
 
     // For each competitor (Handler+Dog) within a Class, their combined total across
     // every trial in the event regardless of Stock (a Cattle trial and a Sheep trial
@@ -93,6 +97,18 @@
     // MSSA_ResultRepository.CalculatePlacingAndPointsAsync). Same aggregation as the
     // "Weekend Average" PDF export on the Results Entry page, just displayed inline
     // here instead of exported.
+    //
+    // An event that mixes Stock types (e.g. both Cattle and Sheep trials) gets three
+    // of these groups: the all-Stock "Weekend Combined", plus one per Stock actually
+    // present ("Cattle Combined", "Sheep Combined", ...) scoped to only that Stock's
+    // runs. A single-Stock event only gets the one, since a per-Stock breakdown would
+    // just duplicate it.
+    private class ReportGroup
+    {
+        public string Title { get; set; }
+        public List<ClassSection> Sections { get; set; }
+    }
+
     private class ClassSection
     {
         public string ClassName { get; set; }
@@ -118,6 +134,7 @@
             if (evt != null && evt.ResultsApprovalStatus == EventResultsStatus.Approved)
             {
                 var trials = await EventService.GetEventTrialsAsync(eventId, ModuleState.ModuleId);
+                var trialStockById = trials.ToDictionary(t => t.TrialId, t => t.Stock);
 
                 var allRows = new List<ResultRunRow>();
                 foreach (var trial in trials)
@@ -125,34 +142,30 @@
                     allRows.AddRange(await ResultService.GetTrialRunRowsAsync(trial.TrialId, ModuleState.ModuleId));
                 }
 
-                sections = allRows
-                    // TotalScore alone, not IsScored (which also requires RunTime) -
-                    // older/migrated trials were scored on points only, with no time
-                    // ever recorded, and those runs still belong in this report. A
-                    // missing time just contributes 0 to that competitor's time sum.
-                    .Where(r => r.TotalScore.HasValue)
-                    .GroupBy(r => r.ClassName)
-                    .OrderBy(g => ClassRunOrder.IndexOf(g.Key))
-                    .ThenBy(g => g.Key)
-                    .Select(g => new ClassSection
+                // TotalScore alone, not IsScored (which also requires RunTime) -
+                // older/migrated trials were scored on points only, with no time
+                // ever recorded, and those runs still belong in this report. A
+                // missing time just contributes 0 to that competitor's time sum.
+                var scoredRows = allRows.Where(r => r.TotalScore.HasValue).ToList();
+
+                groups = new List<ReportGroup>();
+                if (scoredRows.Any())
+                {
+                    groups.Add(new ReportGroup { Title = "Weekend Combined", Sections = BuildClassSections(scoredRows) });
+
+                    var stocksInEvent = trials.Select(t => t.Stock).Where(s => !string.IsNullOrEmpty(s)).Distinct().ToList();
+                    if (stocksInEvent.Count > 1)
                     {
-                        ClassName = g.Key,
-                        Competitors = g
-                            .GroupBy(r => new { r.HandlerName, r.DogName })
-                            .Select(cg => new Competitor
+                        foreach (var stock in stocksInEvent.OrderBy(s => s))
+                        {
+                            var stockRows = scoredRows.Where(r => trialStockById.TryGetValue(r.TrialId, out var s) && s == stock).ToList();
+                            if (stockRows.Any())
                             {
-                                HandlerName = cg.Key.HandlerName,
-                                DogName = cg.Key.DogName,
-                                TotalPoints = cg.Sum(r => r.TotalScore ?? 0),
-                                TotalTime = cg.Aggregate(TimeSpan.Zero, (sum, r) => sum + (TimeParsingHelper.ParseMinutesSeconds(r.RunTimeStr) ?? TimeSpan.Zero)),
-                                RunCount = cg.Count()
-                            })
-                            .OrderByDescending(c => c.RunCount)
-                            .ThenByDescending(c => c.TotalPoints)
-                            .ThenBy(c => c.TotalTime)
-                            .ToList()
-                    })
-                    .ToList();
+                                groups.Add(new ReportGroup { Title = $"{stock} Combined", Sections = BuildClassSections(stockRows) });
+                            }
+                        }
+                    }
+                }
             }
         }
         catch (Exception ex)
@@ -160,5 +173,32 @@
             await logger.LogError(ex, "Error loading weekend average results");
             AddModuleMessage("Error loading results", MessageType.Error);
         }
+    }
+
+    private static List<ClassSection> BuildClassSections(IEnumerable<ResultRunRow> rows)
+    {
+        return rows
+            .GroupBy(r => r.ClassName)
+            .OrderBy(g => ClassRunOrder.IndexOf(g.Key))
+            .ThenBy(g => g.Key)
+            .Select(g => new ClassSection
+            {
+                ClassName = g.Key,
+                Competitors = g
+                    .GroupBy(r => new { r.HandlerName, r.DogName })
+                    .Select(cg => new Competitor
+                    {
+                        HandlerName = cg.Key.HandlerName,
+                        DogName = cg.Key.DogName,
+                        TotalPoints = cg.Sum(r => r.TotalScore ?? 0),
+                        TotalTime = cg.Aggregate(TimeSpan.Zero, (sum, r) => sum + (TimeParsingHelper.ParseMinutesSeconds(r.RunTimeStr) ?? TimeSpan.Zero)),
+                        RunCount = cg.Count()
+                    })
+                    .OrderByDescending(c => c.RunCount)
+                    .ThenByDescending(c => c.TotalPoints)
+                    .ThenBy(c => c.TotalTime)
+                    .ToList()
+            })
+            .ToList();
     }
 }
