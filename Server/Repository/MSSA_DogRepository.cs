@@ -25,10 +25,13 @@ namespace MountainStates.MSSA.Module.MSSA_Dogs.Repository
         {
             using var db = await _dbContextFactory.CreateDbContextAsync();
 
-            return await db.MSSA_Dogs
+            var dogs = await db.MSSA_Dogs
                 .Where(d => d.IsActive)
                 .OrderBy(d => d.Name)
                 .ToListAsync();
+
+            await PopulateOwnerHandlerIdsAsync(db, dogs);
+            return dogs;
         }
 
         public async Task<MSSA_Dog> GetDogAsync(int dogId)
@@ -44,10 +47,37 @@ namespace MountainStates.MSSA.Module.MSSA_Dogs.Repository
                     .Where(h => h.DogId == dogId)
                     .OrderByDescending(h => h.TransferDate)
                     .ToListAsync();
+
+                await PopulateOwnerHandlerIdsAsync(db, new[] { dog });
             }
 
             return dog;
         }
+
+        // OwnerName is a plain string (see MSSA_Dog.OwnerHandlerId) - this resolves it
+        // to a Handler by name, same normalized (trim/lowercase) matching used for
+        // Handler/Dog name matching elsewhere (see MSSA_EntryRepository,
+        // MSSA_ResultRepository's ImportCompleteTrialAsync), and leaves OwnerHandlerId
+        // null on anything but a unique match.
+        private static async Task PopulateOwnerHandlerIdsAsync(MSSADbContext db, IEnumerable<MSSA_Dog> dogs)
+        {
+            var handlersByName = (await db.MSSA_Handlers.ToListAsync())
+                .GroupBy(h => NormalizeName(h.FullName))
+                .ToDictionary(g => g.Key, g => g.ToList());
+
+            foreach (var dog in dogs)
+            {
+                if (!string.IsNullOrWhiteSpace(dog.OwnerName)
+                    && handlersByName.TryGetValue(NormalizeName(dog.OwnerName), out var matches)
+                    && matches.Count == 1)
+                {
+                    dog.OwnerHandlerId = matches[0].HandlerId;
+                }
+            }
+        }
+
+        private static string NormalizeName(string name) =>
+            string.IsNullOrWhiteSpace(name) ? "" : name.Trim().ToLowerInvariant();
 
         public async Task<MSSA_Dog> AddDogAsync(MSSA_Dog dog)
         {
@@ -254,9 +284,12 @@ namespace MountainStates.MSSA.Module.MSSA_Dogs.Repository
                 query = query.Where(d => d.OwnerIsMSSAMember == ownerIsMember.Value);
             }
 
-            return await query
+            var dogs = await query
                 .OrderBy(d => d.Name)
                 .ToListAsync();
+
+            await PopulateOwnerHandlerIdsAsync(db, dogs);
+            return dogs;
         }
 
         // Futurity

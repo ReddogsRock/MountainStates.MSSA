@@ -107,7 +107,13 @@
                             </td>
                             <td>@dog.Breed</td>
                             <td>@(dog.Age.HasValue ? $"{dog.Age} yrs" : "N/A")</td>
-                            <td>@dog.OwnerName</td>
+                            <td>
+                                @dog.OwnerName
+                                @if (dog.OwnerHandlerId.HasValue)
+                                {
+                                    <text> (ID: @dog.OwnerHandlerId)</text>
+                                }
+                            </td>
                             <td>
                                 @if (dog.OwnerIsMSSAMember)
                                 {

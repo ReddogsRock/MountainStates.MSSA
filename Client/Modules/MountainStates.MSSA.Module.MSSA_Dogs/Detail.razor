@@ -101,7 +101,13 @@ else
             <div class="card-body">
                 <dl class="row mb-3">
                     <dt class="col-sm-3">Owner:</dt>
-                    <dd class="col-sm-9">@(dog.OwnerName ?? "Not specified")</dd>
+                    <dd class="col-sm-9">
+                        @(dog.OwnerName ?? "Not specified")
+                        @if (dog.OwnerHandlerId.HasValue)
+                        {
+                            <text> (ID: @dog.OwnerHandlerId)</text>
+                        }
+                    </dd>
                 </dl>
 
                 <hr />

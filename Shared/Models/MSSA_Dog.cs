@@ -98,5 +98,13 @@ namespace MountainStates.MSSA.Module.MSSA_Dogs.Models
         // Populated by the repository join when loading a single dog - not persisted here.
         [NotMapped]
         public List<MSSA_DogOwnershipHistory> OwnershipHistory { get; set; } = new();
+
+        // OwnerName is a plain string, not a foreign key (see Dogs/Edit.razor's
+        // Handler search/quick-add), so this is resolved by the repository matching
+        // OwnerName against Handler.FullName - populated only when that match is
+        // unique; left null if no Handler shares the name or more than one does,
+        // rather than guessing.
+        [NotMapped]
+        public int? OwnerHandlerId { get; set; }
     }
 }
