@@ -228,6 +228,7 @@ namespace MountainStates.MSSA.Module.MSSA_Results.Repository
                     EntryId = e.EntryId,
                     TrialId = e.TrialId,
                     RunOrder = e.RunOrder,
+                    ClassId = e.ClassId,
                     ClassName = classes.TryGetValue(e.ClassId, out var c) ? c.ClassName : "",
                     SubClassName = classes.TryGetValue(e.ClassId, out var c2) ? c2.SubClassName : "",
                     HandlerName = handlers.TryGetValue(e.HandlerId, out var handlerName) ? handlerName : "Unknown",
@@ -269,11 +270,20 @@ namespace MountainStates.MSSA.Module.MSSA_Results.Repository
         //  Placing & Points - tie-aware
         // ─────────────────────────────────────────────────────
 
-        public async Task CalculatePlacingAndPointsAsync(int trialId, int userId)
+        // classId scopes the recalculation to a single class, leaving every other
+        // class's Placing/TrialPoints untouched - added after calculating for the
+        // whole trial (the default, classId null) got requested mid-trial once Open
+        // had run but Nursery/Intermediate/etc. hadn't: it didn't change their data,
+        // but flipping the whole grid's display to Class+Placing order (see
+        // SortByClassAndPlacing in Results/Index.razor) made it look like their run
+        // order had been disturbed.
+        public async Task CalculatePlacingAndPointsAsync(int trialId, int userId, int? classId = null)
         {
             using var db = await _dbContextFactory.CreateDbContextAsync();
 
-            var entries = await db.MSSA_Entries.Where(e => e.TrialId == trialId).ToListAsync();
+            var entries = await db.MSSA_Entries
+                .Where(e => e.TrialId == trialId && (classId == null || e.ClassId == classId))
+                .ToListAsync();
             if (!entries.Any())
             {
                 return;

@@ -248,14 +248,24 @@
     {
         <div class="row mb-2">
             <div class="col">
-                <button class="btn btn-secondary btn-sm" @onclick="CalculatePlacingAndPoints" disabled="@(rows == null || !rows.Any())">
+                <select class="form-select form-select-sm d-inline-block w-auto align-middle" @bind="calculateClassId">
+                    <option value="0">All Classes</option>
+                    @foreach (var cls in ClassesInTrial)
+                    {
+                        <option value="@cls.ClassId">@cls.ClassName @cls.SubClassName</option>
+                    }
+                </select>
+                <button class="btn btn-secondary btn-sm ms-2" @onclick="CalculatePlacingAndPoints" disabled="@(rows == null || !rows.Any())">
                     Calculate Placing &amp; Points
                 </button>
                 <button class="btn btn-outline-secondary btn-sm ms-2" @onclick="ExportResultsPdf" disabled="@(rows == null || !rows.Any())">
                     Export Results PDF
                 </button>
                 <br />
-                <small class="text-muted">Calculate is optional - can be run any time, or left until every run is entered.</small>
+                <small class="text-muted">
+                    Calculate is optional - can be run any time, or left until every run is entered. Pick a single
+                    class to calculate just that one without touching classes that haven't run yet.
+                </small>
             </div>
         </div>
 
@@ -444,7 +454,22 @@
     private ScoreSheetImportResult importResult;
     private ImportCompleteTrialResult completeTrialResult;
 
+    // "Calculate Placing & Points" scope - 0 means every class in the trial.
+    private int calculateClassId = 0;
+
     private EventScoringSummary selectedEvent => events?.FirstOrDefault(e => e.EventId == selectedEventId);
+
+    // Distinct classes actually present in the currently-loaded trial, for the
+    // Calculate scope dropdown.
+    private IEnumerable<(int ClassId, string ClassName, string SubClassName)> ClassesInTrial =>
+        rows == null
+            ? Enumerable.Empty<(int, string, string)>()
+            : rows
+                .Select(r => (r.ClassId, r.ClassName, r.SubClassName))
+                .Distinct()
+                .OrderBy(c => ClassRunOrder.IndexOf(c.ClassName))
+                .ThenBy(c => c.ClassName)
+                .ThenBy(c => c.SubClassName);
 
     protected override async Task OnInitializedAsync()
     {
@@ -501,15 +526,12 @@
         successMessage = "";
         savedEntryIds.Clear();
         importResult = null;
+        calculateClassId = 0;
 
         if (selectedTrialId > 0)
         {
             var loaded = await ResultService.GetTrialRunRowsAsync(selectedTrialId, ModuleState.ModuleId);
-
-            // A trial that's already been placed is more useful to review in
-            // Class + Placing order; one that hasn't yet keeps run order, since that's
-            // the order dogs are actually called into the ring.
-            rows = loaded.Any(r => r.Placing.HasValue) ? SortByClassAndPlacing(loaded) : loaded;
+            rows = SortByClassAndPlacing(loaded);
         }
         else
         {
@@ -517,13 +539,19 @@
         }
     }
 
+    // A class that's already been placed is more useful to review in Placing order;
+    // one that hasn't yet keeps run order, since that's the order dogs are actually
+    // called into the ring - decided per class, not for the whole trial at once, so
+    // calculating one class doesn't disturb the display for classes that haven't run.
+    // Class block order itself is kept exactly as the server returned it (reflecting
+    // the trial's actual PrintOrder), not re-derived, so grouping never reshuffles it.
     private static List<ResultRunRow> SortByClassAndPlacing(List<ResultRunRow> list)
     {
         return list
-            .OrderBy(r => ClassRunOrder.IndexOf(r.ClassName))
-            .ThenBy(r => r.ClassName)
-            .ThenBy(r => r.SubClassName)
-            .ThenBy(r => r.Placing ?? int.MaxValue)
+            .GroupBy(r => new { r.ClassId, r.ClassName, r.SubClassName })
+            .SelectMany(g => g.Any(r => r.Placing.HasValue)
+                ? g.OrderBy(r => r.Placing ?? int.MaxValue)
+                : g.OrderBy(r => r.RunOrder ?? int.MaxValue))
             .ToList();
     }
 
@@ -740,7 +768,7 @@
             importResult = await ResultService.ImportScoreSheetAsync(selectedTrialId, dto, ModuleState.ModuleId);
 
             var reloaded = await ResultService.GetTrialRunRowsAsync(selectedTrialId, ModuleState.ModuleId);
-            rows = reloaded.Any(r => r.Placing.HasValue) ? SortByClassAndPlacing(reloaded) : reloaded;
+            rows = SortByClassAndPlacing(reloaded);
             savedEntryIds.Clear();
 
             await RefreshSelectedEventSummary();
@@ -774,7 +802,7 @@
             completeTrialResult = await ResultService.ImportCompleteTrialAsync(selectedTrialId, dto, ModuleState.ModuleId);
 
             var reloaded = await ResultService.GetTrialRunRowsAsync(selectedTrialId, ModuleState.ModuleId);
-            rows = reloaded.Any(r => r.Placing.HasValue) ? SortByClassAndPlacing(reloaded) : reloaded;
+            rows = SortByClassAndPlacing(reloaded);
             savedEntryIds.Clear();
 
             await RefreshSelectedEventSummary();
@@ -832,22 +860,30 @@
             errorMessage = "";
             successMessage = "";
 
-            if (rows != null && rows.Any(r => r.Placing.HasValue))
+            int? classId = calculateClassId > 0 ? calculateClassId : (int?)null;
+
+            // Only warn about overwriting what's actually in scope - recalculating one
+            // already-placed class shouldn't demand confirmation for the whole trial,
+            // and calculating "All Classes" for the first time (nothing placed yet)
+            // shouldn't ask at all.
+            var inScope = classId.HasValue ? rows?.Where(r => r.ClassId == classId.Value) : rows;
+            if (inScope != null && inScope.Any(r => r.Placing.HasValue))
             {
                 var confirmed = await JSRuntime.InvokeAsync<bool>("confirm",
-                    "This trial has already been placed. Recalculating will overwrite the existing placings and points - continue?");
+                    "This has already been placed. Recalculating will overwrite the existing placings and points - continue?");
                 if (!confirmed)
                 {
                     return;
                 }
             }
 
-            await ResultService.CalculatePlacingAndPointsAsync(selectedTrialId, ModuleState.ModuleId);
+            await ResultService.CalculatePlacingAndPointsAsync(selectedTrialId, ModuleState.ModuleId, classId);
 
             var calculated = await ResultService.GetTrialRunRowsAsync(selectedTrialId, ModuleState.ModuleId);
 
-            // After calculating, Class + Placing is what you actually want to review -
-            // run order (the default view before scores exist) isn't useful here.
+            // Class + Placing for whichever classes now have it, run order for
+            // whichever don't yet - so calculating just one class doesn't disturb the
+            // display for classes that haven't run.
             rows = SortByClassAndPlacing(calculated);
 
             successMessage = "Placing and points calculated.";

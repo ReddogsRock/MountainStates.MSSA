@@ -55,9 +55,9 @@ namespace MountainStates.MSSA.Module.MSSA_Results.Manager
             await _repository.SaveResultRowAsync(dto, userId);
         }
 
-        public async Task CalculatePlacingAndPointsAsync(int trialId, int moduleId, int userId)
+        public async Task CalculatePlacingAndPointsAsync(int trialId, int moduleId, int userId, int? classId = null)
         {
-            await _repository.CalculatePlacingAndPointsAsync(trialId, userId);
+            await _repository.CalculatePlacingAndPointsAsync(trialId, userId, classId);
         }
 
         public async Task<SubmitEventResultsDto> SubmitEventForApprovalAsync(int eventId, int moduleId, int userId)

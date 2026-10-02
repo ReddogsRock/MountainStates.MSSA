@@ -43,10 +43,16 @@ namespace MountainStates.MSSA.Module.MSSA_Results.Services
                 CreateAuthorizationPolicyUrl($"{ApiUrl}/trial/{trialId}/rows/save?moduleid={moduleId}", EntityNames.Module, moduleId), dto);
         }
 
-        public async Task CalculatePlacingAndPointsAsync(int trialId, int moduleId)
+        public async Task CalculatePlacingAndPointsAsync(int trialId, int moduleId, int? classId = null)
         {
+            var url = $"{ApiUrl}/trial/{trialId}/calculate?moduleid={moduleId}";
+            if (classId.HasValue)
+            {
+                url += $"&classid={classId.Value}";
+            }
+
             await PostJsonAsync<object, bool>(
-                CreateAuthorizationPolicyUrl($"{ApiUrl}/trial/{trialId}/calculate?moduleid={moduleId}", EntityNames.Module, moduleId), null);
+                CreateAuthorizationPolicyUrl(url, EntityNames.Module, moduleId), null);
         }
 
         public async Task<SubmitEventResultsDto> SubmitEventForApprovalAsync(int eventId, int moduleId)

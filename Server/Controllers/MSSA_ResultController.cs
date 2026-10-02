@@ -132,10 +132,10 @@ namespace MountainStates.MSSA.Module.MSSA_Results.Controllers
             }
         }
 
-        // POST api/MSSA_Result/trial/5/calculate?moduleid=x
+        // POST api/MSSA_Result/trial/5/calculate?moduleid=x&classid=y (classid optional - omit for every class in the trial)
         [HttpPost("trial/{trialId}/calculate")]
         [Authorize(Policy = PolicyNames.EditModule)]
-        public async Task<IActionResult> CalculatePlacingAndPoints(int trialId, int moduleId)
+        public async Task<IActionResult> CalculatePlacingAndPoints(int trialId, int moduleId, int? classId = null)
         {
             try
             {
@@ -145,8 +145,8 @@ namespace MountainStates.MSSA.Module.MSSA_Results.Controllers
                     return StatusCode((int)System.Net.HttpStatusCode.Forbidden);
                 }
 
-                await _manager.CalculatePlacingAndPointsAsync(trialId, moduleId, User.UserId());
-                _logger.Log(LogLevel.Information, this, LogFunction.Update, "Placing/points calculated for trial {TrialId}", trialId);
+                await _manager.CalculatePlacingAndPointsAsync(trialId, moduleId, User.UserId(), classId);
+                _logger.Log(LogLevel.Information, this, LogFunction.Update, "Placing/points calculated for trial {TrialId}, class {ClassId}", trialId, classId?.ToString() ?? "all");
                 return Ok(true);
             }
             catch (System.Exception ex)

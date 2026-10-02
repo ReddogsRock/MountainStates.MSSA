@@ -16,7 +16,7 @@ namespace MountainStates.MSSA.Module.MSSA_Results.Manager
 
         Task<List<ResultRunRow>> GetTrialRunRowsAsync(int trialId, int moduleId);
         Task SaveResultRowAsync(SaveResultRowDto dto, int moduleId, int userId);
-        Task CalculatePlacingAndPointsAsync(int trialId, int moduleId, int userId);
+        Task CalculatePlacingAndPointsAsync(int trialId, int moduleId, int userId, int? classId = null);
 
         Task<SubmitEventResultsDto> SubmitEventForApprovalAsync(int eventId, int moduleId, int userId);
         Task<SubmitEventResultsDto> ApproveEventAsync(int eventId, int moduleId, int userId);

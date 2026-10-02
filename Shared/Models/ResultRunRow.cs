@@ -10,6 +10,10 @@ namespace MountainStates.MSSA.Module.MSSA_Results.Models
         public int TrialId { get; set; }
         public int? RunOrder { get; set; }
 
+        // Lets the client target "Calculate Placing & Points" at just this one class -
+        // ClassName alone isn't a unique key (e.g. Nursery On-foot vs Horseback are two
+        // different ClassIds sharing the same ClassName).
+        public int ClassId { get; set; }
         public string ClassName { get; set; }
         public string SubClassName { get; set; }
         public string HandlerName { get; set; }
