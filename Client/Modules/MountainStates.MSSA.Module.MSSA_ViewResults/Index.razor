@@ -83,9 +83,15 @@
         {
             // Results show as soon as they're posted, not gated on the event's results
             // being Approved - only the competition Points earned for placement wait
-            // for that (see Results.razor). So this lists every visible event, same as
-            // the Events module's own public Calendar placement.
-            events = await EventService.GetEventsAsync(ModuleState.ModuleId);
+            // for that (see Results.razor). Still limited to events that have already
+            // happened, though - a future event can't have results yet, so it doesn't
+            // belong on a results-browsing page (same "past only" rule as the admin
+            // Outstanding Report). An event with no StartDate at all is excluded too,
+            // since it can't be confirmed past either.
+            var all = await EventService.GetEventsAsync(ModuleState.ModuleId);
+            events = all
+                .Where(e => e.StartDate.HasValue && e.StartDate.Value.Date <= DateTime.Today)
+                .ToList();
         }
         catch (Exception ex)
         {
