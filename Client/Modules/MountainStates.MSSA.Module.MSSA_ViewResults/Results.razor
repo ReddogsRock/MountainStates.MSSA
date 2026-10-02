@@ -127,6 +127,13 @@
 
     private static List<ResultRunRow> SortByRunOrder(List<ResultRunRow> list)
     {
-        return list.OrderBy(r => r.RunOrder ?? int.MaxValue).ToList();
+        // Class block first, then RunOrder within that class - RunOrder starts back
+        // at 1 for every class, so sorting by RunOrder alone would interleave classes.
+        return list
+            .OrderBy(r => ClassRunOrder.IndexOf(r.ClassName))
+            .ThenBy(r => r.ClassName)
+            .ThenBy(r => r.SubClassName)
+            .ThenBy(r => r.RunOrder ?? int.MaxValue)
+            .ToList();
     }
 }

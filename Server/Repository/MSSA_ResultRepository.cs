@@ -216,8 +216,12 @@ namespace MountainStates.MSSA.Module.MSSA_Results.Repository
             var futuritySet = new HashSet<int>(futurityPairs);
 
             return entries
-                .OrderBy(e => e.RunOrder ?? int.MaxValue)
-                .ThenBy(e => classes.TryGetValue(e.ClassId, out var ci) ? ci.PrintOrder ?? int.MaxValue : int.MaxValue)
+                // Class block first, then RunOrder within that class - RunOrder starts
+                // back at 1 for every class (see GetProposedRunOrderAsync), so sorting
+                // by RunOrder first would interleave classes instead of keeping each
+                // one's calling order together.
+                .OrderBy(e => classes.TryGetValue(e.ClassId, out var ci) ? ci.PrintOrder ?? int.MaxValue : int.MaxValue)
+                .ThenBy(e => e.RunOrder ?? int.MaxValue)
                 .ThenBy(e => handlers.TryGetValue(e.HandlerId, out var hn) ? hn : "")
                 .Select(e => new ResultRunRow
                 {
@@ -511,9 +515,12 @@ namespace MountainStates.MSSA.Module.MSSA_Results.Repository
                 .Where(c => classIds.Contains(c.ClassId))
                 .ToDictionaryAsync(c => c.ClassId);
 
+            // Class block first, then RunOrder within that class - RunOrder starts
+            // back at 1 for every class (see MSSA_EntryRepository.GetProposedRunOrderAsync),
+            // so sorting by RunOrder first would interleave classes on the sheet.
             var ordered = entries
-                .OrderBy(e => e.RunOrder ?? int.MaxValue)
-                .ThenBy(e => classes.TryGetValue(e.ClassId, out var ci) ? ci.PrintOrder ?? int.MaxValue : int.MaxValue)
+                .OrderBy(e => classes.TryGetValue(e.ClassId, out var ci) ? ci.PrintOrder ?? int.MaxValue : int.MaxValue)
+                .ThenBy(e => e.RunOrder ?? int.MaxValue)
                 .ToList();
 
             using var package = new ExcelPackage();

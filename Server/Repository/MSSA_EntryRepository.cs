@@ -282,7 +282,6 @@ namespace MountainStates.MSSA.Module.MSSA_Entries.Repository
                 .Where(n => classNames.Contains(n))
                 .Concat(classNames.Where(n => !ClassRunOrder.Names.Contains(n)).OrderBy(n => n));
 
-            int runOrder = 1;
             foreach (var className in orderedClassNames)
             {
                 var shuffled = entries
@@ -290,6 +289,9 @@ namespace MountainStates.MSSA.Module.MSSA_Entries.Repository
                     .OrderBy(x => random.Next())
                     .ToList();
 
+                // Starts back at 1 for every class, rather than continuing to climb
+                // across the whole trial.
+                int runOrder = 1;
                 foreach (var entry in shuffled)
                 {
                     entry.RunOrder = runOrder++;

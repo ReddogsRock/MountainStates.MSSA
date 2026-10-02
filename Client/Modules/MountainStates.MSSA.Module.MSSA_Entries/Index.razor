@@ -709,7 +709,11 @@
         var sb = new StringBuilder();
         sb.AppendLine("EntryId,RunOrder,Class,Handler,Dog,Obstacle1,Obstacle2,Obstacle3,Obstacle4,Obstacle5,Obstacle6,Obstacle7,Obstacle8,Obstacle9,Penalty,RunTime,TieBreakerTime,Placing,Points,Comments");
 
-        var ordered = entries.OrderBy(e => e.RunOrder ?? int.MaxValue);
+        // Class block first, then RunOrder within that class - RunOrder starts back
+        // at 1 for every class, so sorting by RunOrder alone would interleave classes.
+        var ordered = entries
+            .OrderBy(e => classes?.FirstOrDefault(c => c.ClassName == e.ClassName && c.SubClassName == e.SubClassName)?.PrintOrder ?? 999)
+            .ThenBy(e => e.RunOrder ?? int.MaxValue);
 
         foreach (var e in ordered)
         {
