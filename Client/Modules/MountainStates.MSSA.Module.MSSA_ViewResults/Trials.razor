@@ -1,6 +1,5 @@
 @using MountainStates.MSSA.Module.MSSA_Events.Services
 @using MountainStates.MSSA.Module.MSSA_Events.Models
-@using MountainStates.MSSA.Module.MSSA_Results.Enums
 @using Oqtane.Modules.Controls
 
 @namespace MountainStates.MSSA.Module.MSSA_ViewResults
@@ -11,11 +10,6 @@
     @if (evt == null)
     {
         <p><em>Loading...</em></p>
-    }
-    else if (evt.ResultsApprovalStatus != EventResultsStatus.Approved)
-    {
-        <div class="alert alert-warning">Results for this event aren't available yet.</div>
-        <ActionLink Action="Index" Text="Back to Events" Class="btn btn-secondary" />
     }
     else
     {

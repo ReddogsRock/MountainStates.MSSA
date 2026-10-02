@@ -25,11 +25,6 @@ namespace MountainStates.MSSA.Module.MSSA_Events.Manager
             return await _repository.GetEventsAsync(moduleId);
         }
 
-        public async Task<IEnumerable<MSSA_Event>> GetEventsWithApprovedResultsAsync()
-        {
-            return await _repository.GetEventsWithApprovedResultsAsync();
-        }
-
         public async Task<string> CreateSanctioningFeeCheckoutSessionAsync(int eventId, int quantity, string successUrl, string cancelUrl, int moduleId)
         {
             return await _stripeService.CreateSanctioningFeeCheckoutSessionAsync(eventId, quantity, successUrl, cancelUrl);

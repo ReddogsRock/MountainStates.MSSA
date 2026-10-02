@@ -81,11 +81,15 @@
     {
         try
         {
-            events = await EventService.GetEventsWithApprovedResultsAsync(ModuleState.ModuleId);
+            // Results show as soon as they're posted, not gated on the event's results
+            // being Approved - only the competition Points earned for placement wait
+            // for that (see Results.razor). So this lists every visible event, same as
+            // the Events module's own public Calendar placement.
+            events = await EventService.GetEventsAsync(ModuleState.ModuleId);
         }
         catch (Exception ex)
         {
-            await logger.LogError(ex, "Error loading events with approved results");
+            await logger.LogError(ex, "Error loading events");
             AddModuleMessage("Error loading events", MessageType.Error);
         }
     }

@@ -58,18 +58,6 @@ namespace MountainStates.MSSA.Module.MSSA_Events.Repository
             return events;
         }
 
-        // Lean listing for the public "View Results" page - just the fields that page
-        // shows, for events whose results have gone through the approval workflow.
-        public async Task<IEnumerable<MSSA_Event>> GetEventsWithApprovedResultsAsync()
-        {
-            using var db = await _dbContextFactory.CreateDbContextAsync();
-
-            return await db.MSSA_Events
-                .Where(e => e.IsActive && e.ResultsApprovalStatus == EventResultsStatus.Approved)
-                .OrderByDescending(e => e.StartDate)
-                .ToListAsync();
-        }
-
         // "Paid" status is already signaled by FeeReceivedDate being set (previously only
         // ever set manually by an Admin) - this just fills in the same SanctionFee/
         // FeeReceivedDate fields the admin's manual edit uses, plus the Stripe payment

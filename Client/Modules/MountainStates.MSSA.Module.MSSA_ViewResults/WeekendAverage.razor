@@ -17,11 +17,6 @@
     {
         <p><em>Loading...</em></p>
     }
-    else if (evt.ResultsApprovalStatus != EventResultsStatus.Approved)
-    {
-        <div class="alert alert-warning">Results for this event aren't available yet.</div>
-        <ActionLink Action="Index" Text="Back to Events" Class="btn btn-secondary" />
-    }
     else
     {
         <div class="row mb-3">
@@ -131,7 +126,7 @@
             var eventId = int.Parse(PageState.QueryString["id"]);
             evt = await EventService.GetEventAsync(eventId, ModuleState.ModuleId);
 
-            if (evt != null && evt.ResultsApprovalStatus == EventResultsStatus.Approved)
+            if (evt != null)
             {
                 var trials = await EventService.GetEventTrialsAsync(eventId, ModuleState.ModuleId);
                 var trialStockById = trials.ToDictionary(t => t.TrialId, t => t.Stock);

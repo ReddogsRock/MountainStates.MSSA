@@ -9,7 +9,6 @@ namespace MountainStates.MSSA.Module.MSSA_Events.Manager
     {
         // Events
         Task<IEnumerable<MSSA_Event>> GetEventsAsync(int moduleId);
-        Task<IEnumerable<MSSA_Event>> GetEventsWithApprovedResultsAsync();
         Task<string> CreateSanctioningFeeCheckoutSessionAsync(int eventId, int quantity, string successUrl, string cancelUrl, int moduleId);
         Task<MSSA_Event> MarkSanctionFeePaidAsync(int eventId, string stripePaymentIntentId, decimal amount, int moduleId);
         Task<MSSA_Event> GetEventAsync(int eventId, int moduleId);

@@ -68,12 +68,16 @@
                                 <td>@(row.TieBreakerTimeStr ?? "-")</td>
                                 <td>@(row.TotalScore?.ToString("F2") ?? "-")</td>
                                 <td class="text-center">@(row.Placing?.ToString() ?? "-")</td>
-                                <td class="text-center">@(row.TrialPoints?.ToString() ?? "-")</td>
+                                <td class="text-center">@(pointsVisible ? (row.TrialPoints?.ToString() ?? "-") : "")</td>
                             </tr>
                         }
                     </tbody>
                 </table>
             </div>
+            @if (!pointsVisible)
+            {
+                <p class="text-muted small">Points awarded for placement are posted once the event's results are approved.</p>
+            }
         }
     }
 </div>
@@ -83,6 +87,12 @@
     private MSSA_Event evt;
     private List<ResultRunRow> rows;
     private bool resultsAvailable;
+
+    // Results (time, score, placing) show as soon as they're posted - only the
+    // competition Points earned for placement wait for the event's results to be
+    // Approved, since those feed year-end standings and shouldn't be calculable
+    // ahead of the official record.
+    private bool pointsVisible => evt != null && evt.ResultsApprovalStatus == EventResultsStatus.Approved;
 
     protected override async Task OnInitializedAsync()
     {
@@ -94,10 +104,7 @@
             if (trial != null)
             {
                 evt = await EventService.GetEventAsync(trial.EventId, ModuleState.ModuleId);
-
-                // Guards direct-URL access, too - a trial link is only meaningful once its
-                // event's results have cleared the approval workflow (same rule as the listing).
-                resultsAvailable = evt != null && evt.ResultsApprovalStatus == EventResultsStatus.Approved;
+                resultsAvailable = evt != null;
 
                 if (resultsAvailable)
                 {
