@@ -82,7 +82,11 @@
         {
             var eventId = int.Parse(PageState.QueryString["id"]);
             evt = await EventService.GetEventAsync(eventId, ModuleState.ModuleId);
-            trials = await EventService.GetEventTrialsAsync(eventId, ModuleState.ModuleId);
+
+            // Past or today - a future-dated trial within the same multi-day event
+            // hasn't happened yet, so there's no run order or results to show for it.
+            var eventTrials = await EventService.GetEventTrialsAsync(eventId, ModuleState.ModuleId);
+            trials = eventTrials.Where(t => t.TrialDate.Date <= DateTime.Today).ToList();
         }
         catch (Exception ex)
         {
