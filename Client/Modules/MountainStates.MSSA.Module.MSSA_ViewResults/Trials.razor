@@ -51,7 +51,8 @@
                                 <td>@trial.TrialName</td>
                                 <td>@trial.Stock</td>
                                 <td>
-                                    <ActionLink Action="Results" Parameters="@($"id={trial.TrialId}")" Text="View" Class="btn btn-primary btn-sm" />
+                                    <ActionLink Action="RunOrder" Parameters="@($"id={trial.TrialId}")" Text="Run Order" Class="btn btn-outline-primary btn-sm me-1" />
+                                    <ActionLink Action="Results" Parameters="@($"id={trial.TrialId}")" Text="Results" Class="btn btn-primary btn-sm" />
                                 </td>
                             </tr>
                         }

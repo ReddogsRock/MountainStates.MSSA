@@ -81,17 +81,14 @@
     {
         try
         {
-            // Results show as soon as they're posted, not gated on the event's results
-            // being Approved - only the competition Points earned for placement wait
-            // for that (see Results.razor). Still limited to events that have already
-            // happened, though - a future event can't have results yet, so it doesn't
-            // belong on a results-browsing page (same "past only" rule as the admin
-            // Outstanding Report). An event with no StartDate at all is excluded too,
-            // since it can't be confirmed past either.
+            // Results show as soon as they're posted, and Run Order is meant to be
+            // checked before/during the event too - not gated on the event's results
+            // being Approved (only the competition Points earned for placement wait
+            // for that, see Results.razor) or on the event's date having passed. Just
+            // needs trials to exist yet - an event with none planned yet has nothing
+            // to show here regardless of how far out its date is.
             var all = await EventService.GetEventsAsync(ModuleState.ModuleId);
-            events = all
-                .Where(e => e.StartDate.HasValue && e.StartDate.Value.Date <= DateTime.Today)
-                .ToList();
+            events = all.Where(e => e.TrialCount > 0).ToList();
         }
         catch (Exception ex)
         {

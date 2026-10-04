@@ -1,0 +1,102 @@
+@using MountainStates.MSSA.Module.MSSA_Events.Services
+@using MountainStates.MSSA.Module.MSSA_Events.Models
+@using MountainStates.MSSA.Module.MSSA_Results.Services
+@using MountainStates.MSSA.Module.MSSA_Results.Models
+@using MountainStates.MSSA.Module.MSSA_Entries.Enums
+@using Oqtane.Modules.Controls
+
+@namespace MountainStates.MSSA.Module.MSSA_ViewResults
+@inherits ModuleBase
+@inject IMSSA_EventService EventService
+@inject IMSSA_ResultService ResultService
+
+<div class="container-fluid">
+    @if (trial == null)
+    {
+        <p><em>Loading...</em></p>
+    }
+    else
+    {
+        <div class="row mb-3">
+            <div class="col">
+                <h2>@trial.TrialName - Run Order</h2>
+                <p class="text-muted mb-0">@evt?.EventName - @trial.TrialDate.ToString("MMM dd, yyyy") - @trial.Stock</p>
+            </div>
+            <div class="col-auto">
+                <ActionLink Action="Trials" Parameters="@($"id={trial.EventId}")" Text="Back to Trials" Class="btn btn-secondary" />
+            </div>
+        </div>
+
+        @if (rows == null)
+        {
+            <p><em>Loading run order...</em></p>
+        }
+        else if (!rows.Any())
+        {
+            <p class="text-muted"><em>Run order hasn't been posted for this trial yet.</em></p>
+        }
+        else
+        {
+            <div class="table-responsive">
+                <table class="table table-sm table-bordered align-middle">
+                    <thead>
+                        <tr>
+                            <th style="width:80px">Run #</th>
+                            <th>Class</th>
+                            <th>Handler</th>
+                            <th>Dog</th>
+                        </tr>
+                    </thead>
+                    <tbody>
+                        @foreach (var row in rows)
+                        {
+                            <tr>
+                                <td>@(row.RunOrder?.ToString() ?? "-")</td>
+                                <td>@row.ClassName @row.SubClassName</td>
+                                <td>@row.HandlerName</td>
+                                <td>@row.DogName</td>
+                            </tr>
+                        }
+                    </tbody>
+                </table>
+            </div>
+        }
+    }
+</div>
+
+@code {
+    private MSSA_Trial trial;
+    private MSSA_Event evt;
+    private List<ResultRunRow> rows;
+
+    protected override async Task OnInitializedAsync()
+    {
+        try
+        {
+            var trialId = int.Parse(PageState.QueryString["id"]);
+            trial = await EventService.GetTrialAsync(trialId, ModuleState.ModuleId);
+
+            if (trial != null)
+            {
+                evt = await EventService.GetEventAsync(trial.EventId, ModuleState.ModuleId);
+
+                var loaded = await ResultService.GetTrialRunRowsAsync(trialId, ModuleState.ModuleId);
+
+                // Always the calling order, never placing order - unlike Results.razor,
+                // this page is specifically about when a dog runs, not how it scored.
+                rows = loaded
+                    .Where(r => r.RunOrder.HasValue)
+                    .OrderBy(r => ClassRunOrder.IndexOf(r.ClassName))
+                    .ThenBy(r => r.ClassName)
+                    .ThenBy(r => r.SubClassName)
+                    .ThenBy(r => r.RunOrder)
+                    .ToList();
+            }
+        }
+        catch (Exception ex)
+        {
+            await logger.LogError(ex, "Error loading run order");
+            AddModuleMessage("Error loading run order", MessageType.Error);
+        }
+    }
+}
