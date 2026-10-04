@@ -421,9 +421,11 @@ namespace MountainStates.MSSA.Module.MSSA_Events.Controllers
             }
         }
 
-        // GET: api/MSSA_Event/5/flyer?moduleid=x
+        // GET: api/MSSA_Event/5/flyer?moduleid=x - anyone browsing the public Calendar
+        // needs to be able to download a flyer, logged in or not, so this can't require
+        // the ViewModule permission check the rest of this controller uses.
         [HttpGet("{eventId}/flyer")]
-        [Authorize(Policy = PolicyNames.ViewModule)]
+        [AllowAnonymous]
         public async Task<IActionResult> GetFlyer(int eventId, int moduleId)
         {
             try
