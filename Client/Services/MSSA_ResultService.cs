@@ -78,5 +78,18 @@ namespace MountainStates.MSSA.Module.MSSA_Results.Services
             return await PostJsonAsync<ImportScoreSheetDto, ImportCompleteTrialResult>(
                 CreateAuthorizationPolicyUrl($"{ApiUrl}/trial/{trialId}/completetrial/import?moduleid={moduleId}", EntityNames.Module, moduleId), dto);
         }
+
+        // Fetched as bytes through the authenticated HttpClient rather than linked to
+        // directly - a plain <a href> download is a bare browser navigation that relies
+        // on cookies alone, which doesn't carry whatever this app's own role/ownership
+        // check needs for a non-Admin user (a Trial Secretary could edit scores and
+        // calculate placing on a trial - both going through this same HttpClient - but
+        // got Forbidden on the scoring sheet link specifically). The caller triggers the
+        // actual file save client-side (see mssaResultsDownloadFile).
+        public async Task<byte[]> GetScoreSheetAsync(int trialId, int moduleId)
+        {
+            return await GetByteArrayAsync(
+                CreateAuthorizationPolicyUrl($"{ApiUrl}/trial/{trialId}/scoresheet?moduleid={moduleId}", EntityNames.Module, moduleId));
+        }
     }
 }

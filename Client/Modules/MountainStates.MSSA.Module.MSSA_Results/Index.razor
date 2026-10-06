@@ -16,6 +16,19 @@
 @inject IMSSA_EventService EventService
 
 <script suppress-error="BL9992">
+    // Triggers a client-side save of bytes already fetched through the authenticated
+    // HttpClient (see MSSA_ResultService.GetScoreSheetAsync) - a plain <a href> to the
+    // API endpoint is a bare browser navigation that only carries cookies, not whatever
+    // this app's role/ownership check needs for a non-Admin user.
+    window.mssaResultsDownloadFile = (fileName, contentType, base64Content) => {
+        const link = document.createElement('a');
+        link.href = `data:${contentType};base64,${base64Content}`;
+        link.download = fileName;
+        document.body.appendChild(link);
+        link.click();
+        document.body.removeChild(link);
+    };
+
     // Fetches a script and waits for it to finish loading, rather than relying on a
     // <script src> tag rendered by a Blazor component (not guaranteed to execute).
     // Safe to call more than once for the same URL.
@@ -271,9 +284,9 @@
 
         <div class="row mb-3">
             <div class="col">
-                <a class="btn btn-outline-secondary btn-sm" href="@ScoreSheetDownloadUrl" target="_blank">
-                    Download Scoring Sheet
-                </a>
+                <button type="button" class="btn btn-outline-secondary btn-sm" @onclick="DownloadScoreSheet" disabled="@downloadingScoreSheet">
+                    @(downloadingScoreSheet ? "Downloading..." : "Download Scoring Sheet")
+                </button>
                 <label class="btn btn-outline-secondary btn-sm ms-2 mb-0">
                     Upload Completed Score Sheet
                     <InputFile OnChange="OnScoreSheetSelected" style="display:none" accept=".xlsx" />
@@ -736,8 +749,28 @@
             });
     }
 
-    private string ScoreSheetDownloadUrl =>
-        $"{PageState.Alias.BaseUrl}/api/MSSA_Result/trial/{selectedTrialId}/scoresheet?moduleid={ModuleState.ModuleId}";
+    private bool downloadingScoreSheet = false;
+
+    private async Task DownloadScoreSheet()
+    {
+        downloadingScoreSheet = true;
+        try
+        {
+            var bytes = await ResultService.GetScoreSheetAsync(selectedTrialId, ModuleState.ModuleId);
+            var fileName = $"ScoreSheet_Trial{selectedTrialId}_{DateTime.Now:yyyyMMdd}.xlsx";
+            await JSRuntime.InvokeVoidAsync("mssaResultsDownloadFile", fileName,
+                "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet", Convert.ToBase64String(bytes));
+        }
+        catch (Exception ex)
+        {
+            await logger.LogError(ex, "Error downloading score sheet for trial {TrialId}", selectedTrialId);
+            errorMessage = "Error downloading the scoring sheet. Please try again.";
+        }
+        finally
+        {
+            downloadingScoreSheet = false;
+        }
+    }
 
     // A data: URI rather than a server round-trip - the bytes are already in hand from
     // the import response, and this is a small, one-off file (unmatched rows only).
