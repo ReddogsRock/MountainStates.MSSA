@@ -13,6 +13,7 @@ using MountainStates.MSSA.Module.MSSA_Dogs.Manager;
 using MountainStates.MSSA.Module.MSSA_Dogs.Startup;
 using MountainStates.MSSA.Module.MSSA_Handlers.Manager;
 using MountainStates.MSSA.Module.MSSA_Events.Manager;
+using MountainStates.MSSA.Server.Startup;
 
 namespace MountainStates.MSSA.Server
 {
@@ -79,6 +80,12 @@ namespace MountainStates.MSSA.Server
 
                 await next();
             });
+
+            // Also registered before UseOqtane: this needs to wrap Oqtane's entire
+            // response pipeline to rewrite the HTML it produces (adding Open Graph
+            // tags Oqtane doesn't generate on its own - see OpenGraphMiddleware), so it
+            // has to run "around" everything else, not after it.
+            app.Use(OpenGraphMiddleware.InvokeAsync);
 
             app.UseOqtane(configuration, builder.Environment, corsService, corsPolicyProvider, syncManager);
 
