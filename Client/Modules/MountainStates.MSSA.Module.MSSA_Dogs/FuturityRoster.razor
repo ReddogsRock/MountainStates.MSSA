@@ -1,0 +1,135 @@
+@using MountainStates.MSSA.Module.MSSA_Dogs.Services
+@using MountainStates.MSSA.Module.MSSA_Dogs.Models
+@using MountainStates.MSSA.Module.MSSA_Dogs.Enums
+@using Oqtane.Modules.Controls
+
+@namespace MountainStates.MSSA.Module.MSSA_Dogs
+@inherits ModuleBase
+@inject IMSSA_DogService DogService
+
+<div class="container-fluid">
+    <div class="row mb-3">
+        <div class="col">
+            <h2>Futurity Roster</h2>
+            <p class="text-muted mb-0">
+                Every dog nominated for Futurity, regardless of whether they've run or scored yet.
+                For the points leaderboard instead (approved, scored results only), see Year End Standings.
+            </p>
+        </div>
+        <div class="col-auto">
+            <ActionLink Action="Index" Text="Back to Dogs" Class="btn btn-secondary" />
+        </div>
+    </div>
+
+    @if (!UserSecurity.IsAuthorized(PageState.User, RoleNames.Admin))
+    {
+        <div class="alert alert-warning">This report is only available to Administrators.</div>
+    }
+    else
+    {
+        <div class="row mb-3">
+            <div class="col-md-3">
+                <label for="yearFilter" class="form-label">Year</label>
+                <select id="yearFilter" class="form-select" @bind="selectedYear" @bind:after="LoadRoster">
+                    <option value="">All Years</option>
+                    @foreach (var y in YearOptions)
+                    {
+                        <option value="@y">@y</option>
+                    }
+                </select>
+            </div>
+        </div>
+
+        @if (entries == null)
+        {
+            <p><em>Loading...</em></p>
+        }
+        else if (!entries.Any())
+        {
+            <p class="text-muted"><em>No Futurity nominations found@(selectedYear.HasValue ? $" for {selectedYear}" : "").</em></p>
+        }
+        else
+        {
+            <p class="text-muted">@entries.Count nominated</p>
+            <div class="table-responsive">
+                <table class="table table-sm table-striped align-middle">
+                    <thead>
+                        <tr>
+                            <th>Year</th>
+                            <th>Dog</th>
+                            <th>Owner</th>
+                            <th>Payment Status</th>
+                            <th>Amount</th>
+                            <th>Date Received</th>
+                            <th>Documentation</th>
+                        </tr>
+                    </thead>
+                    <tbody>
+                        @foreach (var entry in entries)
+                        {
+                            <tr>
+                                <td>@entry.Year</td>
+                                <td>
+                                    <ActionLink Action="Detail" Parameters="@($"id={entry.DogId}")" Text="@entry.DogName" ResourceKey="ViewDogName" />
+                                </td>
+                                <td>@(entry.OwnerName ?? "-")</td>
+                                <td>
+                                    @if (entry.Status == FuturityPaymentStatus.Paid)
+                                    {
+                                        <span class="badge bg-success">Paid</span>
+                                    }
+                                    else
+                                    {
+                                        <span class="badge bg-warning text-dark">Pending Payment</span>
+                                    }
+                                </td>
+                                <td>@(entry.Amount?.ToString("C") ?? "-")</td>
+                                <td>@(entry.DateReceived?.ToString("MMM dd, yyyy") ?? "-")</td>
+                                <td>@(entry.HasDocument ? "Yes" : "No")</td>
+                            </tr>
+                        }
+                    </tbody>
+                </table>
+            </div>
+        }
+    }
+</div>
+
+@code {
+    private List<FuturityRosterEntry> entries;
+    private int? selectedYear;
+
+    // Competition year runs May 1 - Apr 30, named for the year it ends in - same rule
+    // used for Futurity enrollment elsewhere (see Dogs/Edit.razor).
+    private int CurrentCompetitionYear =>
+        DateTime.Now.Month >= 5 ? DateTime.Now.Year + 1 : DateTime.Now.Year;
+
+    // A handful of years around the current one - enough to cover recent/upcoming
+    // nominations without listing every year back to 1900.
+    private IEnumerable<int> YearOptions =>
+        Enumerable.Range(CurrentCompetitionYear - 3, 6).OrderByDescending(y => y);
+
+    protected override async Task OnInitializedAsync()
+    {
+        if (!UserSecurity.IsAuthorized(PageState.User, RoleNames.Admin))
+        {
+            return;
+        }
+
+        selectedYear = CurrentCompetitionYear;
+        await LoadRoster();
+    }
+
+    private async Task LoadRoster()
+    {
+        try
+        {
+            entries = await DogService.GetFuturityRosterAsync(selectedYear, ModuleState.ModuleId);
+        }
+        catch (Exception ex)
+        {
+            await logger.LogError(ex, "Error loading futurity roster");
+            AddModuleMessage("Error loading the Futurity roster", MessageType.Error);
+        }
+    }
+}

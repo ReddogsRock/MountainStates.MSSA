@@ -89,6 +89,14 @@ namespace MountainStates.MSSA.Module.MSSA_Dogs.Services
                 CreateAuthorizationPolicyUrl($"{url}/dog/{dogId}?moduleid={moduleId}", EntityNames.Module, moduleId));
         }
 
+        public async Task<List<FuturityRosterEntry>> GetFuturityRosterAsync(int? year, int moduleId)
+        {
+            var url = CreateApiUrl("MSSA_DogFuturity");
+            var query = $"?moduleid={moduleId}" + (year.HasValue ? $"&year={year.Value}" : "");
+            return await GetJsonAsync<List<FuturityRosterEntry>>(
+                CreateAuthorizationPolicyUrl($"{url}/roster{query}", EntityNames.Module, moduleId));
+        }
+
         public async Task<MSSA_DogFuturityParticipation> AddFuturityParticipationAsync(MSSA_DogFuturityParticipation participation, int moduleId)
         {
             var url = CreateApiUrl("MSSA_DogFuturity");

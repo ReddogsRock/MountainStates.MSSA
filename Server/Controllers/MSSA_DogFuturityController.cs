@@ -35,6 +35,25 @@ namespace MountainStates.MSSA.Module.MSSA_Dogs.Controllers
             _hostEnvironment = hostEnvironment;
         }
 
+        // GET: api/MSSA_DogFuturity/roster?year=2027&moduleid=x (year optional - omit for every year)
+        // Every dog nominated for Futurity, regardless of whether they've run/scored
+        // yet - the plain enrollment roster. Distinct from Year End Standings, which
+        // only counts approved, scored results and so shows a much smaller list.
+        [HttpGet("roster")]
+        [Authorize(Policy = PolicyNames.ViewModule)]
+        public async Task<List<FuturityRosterEntry>> GetRoster(int moduleId, int? year = null)
+        {
+            try
+            {
+                return await _manager.GetFuturityRosterAsync(year, moduleId);
+            }
+            catch (System.Exception ex)
+            {
+                _logger.Log(LogLevel.Error, this, LogFunction.Read, ex, "Error getting futurity roster for year {Year}", year);
+                throw;
+            }
+        }
+
         // GET: api/MSSA_DogFuturity/dog/5?moduleid=x
         [HttpGet("dog/{dogId}")]
         [Authorize(Policy = PolicyNames.ViewModule)]

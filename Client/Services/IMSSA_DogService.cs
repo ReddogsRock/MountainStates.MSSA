@@ -24,6 +24,7 @@ namespace MountainStates.MSSA.Module.MSSA_Dogs.Services
 
         // Futurity
         Task<List<MSSA_DogFuturityParticipation>> GetDogFuturityParticipationAsync(int dogId, int moduleId);
+        Task<List<FuturityRosterEntry>> GetFuturityRosterAsync(int? year, int moduleId);
         Task<MSSA_DogFuturityParticipation> AddFuturityParticipationAsync(MSSA_DogFuturityParticipation participation, int moduleId);
         Task DeleteFuturityParticipationAsync(int participationId, int moduleId);
         Task<MSSA_DogFuturityParticipation> UploadFuturityDocumentAsync(MSSA_DogFuturityParticipation participation, int moduleId);

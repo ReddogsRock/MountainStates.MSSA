@@ -77,6 +77,11 @@ namespace MountainStates.MSSA.Module.MSSA_Dogs.Manager
             return await _repository.GetDogFuturityParticipationAsync(dogId);
         }
 
+        public async Task<List<FuturityRosterEntry>> GetFuturityRosterAsync(int? year, int moduleId)
+        {
+            return await _repository.GetFuturityRosterAsync(year);
+        }
+
         public async Task<MSSA_DogFuturityParticipation> AddFuturityParticipationAsync(MSSA_DogFuturityParticipation participation, int moduleId)
         {
             return await _repository.AddFuturityParticipationAsync(participation);

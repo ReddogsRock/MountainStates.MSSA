@@ -292,6 +292,46 @@ namespace MountainStates.MSSA.Module.MSSA_Dogs.Repository
             return dogs;
         }
 
+        // Every dog nominated for Futurity in a given year (or every year, if null),
+        // regardless of whether they've run/scored yet - the plain enrollment roster,
+        // as opposed to Year End Standings' points leaderboard (which only counts
+        // approved, scored results and so shows a much smaller list).
+        public async Task<List<FuturityRosterEntry>> GetFuturityRosterAsync(int? year)
+        {
+            using var db = await _dbContextFactory.CreateDbContextAsync();
+
+            var query = db.MSSA_DogFuturityParticipation.AsQueryable();
+            if (year.HasValue)
+            {
+                query = query.Where(f => f.Year == year.Value);
+            }
+
+            var participations = await query.ToListAsync();
+
+            var dogIds = participations.Select(f => f.DogId).Distinct().ToList();
+            var dogs = await db.MSSA_Dogs
+                .Where(d => dogIds.Contains(d.DogId))
+                .ToDictionaryAsync(d => d.DogId);
+
+            return participations
+                .OrderByDescending(f => f.Year)
+                .ThenBy(f => dogs.TryGetValue(f.DogId, out var d) ? d.Name : "")
+                .Select(f => new FuturityRosterEntry
+                {
+                    ParticipationId = f.ParticipationId,
+                    Year = f.Year,
+                    DogId = f.DogId,
+                    DogName = dogs.TryGetValue(f.DogId, out var dog) ? dog.Name : "Unknown",
+                    OwnerName = dogs.TryGetValue(f.DogId, out var dog2) ? dog2.OwnerName : null,
+                    Status = f.Status,
+                    DateReceived = f.DateReceived,
+                    Amount = f.Amount,
+                    HasDocument = !string.IsNullOrEmpty(f.DocumentPath),
+                    CreatedDate = f.CreatedDate
+                })
+                .ToList();
+        }
+
         // Futurity
         public async Task<IEnumerable<MSSA_DogFuturityParticipation>> GetDogFuturityParticipationAsync(int dogId)
         {
