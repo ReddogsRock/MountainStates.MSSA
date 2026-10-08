@@ -62,6 +62,7 @@
                             <th>Amount</th>
                             <th>Date Received</th>
                             <th>Documentation</th>
+                            <th></th>
                         </tr>
                     </thead>
                     <tbody>
@@ -78,6 +79,10 @@
                                     {
                                         <span class="badge bg-success">Paid</span>
                                     }
+                                    else if (entry.Status == FuturityPaymentStatus.Failed)
+                                    {
+                                        <span class="badge bg-danger">Failed - Retry Needed</span>
+                                    }
                                     else
                                     {
                                         <span class="badge bg-warning text-dark">Pending Payment</span>
@@ -86,6 +91,17 @@
                                 <td>@(entry.Amount?.ToString("C") ?? "-")</td>
                                 <td>@(entry.DateReceived?.ToString("MMM dd, yyyy") ?? "-")</td>
                                 <td>@(entry.HasDocument ? "Yes" : "No")</td>
+                                <td>
+                                    @if (entry.Status != FuturityPaymentStatus.Paid)
+                                    {
+                                        <button type="button" class="btn btn-sm btn-success me-1" @onclick="() => ShowMarkPaid(entry)">
+                                            Mark Paid
+                                        </button>
+                                        <button type="button" class="btn btn-sm btn-outline-danger" @onclick="() => MarkFailed(entry)">
+                                            Mark Failed
+                                        </button>
+                                    }
+                                </td>
                             </tr>
                         }
                     </tbody>
@@ -93,11 +109,66 @@
             </div>
         }
     }
+
+    @* Mark Paid Modal *@
+    @if (showMarkPaidModal && markPaidEntry != null)
+    {
+        <div class="modal fade show d-block" tabindex="-1" style="background-color: rgba(0,0,0,0.5);">
+            <div class="modal-dialog">
+                <div class="modal-content">
+                    <div class="modal-header">
+                        <h5 class="modal-title">Mark Paid</h5>
+                        <button type="button" class="btn-close" @onclick="CloseMarkPaid"></button>
+                    </div>
+                    <div class="modal-body">
+                        <p><strong>@markPaidEntry.DogName</strong> &mdash; @markPaidEntry.Year Futurity</p>
+                        <div class="row g-2">
+                            <div class="col-md-4">
+                                <label class="form-label">Amount</label>
+                                <input type="number" step="0.01" class="form-control" @bind="markPaidAmount" />
+                            </div>
+                            <div class="col-md-4">
+                                <label class="form-label">Paid By</label>
+                                <select class="form-select" @bind="markPaidMethod">
+                                    <option value="">Select...</option>
+                                    <option value="Cash">Cash</option>
+                                    <option value="Check">Check</option>
+                                    <option value="PayPal">PayPal</option>
+                                    <option value="Credit Card">Credit Card</option>
+                                </select>
+                            </div>
+                            <div class="col-md-4">
+                                <label class="form-label">Date Received</label>
+                                <input type="date" class="form-control"
+                                       value="@markPaidDateReceived.ToString("yyyy-MM-dd")"
+                                       @onchange="@(e => markPaidDateReceived = DateTime.Parse(e.Value.ToString()))" />
+                            </div>
+                        </div>
+                        @if (!string.IsNullOrEmpty(markPaidError))
+                        {
+                            <div class="alert alert-danger mt-3 mb-0">@markPaidError</div>
+                        }
+                    </div>
+                    <div class="modal-footer">
+                        <button type="button" class="btn btn-success" @onclick="ConfirmMarkPaid">Confirm</button>
+                        <button type="button" class="btn btn-secondary" @onclick="CloseMarkPaid">Cancel</button>
+                    </div>
+                </div>
+            </div>
+        </div>
+    }
 </div>
 
 @code {
     private List<FuturityRosterEntry> entries;
     private int? selectedYear;
+
+    private bool showMarkPaidModal = false;
+    private FuturityRosterEntry markPaidEntry;
+    private decimal? markPaidAmount;
+    private string markPaidMethod = "";
+    private DateTime markPaidDateReceived = DateTime.Today;
+    private string markPaidError = "";
 
     // Competition year runs May 1 - Apr 30, named for the year it ends in - same rule
     // used for Futurity enrollment elsewhere (see Dogs/Edit.razor).
@@ -130,6 +201,75 @@
         {
             await logger.LogError(ex, "Error loading futurity roster");
             AddModuleMessage("Error loading the Futurity roster", MessageType.Error);
+        }
+    }
+
+    private void ShowMarkPaid(FuturityRosterEntry entry)
+    {
+        markPaidEntry = entry;
+        markPaidAmount = entry.Amount;
+        markPaidMethod = "";
+        markPaidDateReceived = DateTime.Today;
+        markPaidError = "";
+        showMarkPaidModal = true;
+    }
+
+    private async Task ConfirmMarkPaid()
+    {
+        try
+        {
+            if (!markPaidAmount.HasValue || markPaidAmount.Value <= 0)
+            {
+                markPaidError = "Amount is required.";
+                return;
+            }
+            if (string.IsNullOrWhiteSpace(markPaidMethod))
+            {
+                markPaidError = "Paid By is required.";
+                return;
+            }
+
+            markPaidError = "";
+
+            await DogService.MarkFuturityPaymentManualAsync(new MarkFuturityPaymentManualDto
+            {
+                ParticipationId = markPaidEntry.ParticipationId,
+                Amount = markPaidAmount.Value,
+                PaymentMethod = markPaidMethod,
+                DateReceived = markPaidDateReceived
+            }, ModuleState.ModuleId);
+
+            CloseMarkPaid();
+            await LoadRoster();
+            AddModuleMessage("Futurity nomination marked as paid", MessageType.Success);
+        }
+        catch (Exception ex)
+        {
+            await logger.LogError(ex, "Error marking futurity nomination paid");
+            markPaidError = "Error saving. Please try again.";
+        }
+    }
+
+    private void CloseMarkPaid()
+    {
+        showMarkPaidModal = false;
+        markPaidEntry = null;
+        markPaidAmount = null;
+        markPaidMethod = "";
+    }
+
+    private async Task MarkFailed(FuturityRosterEntry entry)
+    {
+        try
+        {
+            await DogService.MarkFuturityPaymentFailedAsync(entry.ParticipationId, ModuleState.ModuleId);
+            await LoadRoster();
+            AddModuleMessage($"{entry.DogName}'s {entry.Year} nomination marked Failed - they can retry payment from the dog's Detail page", MessageType.Success);
+        }
+        catch (Exception ex)
+        {
+            await logger.LogError(ex, "Error marking futurity nomination failed");
+            AddModuleMessage("Error marking as failed. Please try again.", MessageType.Error);
         }
     }
 }

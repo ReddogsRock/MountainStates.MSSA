@@ -34,6 +34,13 @@ namespace MountainStates.MSSA.Module.MSSA_Handlers.Models
 
         public DateTime? DateReceived { get; set; }
 
+        // NULL in the normal case - Paid/Pending is still determined by DateReceived
+        // (see SearchMembershipsAsync). The only meaningful value here is "Failed",
+        // set by an Admin when a Stripe attempt didn't go through, so the handler can
+        // retry via "Pay Now" on their Detail page instead of staff chasing it down.
+        [StringLength(20)]
+        public string Status { get; set; }
+
         [StringLength(255)]
         public string StripePaymentIntentId { get; set; }
 

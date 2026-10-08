@@ -374,6 +374,33 @@ namespace MountainStates.MSSA.Module.MSSA_Handlers.Controllers
             }
         }
 
+        // PUT: api/MSSA_Handler/membership/5/mark-failed?moduleid=x
+        // Admin flagging a Stripe attempt that didn't go through, so the handler can
+        // retry via "Pay Now" on their Detail page instead of staff chasing it down.
+        [HttpPut("membership/{membershipId}/mark-failed")]
+        [Authorize(Policy = PolicyNames.EditModule)]
+        public async Task<MSSA_Membership> MarkMembershipFailed(int membershipId, int moduleId)
+        {
+            try
+            {
+                if (!IsAuthorizedForRole(MSSARoles.Admin))
+                {
+                    _logger.Log(LogLevel.Error, this, LogFunction.Security, "Unauthorized membership mark-failed attempt");
+                    HttpContext.Response.StatusCode = (int)System.Net.HttpStatusCode.Forbidden;
+                    return null;
+                }
+
+                var updated = await _manager.MarkMembershipPaymentFailedAsync(membershipId, moduleId);
+                _logger.Log(LogLevel.Information, this, LogFunction.Update, "Membership {MembershipId} marked Failed", membershipId);
+                return updated;
+            }
+            catch (System.Exception ex)
+            {
+                _logger.Log(LogLevel.Error, this, LogFunction.Update, ex, "Error marking membership {MembershipId} failed", membershipId);
+                throw;
+            }
+        }
+
         // GET: api/MSSA_Handler/memberships/search?filter=ExpiringThisYear&searchTerm=smith&moduleid=x
         // filter: ExpiringThisYear, Expired, PendingPayment, or omitted for All.
         [HttpGet("memberships/search")]

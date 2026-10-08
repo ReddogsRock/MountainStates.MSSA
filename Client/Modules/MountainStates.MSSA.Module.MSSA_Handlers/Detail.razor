@@ -182,6 +182,7 @@ else
                                 <th>Date Received</th>
                                 <th>Members</th>
                                 <th></th>
+                                <th></th>
                             </tr>
                         </thead>
                         <tbody>
@@ -192,7 +193,20 @@ else
                                     <td>@m.StartYear&ndash;@(m.EndYear?.ToString() ?? "Lifetime")</td>
                                     <td>@(m.Amount.HasValue ? $"${m.Amount.Value:N2}" : "N/A")</td>
                                     <td>@m.PaidBy</td>
-                                    <td>@(m.DateReceived?.ToString("MMM dd, yyyy") ?? "N/A")</td>
+                                    <td>
+                                        @if (m.DateReceived.HasValue)
+                                        {
+                                            @m.DateReceived.Value.ToString("MMM dd, yyyy")
+                                        }
+                                        else if (m.Status == "Failed")
+                                        {
+                                            <span class="badge bg-danger">Payment Failed</span>
+                                        }
+                                        else
+                                        {
+                                            <span class="badge bg-warning text-dark">Pending Payment</span>
+                                        }
+                                    </td>
                                     <td>@string.Join(", ", m.Members.Select(x => x.HandlerName))</td>
                                     <td>
                                         @if (m.IsCurrentlyActive)
@@ -200,10 +214,23 @@ else
                                             <span class="badge bg-success">Active</span>
                                         }
                                     </td>
+                                    <td>
+                                        @if (!m.DateReceived.HasValue)
+                                        {
+                                            <button type="button" class="btn btn-sm btn-primary" disabled="@retryingMembershipId.HasValue"
+                                                    @onclick="() => RetryMembershipPayment(m)">
+                                                @(retryingMembershipId == m.MembershipId ? "Redirecting..." : "Pay Now")
+                                            </button>
+                                        }
+                                    </td>
                                 </tr>
                             }
                         </tbody>
                     </table>
+                    @if (!string.IsNullOrEmpty(membershipPaymentError))
+                    {
+                        <div class="alert alert-danger mt-2 mb-0">@membershipPaymentError</div>
+                    }
                 }
             </div>
         </div>
@@ -458,6 +485,9 @@ else
     private string membershipErrorMessage = "";
     private bool creatingMembershipCheckout = false;
 
+    private int? retryingMembershipId;
+    private string membershipPaymentError = "";
+
     protected override async Task OnInitializedAsync()
     {
         try
@@ -636,6 +666,34 @@ else
             await logger.LogError(ex, "Error starting membership purchase");
             membershipErrorMessage = "Error starting payment. Please try again.";
             creatingMembershipCheckout = false;
+        }
+    }
+
+    private async Task RetryMembershipPayment(MSSA_Membership membership)
+    {
+        try
+        {
+            membershipPaymentError = "";
+            retryingMembershipId = membership.MembershipId;
+
+            var successUrl = NavigationManager.ToAbsoluteUri(EditUrl("Detail", $"id={handler.HandlerId}&membership=success")).ToString();
+            var cancelUrl = NavigationManager.ToAbsoluteUri(EditUrl("Detail", $"id={handler.HandlerId}&membership=cancelled")).ToString();
+
+            var checkout = await HandlerService.CreateMembershipCheckoutSessionAsync(new CreateMembershipCheckoutDto
+            {
+                MembershipId = membership.MembershipId,
+                MembershipType = membership.MembershipType,
+                SuccessUrl = successUrl,
+                CancelUrl = cancelUrl
+            }, ModuleState.ModuleId);
+
+            await JSRuntime.InvokeVoidAsync("window.location.assign", checkout.CheckoutUrl);
+        }
+        catch (Exception ex)
+        {
+            await logger.LogError(ex, "Error starting membership payment retry for membership {MembershipId}", membership.MembershipId);
+            membershipPaymentError = "Error starting payment. Please try again.";
+            retryingMembershipId = null;
         }
     }
 }

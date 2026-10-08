@@ -394,6 +394,27 @@ namespace MountainStates.MSSA.Module.MSSA_Handlers.Repository
             membership.PaidBy = "Stripe";
             membership.StripePaymentIntentId = stripePaymentIntentId;
             membership.DateReceived = DateTime.UtcNow.Date;
+            membership.Status = null;
+            membership.ModifiedDate = DateTime.UtcNow;
+
+            await db.SaveChangesAsync();
+
+            return membership;
+        }
+
+        // Admin flagging a Stripe attempt that didn't go through, so the handler can
+        // retry via "Pay Now" on their Detail page instead of staff chasing it down.
+        public async Task<MSSA_Membership> MarkMembershipPaymentFailedAsync(int membershipId)
+        {
+            using var db = await _dbContextFactory.CreateDbContextAsync();
+
+            var membership = await db.MSSA_Memberships.FindAsync(membershipId);
+            if (membership == null)
+            {
+                return null;
+            }
+
+            membership.Status = "Failed";
             membership.ModifiedDate = DateTime.UtcNow;
 
             await db.SaveChangesAsync();

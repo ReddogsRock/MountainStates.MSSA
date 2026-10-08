@@ -103,6 +103,11 @@ namespace MountainStates.MSSA.Module.MSSA_Handlers.Manager
             return await _repository.MarkMembershipPaymentReceivedAsync(membershipId, stripePaymentIntentId, amount);
         }
 
+        public async Task<MSSA_Membership> MarkMembershipPaymentFailedAsync(int membershipId, int moduleId)
+        {
+            return await _repository.MarkMembershipPaymentFailedAsync(membershipId);
+        }
+
         public async Task<string> CreateMembershipCheckoutSessionAsync(int membershipId, string membershipType, string successUrl, string cancelUrl, int moduleId)
         {
             return await _stripeService.CreateMembershipCheckoutSessionAsync(membershipId, membershipType, successUrl, cancelUrl);

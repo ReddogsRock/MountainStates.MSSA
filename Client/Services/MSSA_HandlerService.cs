@@ -127,5 +127,11 @@ namespace MountainStates.MSSA.Module.MSSA_Handlers.Services
             return await PostJsonAsync<CreateMembershipCheckoutDto, MembershipCheckoutResult>(
                 CreateAuthorizationPolicyUrl($"{ApiUrl}/membership/{dto.MembershipId}/checkout?moduleid={moduleId}", EntityNames.Module, moduleId), dto);
         }
+
+        public async Task<MSSA_Membership> MarkMembershipPaymentFailedAsync(int membershipId, int moduleId)
+        {
+            return await PutJsonAsync<int, MSSA_Membership>(
+                CreateAuthorizationPolicyUrl($"{ApiUrl}/membership/{membershipId}/mark-failed?moduleid={moduleId}", EntityNames.Module, moduleId), membershipId);
+        }
     }
 }

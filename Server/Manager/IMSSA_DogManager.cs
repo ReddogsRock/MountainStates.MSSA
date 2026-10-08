@@ -1,4 +1,5 @@
-﻿using System.Collections.Generic;
+﻿using System;
+using System.Collections.Generic;
 using System.Threading.Tasks;
 using MountainStates.MSSA.Module.MSSA_Dogs.Models;
 
@@ -30,6 +31,8 @@ namespace MountainStates.MSSA.Module.MSSA_Dogs.Manager
         Task DeleteFuturityParticipationAsync(int participationId, int moduleId);
         Task<MSSA_DogFuturityParticipation> SaveFuturityDocumentAsync(int participationId, string fileName, string filePath, int moduleId);
         Task<MSSA_DogFuturityParticipation> MarkFuturityPaymentReceivedAsync(int participationId, string stripePaymentIntentId, decimal amount, int moduleId);
+        Task<MSSA_DogFuturityParticipation> MarkFuturityPaymentManualAsync(int participationId, decimal amount, string paymentMethod, DateTime dateReceived, int moduleId);
+        Task<MSSA_DogFuturityParticipation> MarkFuturityPaymentFailedAsync(int participationId, int moduleId);
         Task<string> CreateFuturityCheckoutSessionAsync(int participationId, string successUrl, string cancelUrl, int moduleId);
 
         // Entries

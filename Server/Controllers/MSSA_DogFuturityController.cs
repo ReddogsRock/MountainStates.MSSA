@@ -136,6 +136,66 @@ namespace MountainStates.MSSA.Module.MSSA_Dogs.Controllers
             }
         }
 
+        // PUT: api/MSSA_DogFuturity/5/mark-paid?moduleid=x
+        // Admin recording an offline payment (check/cash/etc.) directly - the other way
+        // a participation reaches Paid, alongside the Stripe webhook.
+        [HttpPut("{id}/mark-paid")]
+        [Authorize(Policy = PolicyNames.EditModule)]
+        public async Task<MSSA_DogFuturityParticipation> MarkPaid(int id, [FromBody] MarkFuturityPaymentManualDto dto, int moduleId)
+        {
+            try
+            {
+                if (!IsAuthorizedForRole(MSSARoles.Admin))
+                {
+                    _logger.Log(LogLevel.Error, this, LogFunction.Security, "Unauthorized futurity manual mark-paid attempt");
+                    HttpContext.Response.StatusCode = (int)System.Net.HttpStatusCode.Forbidden;
+                    return null;
+                }
+
+                if (dto == null || dto.ParticipationId != id || dto.Amount <= 0 || string.IsNullOrEmpty(dto.PaymentMethod))
+                {
+                    HttpContext.Response.StatusCode = (int)System.Net.HttpStatusCode.BadRequest;
+                    return null;
+                }
+
+                var updated = await _manager.MarkFuturityPaymentManualAsync(id, dto.Amount, dto.PaymentMethod, dto.DateReceived, moduleId);
+                _logger.Log(LogLevel.Information, this, LogFunction.Update, "Futurity participation {ParticipationId} marked Paid manually ({PaymentMethod})", id, dto.PaymentMethod);
+                return updated;
+            }
+            catch (System.Exception ex)
+            {
+                _logger.Log(LogLevel.Error, this, LogFunction.Update, ex, "Error marking futurity participation {ParticipationId} paid manually", id);
+                throw;
+            }
+        }
+
+        // PUT: api/MSSA_DogFuturity/5/mark-failed?moduleid=x
+        // Admin flagging a Stripe attempt that didn't go through, so the handler can
+        // retry via "Pay Now" on the dog's Detail page instead of staff chasing it down.
+        [HttpPut("{id}/mark-failed")]
+        [Authorize(Policy = PolicyNames.EditModule)]
+        public async Task<MSSA_DogFuturityParticipation> MarkFailed(int id, int moduleId)
+        {
+            try
+            {
+                if (!IsAuthorizedForRole(MSSARoles.Admin))
+                {
+                    _logger.Log(LogLevel.Error, this, LogFunction.Security, "Unauthorized futurity mark-failed attempt");
+                    HttpContext.Response.StatusCode = (int)System.Net.HttpStatusCode.Forbidden;
+                    return null;
+                }
+
+                var updated = await _manager.MarkFuturityPaymentFailedAsync(id, moduleId);
+                _logger.Log(LogLevel.Information, this, LogFunction.Update, "Futurity participation {ParticipationId} marked Failed", id);
+                return updated;
+            }
+            catch (System.Exception ex)
+            {
+                _logger.Log(LogLevel.Error, this, LogFunction.Update, ex, "Error marking futurity participation {ParticipationId} failed", id);
+                throw;
+            }
+        }
+
         // DELETE: api/MSSA_DogFuturity/5?moduleid=x
         [HttpDelete("{id}")]
         [Authorize(Policy = PolicyNames.EditModule)]

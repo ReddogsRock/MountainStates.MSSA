@@ -95,6 +95,10 @@
                                 {
                                     @m.DateReceived.Value.ToString("MMM dd, yyyy")
                                 }
+                                else if (m.Status == "Failed")
+                                {
+                                    <span class="badge bg-danger">Failed - Retry Needed</span>
+                                }
                                 else
                                 {
                                     <span class="badge bg-warning text-dark">Pending</span>
@@ -103,8 +107,11 @@
                             <td>
                                 @if (!m.DateReceived.HasValue)
                                 {
-                                    <button type="button" class="btn btn-sm btn-success" @onclick="() => ShowMarkPaid(m)">
+                                    <button type="button" class="btn btn-sm btn-success me-1" @onclick="() => ShowMarkPaid(m)">
                                         Mark Paid
+                                    </button>
+                                    <button type="button" class="btn btn-sm btn-outline-danger" @onclick="() => MarkFailed(m)">
+                                        Mark Failed
                                     </button>
                                 }
                             </td>
@@ -230,10 +237,12 @@
             errorMessage = "";
 
             // Only Amount/PaidBy/DateReceived change - everything else on the
-            // membership (Type, Years) is carried through unchanged.
+            // membership (Type, Years) is carried through unchanged. Status is cleared
+            // in case this membership was previously flagged Failed.
             markPaidMembership.Amount = markPaidAmount;
             markPaidMembership.PaidBy = markPaidPaidBy;
             markPaidMembership.DateReceived = markPaidDateReceived;
+            markPaidMembership.Status = null;
 
             await HandlerService.UpdateMembershipAsync(markPaidMembership, ModuleState.ModuleId);
 
@@ -245,6 +254,21 @@
         {
             await logger.LogError(ex, "Error marking membership paid");
             errorMessage = "Error saving. Please try again.";
+        }
+    }
+
+    private async Task MarkFailed(MSSA_Membership m)
+    {
+        try
+        {
+            await HandlerService.MarkMembershipPaymentFailedAsync(m.MembershipId, ModuleState.ModuleId);
+            await LoadMemberships();
+            AddModuleMessage("Membership marked as Failed - they can retry payment from their Detail page", MessageType.Success);
+        }
+        catch (Exception ex)
+        {
+            await logger.LogError(ex, "Error marking membership failed");
+            AddModuleMessage("Error marking as failed. Please try again.", MessageType.Error);
         }
     }
 

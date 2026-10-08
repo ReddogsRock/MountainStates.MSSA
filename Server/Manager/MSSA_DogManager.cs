@@ -1,4 +1,5 @@
-﻿using System.Collections.Generic;
+﻿using System;
+using System.Collections.Generic;
 using System.Threading.Tasks;
 using Oqtane.Modules;
 using MountainStates.MSSA.Module.MSSA_Dogs.Repository;
@@ -105,6 +106,16 @@ namespace MountainStates.MSSA.Module.MSSA_Dogs.Manager
         public async Task<MSSA_DogFuturityParticipation> MarkFuturityPaymentReceivedAsync(int participationId, string stripePaymentIntentId, decimal amount, int moduleId)
         {
             return await _repository.MarkFuturityPaymentReceivedAsync(participationId, stripePaymentIntentId, amount);
+        }
+
+        public async Task<MSSA_DogFuturityParticipation> MarkFuturityPaymentManualAsync(int participationId, decimal amount, string paymentMethod, DateTime dateReceived, int moduleId)
+        {
+            return await _repository.MarkFuturityPaymentManualAsync(participationId, amount, paymentMethod, dateReceived);
+        }
+
+        public async Task<MSSA_DogFuturityParticipation> MarkFuturityPaymentFailedAsync(int participationId, int moduleId)
+        {
+            return await _repository.MarkFuturityPaymentFailedAsync(participationId);
         }
 
         public async Task<string> CreateFuturityCheckoutSessionAsync(int participationId, string successUrl, string cancelUrl, int moduleId)

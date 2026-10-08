@@ -390,6 +390,52 @@ namespace MountainStates.MSSA.Module.MSSA_Dogs.Repository
             return participation;
         }
 
+        // Admin manually recording an offline payment (check/cash/etc.) - the other way
+        // a participation reaches Paid, alongside the Stripe webhook above.
+        public async Task<MSSA_DogFuturityParticipation> MarkFuturityPaymentManualAsync(
+            int participationId, decimal amount, string paymentMethod, DateTime dateReceived)
+        {
+            using var db = await _dbContextFactory.CreateDbContextAsync();
+
+            var participation = await db.MSSA_DogFuturityParticipation.FindAsync(participationId);
+            if (participation == null)
+            {
+                return null;
+            }
+
+            participation.Status = FuturityPaymentStatus.Paid;
+            participation.PaymentMethod = paymentMethod;
+            participation.Amount = amount;
+            participation.DateReceived = dateReceived;
+            participation.ModifiedDate = DateTime.UtcNow;
+
+            await db.SaveChangesAsync();
+
+            return participation;
+        }
+
+        // Admin flagging a Stripe attempt that didn't go through, so staff don't have to
+        // chase it down in the Stripe dashboard - the handler sees this on the dog's
+        // Detail page and can retry via "Pay Now", which fires a fresh checkout session
+        // for this same participation.
+        public async Task<MSSA_DogFuturityParticipation> MarkFuturityPaymentFailedAsync(int participationId)
+        {
+            using var db = await _dbContextFactory.CreateDbContextAsync();
+
+            var participation = await db.MSSA_DogFuturityParticipation.FindAsync(participationId);
+            if (participation == null)
+            {
+                return null;
+            }
+
+            participation.Status = FuturityPaymentStatus.Failed;
+            participation.ModifiedDate = DateTime.UtcNow;
+
+            await db.SaveChangesAsync();
+
+            return participation;
+        }
+
         public async Task DeleteFuturityParticipationAsync(int participationId)
         {
             using var db = await _dbContextFactory.CreateDbContextAsync();

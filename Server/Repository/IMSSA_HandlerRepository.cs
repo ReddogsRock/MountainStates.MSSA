@@ -30,6 +30,7 @@ namespace MountainStates.MSSA.Module.MSSA_Handlers.Repository
         Task<List<MembershipMemberInfo>> AddMemberToMembershipAsync(int membershipId, int handlerId);
         Task<List<MembershipMemberInfo>> RemoveMemberFromMembershipAsync(int membershipId, int handlerId);
         Task<MSSA_Membership> MarkMembershipPaymentReceivedAsync(int membershipId, string stripePaymentIntentId, decimal amount);
+        Task<MSSA_Membership> MarkMembershipPaymentFailedAsync(int membershipId);
         Task<List<MSSA_Membership>> SearchMembershipsAsync(string filter, string searchTerm);
     }
 }

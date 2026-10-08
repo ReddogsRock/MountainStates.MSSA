@@ -190,6 +190,7 @@ else
                                 <th>Year</th>
                                 <th>Documentation</th>
                                 <th>Payment</th>
+                                <th></th>
                             </tr>
                         </thead>
                         <tbody>
@@ -212,15 +213,32 @@ else
                                         {
                                             <span class="badge bg-success">Paid</span>
                                         }
+                                        else if (participation.Status == FuturityPaymentStatus.Failed)
+                                        {
+                                            <span class="badge bg-danger">Payment Failed</span>
+                                        }
                                         else
                                         {
                                             <span class="badge bg-warning text-dark">Pending Payment</span>
+                                        }
+                                    </td>
+                                    <td>
+                                        @if (participation.Status != FuturityPaymentStatus.Paid)
+                                        {
+                                            <button type="button" class="btn btn-sm btn-primary" disabled="@retryingPaymentId.HasValue"
+                                                    @onclick="() => RetryFuturityPayment(participation)">
+                                                @(retryingPaymentId == participation.ParticipationId ? "Redirecting..." : "Pay Now")
+                                            </button>
                                         }
                                     </td>
                                 </tr>
                             }
                         </tbody>
                     </table>
+                    @if (!string.IsNullOrEmpty(futurityPaymentError))
+                    {
+                        <div class="alert alert-danger mt-2 mb-0">@futurityPaymentError</div>
+                    }
                 }
             </div>
         </div>
@@ -409,6 +427,9 @@ else
     private string ownershipTransferError = "";
     private string ownershipTransferMessage = "";
 
+    private int? retryingPaymentId;
+    private string futurityPaymentError = "";
+
     protected override async Task OnInitializedAsync()
     {
         try
@@ -576,5 +597,32 @@ else
     {
         if (sortColumn != column) return "";
         return sortAscending ? "▲" : "▼";
+    }
+
+    private async Task RetryFuturityPayment(MSSA_DogFuturityParticipation participation)
+    {
+        try
+        {
+            futurityPaymentError = "";
+            retryingPaymentId = participation.ParticipationId;
+
+            var successUrl = NavigationManager.ToAbsoluteUri(EditUrl("Detail", $"id={dog.DogId}&futurity=success")).ToString();
+            var cancelUrl = NavigationManager.ToAbsoluteUri(EditUrl("Detail", $"id={dog.DogId}&futurity=cancelled")).ToString();
+
+            var checkout = await DogService.CreateFuturityCheckoutSessionAsync(new CreateFuturityCheckoutDto
+            {
+                ParticipationId = participation.ParticipationId,
+                SuccessUrl = successUrl,
+                CancelUrl = cancelUrl
+            }, ModuleState.ModuleId);
+
+            await JSRuntime.InvokeVoidAsync("window.location.assign", checkout.CheckoutUrl);
+        }
+        catch (Exception ex)
+        {
+            await logger.LogError(ex, "Error starting futurity payment retry for participation {ParticipationId}", participation.ParticipationId);
+            futurityPaymentError = "Error starting payment. Please try again.";
+            retryingPaymentId = null;
+        }
     }
 }
