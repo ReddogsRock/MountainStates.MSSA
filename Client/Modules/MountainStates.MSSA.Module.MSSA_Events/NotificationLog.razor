@@ -1,0 +1,116 @@
+@using MountainStates.MSSA.Module.MSSA_Events.Services
+@using Oqtane.Models
+@using Oqtane.Modules.Controls
+
+@namespace MountainStates.MSSA.Module.MSSA_Events
+@inherits ModuleBase
+@inject IMSSA_NotificationLogService NotificationLogService
+
+<div class="container-fluid">
+    <div class="row mb-3">
+        <div class="col">
+            <h2>Notification Log</h2>
+            <p class="text-muted mb-0">
+                Admin email notifications this app has sent - event approvals needed,
+                Futurity nominations, results submitted for approval, and sanctioning fee
+                payments. Delivery is handled by Oqtane's background Notification Job
+                (runs every minute), so a brand-new entry may briefly show "Pending".
+            </p>
+        </div>
+        <div class="col-auto">
+            <ActionLink Action="Index" Text="Back to Events" Class="btn btn-secondary" />
+        </div>
+    </div>
+
+    @if (!UserSecurity.IsAuthorized(PageState.User, RoleNames.Admin))
+    {
+        <div class="alert alert-warning">This report is only available to Administrators.</div>
+    }
+    else if (!string.IsNullOrEmpty(errorMessage))
+    {
+        <div class="alert alert-danger">@errorMessage</div>
+    }
+    else if (notifications == null)
+    {
+        <p><em>Loading...</em></p>
+    }
+    else if (!notifications.Any())
+    {
+        <p class="text-muted"><em>No notifications sent yet.</em></p>
+    }
+    else
+    {
+        <p class="text-muted">Showing the most recent @notifications.Count.</p>
+        <div class="table-responsive">
+            <table class="table table-sm table-striped align-middle">
+                <thead>
+                    <tr>
+                        <th>Sent</th>
+                        <th>Subject</th>
+                        <th>To</th>
+                        <th>Status</th>
+                    </tr>
+                </thead>
+                <tbody>
+                    @foreach (var n in notifications)
+                    {
+                        <tr>
+                            <td class="text-nowrap">@n.CreatedOn.ToString("MMM dd, yyyy h:mm tt")</td>
+                            <td>
+                                @DisplaySubject(n.Subject)
+                                @if (!string.IsNullOrEmpty(n.Body))
+                                {
+                                    <div class="text-muted small">@n.Body</div>
+                                }
+                            </td>
+                            <td>@n.ToEmail</td>
+                            <td>
+                                @if (n.IsDelivered)
+                                {
+                                    <span class="badge bg-success">
+                                        Delivered @(n.DeliveredOn.HasValue ? n.DeliveredOn.Value.ToString("MMM dd, h:mm tt") : "")
+                                    </span>
+                                }
+                                else
+                                {
+                                    <span class="badge bg-warning text-dark">Pending</span>
+                                }
+                            </td>
+                        </tr>
+                    }
+                </tbody>
+            </table>
+        </div>
+    }
+</div>
+
+@code {
+    private List<Notification> notifications;
+    private string errorMessage = "";
+
+    protected override async Task OnInitializedAsync()
+    {
+        if (!UserSecurity.IsAuthorized(PageState.User, RoleNames.Admin))
+        {
+            return;
+        }
+
+        try
+        {
+            notifications = await NotificationLogService.GetRecentNotificationsAsync(200, ModuleState.ModuleId);
+        }
+        catch (Exception ex)
+        {
+            await logger.LogError(ex, "Error loading notification log");
+            errorMessage = "Error loading the notification log. Please try again.";
+        }
+    }
+
+    // Subjects are stored with a "[MSSA] " tag so the server can tell them apart from
+    // Oqtane's own system notifications sharing the same table - not useful to show here.
+    private string DisplaySubject(string subject)
+    {
+        const string tag = "[MSSA] ";
+        return subject != null && subject.StartsWith(tag) ? subject.Substring(tag.Length) : subject;
+    }
+}
