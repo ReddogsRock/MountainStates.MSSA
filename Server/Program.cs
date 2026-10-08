@@ -64,10 +64,11 @@ namespace MountainStates.MSSA.Server
                         var dogManager = context.RequestServices.GetRequiredService<IMSSA_DogManager>();
                         var handlerManager = context.RequestServices.GetRequiredService<IMSSA_HandlerManager>();
                         var eventManager = context.RequestServices.GetRequiredService<IMSSA_EventManager>();
+                        var adminNotificationService = context.RequestServices.GetRequiredService<IMSSA_AdminNotificationService>();
                         var loggerFactory = context.RequestServices.GetRequiredService<ILoggerFactory>();
                         var logger = loggerFactory.CreateLogger("StripeWebhook");
 
-                        await StripeWebhookHandler.HandleAsync(context, stripeService, dogManager, handlerManager, eventManager, logger);
+                        await StripeWebhookHandler.HandleAsync(context, stripeService, dogManager, handlerManager, eventManager, adminNotificationService, logger);
                     }
                     catch (Exception ex)
                     {

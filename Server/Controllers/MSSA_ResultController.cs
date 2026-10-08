@@ -11,6 +11,7 @@ using System.Threading.Tasks;
 using MountainStates.MSSA.Module.MSSA_Handlers.Enums;
 using MountainStates.MSSA.Module.MSSA_Results.Manager;
 using MountainStates.MSSA.Module.MSSA_Results.Models;
+using MountainStates.MSSA.Server.Startup;
 
 namespace MountainStates.MSSA.Module.MSSA_Results.Controllers
 {
@@ -18,11 +19,13 @@ namespace MountainStates.MSSA.Module.MSSA_Results.Controllers
     public class MSSA_ResultController : ModuleControllerBase
     {
         private readonly IMSSA_ResultManager _manager;
+        private readonly IMSSA_AdminNotificationService _adminNotificationService;
 
-        public MSSA_ResultController(IMSSA_ResultManager manager, ILogManager logger, IHttpContextAccessor httpContextAccessor)
+        public MSSA_ResultController(IMSSA_ResultManager manager, IMSSA_AdminNotificationService adminNotificationService, ILogManager logger, IHttpContextAccessor httpContextAccessor)
             : base(logger, httpContextAccessor)
         {
             _manager = manager;
+            _adminNotificationService = adminNotificationService;
         }
 
         // GET api/MSSA_Result/events?moduleid=x
@@ -173,6 +176,8 @@ namespace MountainStates.MSSA.Module.MSSA_Results.Controllers
                 if (result.Success)
                 {
                     _logger.Log(LogLevel.Information, this, LogFunction.Update, "Event {EventId} submitted for approval", eventId);
+                    _adminNotificationService.NotifyAdmins(HttpContext.GetAlias().SiteId, $"Results Submitted For Approval: {result.EventName}",
+                        $"{result.EventName} results were submitted and are awaiting Admin approval.");
                 }
                 return result;
             }

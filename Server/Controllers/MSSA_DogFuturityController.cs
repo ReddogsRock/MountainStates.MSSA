@@ -4,6 +4,7 @@ using Microsoft.AspNetCore.Http;
 using Microsoft.AspNetCore.Mvc;
 using Oqtane.Controllers;
 using Oqtane.Enums;
+using Oqtane.Extensions;
 using Oqtane.Infrastructure;
 using Oqtane.Shared;
 using System;
@@ -14,6 +15,7 @@ using System.Threading.Tasks;
 using MountainStates.MSSA.Module.MSSA_Dogs.Manager;
 using MountainStates.MSSA.Module.MSSA_Dogs.Models;
 using MountainStates.MSSA.Module.MSSA_Handlers.Enums;
+using MountainStates.MSSA.Server.Startup;
 
 namespace MountainStates.MSSA.Module.MSSA_Dogs.Controllers
 {
@@ -27,12 +29,14 @@ namespace MountainStates.MSSA.Module.MSSA_Dogs.Controllers
 
         private readonly IMSSA_DogManager _manager;
         private readonly IWebHostEnvironment _hostEnvironment;
+        private readonly IMSSA_AdminNotificationService _adminNotificationService;
 
-        public MSSA_DogFuturityController(IMSSA_DogManager manager, IWebHostEnvironment hostEnvironment, ILogManager logger, IHttpContextAccessor httpContextAccessor)
+        public MSSA_DogFuturityController(IMSSA_DogManager manager, IWebHostEnvironment hostEnvironment, IMSSA_AdminNotificationService adminNotificationService, ILogManager logger, IHttpContextAccessor httpContextAccessor)
             : base(logger, httpContextAccessor)
         {
             _manager = manager;
             _hostEnvironment = hostEnvironment;
+            _adminNotificationService = adminNotificationService;
         }
 
         // GET: api/MSSA_DogFuturity/roster?year=2027&moduleid=x (year optional - omit for every year)
@@ -84,6 +88,11 @@ namespace MountainStates.MSSA.Module.MSSA_Dogs.Controllers
                 {
                     participation = await _manager.AddFuturityParticipationAsync(participation, moduleId);
                     _logger.Log(LogLevel.Information, this, LogFunction.Create, "Futurity participation added {Participation}", participation);
+
+                    var dog = await _manager.GetDogAsync(participation.DogId, moduleId);
+                    _adminNotificationService.NotifyAdmins(HttpContext.GetAlias().SiteId, $"New Futurity Nomination: {dog?.Name}",
+                        $"{dog?.Name} (Dog ID: {participation.DogId}) was nominated for Futurity {participation.Year}.");
+
                     return participation;
                 }
                 else

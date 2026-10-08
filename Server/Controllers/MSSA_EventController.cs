@@ -20,6 +20,7 @@ using MountainStates.MSSA.Module.MSSA_Results.Enums;
 using MountainStates.MSSA.Module.MSSA_Results.Manager;
 using System.Linq;
 using Oqtane.Repository;
+using MountainStates.MSSA.Server.Startup;
 
 namespace MountainStates.MSSA.Module.MSSA_Events.Controllers
 {
@@ -30,14 +31,16 @@ namespace MountainStates.MSSA.Module.MSSA_Events.Controllers
         private readonly IWebHostEnvironment _hostEnvironment;
         private readonly IMSSA_ResultManager _resultManager;
         private readonly IUserRoleRepository _userRoleRepository;
+        private readonly IMSSA_AdminNotificationService _adminNotificationService;
 
-        public MSSA_EventController(IMSSA_EventManager manager, IWebHostEnvironment hostEnvironment, IMSSA_ResultManager resultManager, IUserRoleRepository userRoleRepository, ILogManager logger, IHttpContextAccessor httpContextAccessor)
+        public MSSA_EventController(IMSSA_EventManager manager, IWebHostEnvironment hostEnvironment, IMSSA_ResultManager resultManager, IUserRoleRepository userRoleRepository, IMSSA_AdminNotificationService adminNotificationService, ILogManager logger, IHttpContextAccessor httpContextAccessor)
             : base(logger, httpContextAccessor)
         {
             _manager = manager;
             _hostEnvironment = hostEnvironment;
             _resultManager = resultManager;
             _userRoleRepository = userRoleRepository;
+            _adminNotificationService = adminNotificationService;
         }
 
         // GET: api/MSSA_Event?moduleid=x
@@ -406,6 +409,13 @@ namespace MountainStates.MSSA.Module.MSSA_Events.Controllers
                     SaveFlyerIfPresent(evt);
                     evt = await _manager.AddEventAsync(evt, moduleId);
                     _logger.Log(LogLevel.Information, this, LogFunction.Create, "Event added {Event}", evt);
+
+                    if (evt.ApprovalStatus == EventApprovalStatus.Pending)
+                    {
+                        _adminNotificationService.NotifyAdmins(HttpContext.GetAlias().SiteId, $"Event Pending Approval: {evt.EventName}",
+                            $"{evt.EventName} ({evt.EventIdentifier}) was submitted by a Trial Secretary and needs Admin approval before it's visible.");
+                    }
+
                     return evt;
                 }
                 else

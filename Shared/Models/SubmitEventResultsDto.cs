@@ -10,5 +10,6 @@ namespace MountainStates.MSSA.Module.MSSA_Results.Models
         public bool Success { get; set; }
         public string ResultsApprovalStatus { get; set; }
         public List<string> Reasons { get; set; } = new();
+        public string EventName { get; set; }
     }
 }

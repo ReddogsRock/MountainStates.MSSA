@@ -8,6 +8,7 @@ using Stripe.Checkout;
 using MountainStates.MSSA.Module.MSSA_Dogs.Manager;
 using MountainStates.MSSA.Module.MSSA_Handlers.Manager;
 using MountainStates.MSSA.Module.MSSA_Events.Manager;
+using MountainStates.MSSA.Server.Startup;
 
 namespace MountainStates.MSSA.Module.MSSA_Dogs.Startup
 {
@@ -21,7 +22,7 @@ namespace MountainStates.MSSA.Module.MSSA_Dogs.Startup
     // what the signature proves.
     public static class StripeWebhookHandler
     {
-        public static async Task HandleAsync(HttpContext context, IStripeService stripeService, IMSSA_DogManager dogManager, IMSSA_HandlerManager handlerManager, IMSSA_EventManager eventManager, ILogger logger)
+        public static async Task HandleAsync(HttpContext context, IStripeService stripeService, IMSSA_DogManager dogManager, IMSSA_HandlerManager handlerManager, IMSSA_EventManager eventManager, IMSSA_AdminNotificationService adminNotificationService, ILogger logger)
         {
             string json;
             using (var reader = new StreamReader(context.Request.Body, leaveOpen: true))
@@ -46,7 +47,7 @@ namespace MountainStates.MSSA.Module.MSSA_Dogs.Startup
                 if (stripeEvent.Type == "checkout.session.completed")
                 {
                     var session = stripeEvent.Data.Object as Session;
-                    await HandleCheckoutCompletedAsync(session, dogManager, handlerManager, eventManager, logger);
+                    await HandleCheckoutCompletedAsync(session, dogManager, handlerManager, eventManager, adminNotificationService, logger);
                 }
 
                 context.Response.StatusCode = StatusCodes.Status200OK;
@@ -59,7 +60,7 @@ namespace MountainStates.MSSA.Module.MSSA_Dogs.Startup
             }
         }
 
-        private static async Task HandleCheckoutCompletedAsync(Session session, IMSSA_DogManager dogManager, IMSSA_HandlerManager handlerManager, IMSSA_EventManager eventManager, ILogger logger)
+        private static async Task HandleCheckoutCompletedAsync(Session session, IMSSA_DogManager dogManager, IMSSA_HandlerManager handlerManager, IMSSA_EventManager eventManager, IMSSA_AdminNotificationService adminNotificationService, ILogger logger)
         {
             if (session?.Metadata == null || !session.Metadata.TryGetValue("Purpose", out var purpose))
             {
@@ -75,7 +76,7 @@ namespace MountainStates.MSSA.Module.MSSA_Dogs.Startup
                     await HandleMembershipPurchaseAsync(session, handlerManager, logger);
                     break;
                 case "SanctioningFee":
-                    await HandleSanctioningFeeAsync(session, eventManager, logger);
+                    await HandleSanctioningFeeAsync(session, eventManager, adminNotificationService, logger);
                     break;
             }
         }
@@ -126,7 +127,7 @@ namespace MountainStates.MSSA.Module.MSSA_Dogs.Startup
             }
         }
 
-        private static async Task HandleSanctioningFeeAsync(Session session, IMSSA_EventManager eventManager, ILogger logger)
+        private static async Task HandleSanctioningFeeAsync(Session session, IMSSA_EventManager eventManager, IMSSA_AdminNotificationService adminNotificationService, ILogger logger)
         {
             if (!session.Metadata.TryGetValue("EventId", out var eventIdText)
                 || !int.TryParse(eventIdText, out var eventId))
@@ -146,6 +147,13 @@ namespace MountainStates.MSSA.Module.MSSA_Dogs.Startup
             else
             {
                 logger.LogInformation("Event {EventId} sanctioning fee marked Paid via Stripe session {SessionId}", eventId, session.Id);
+
+                // This middleware runs before UseOqtane, so there's no resolved Alias to
+                // read a real SiteId from (same reason this uses a plain ILogger above,
+                // not ILogManager) - siteId 1 is hardcoded same as moduleId: 0 above,
+                // fine for this single-site install.
+                adminNotificationService.NotifyAdmins(1, $"Sanctioning Fee Paid: {updated.EventName}",
+                    $"{updated.EventName} paid a sanctioning fee of {amount:C}.");
             }
         }
     }

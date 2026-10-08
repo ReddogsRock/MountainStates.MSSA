@@ -496,7 +496,7 @@ namespace MountainStates.MSSA.Module.MSSA_Results.Repository
             evt.ModifiedDate = DateTime.UtcNow;
             await db.SaveChangesAsync();
 
-            return new SubmitEventResultsDto { Success = true, ResultsApprovalStatus = evt.ResultsApprovalStatus };
+            return new SubmitEventResultsDto { Success = true, ResultsApprovalStatus = evt.ResultsApprovalStatus, EventName = evt.EventName };
         }
 
         public async Task<SubmitEventResultsDto> ApproveEventAsync(int eventId, int userId)
