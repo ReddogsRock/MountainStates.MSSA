@@ -248,6 +248,19 @@ namespace MountainStates.MSSA.Module.MSSA_Entries.Repository
                          .FirstOrDefaultAsync();
         }
 
+        // Mirrors GetEventOwnerForTrialAsync above, but for a team member added via
+        // MSSA_EventTeamMembers instead of the event's own creator.
+        public async Task<bool> IsUserOnEventTeamForTrialAsync(int trialId, int userId)
+        {
+            using var db = await _dbContextFactory.CreateDbContextAsync();
+
+            return await (from t in db.MSSA_Trials
+                          join tm in db.MSSA_EventTeamMembers on t.EventId equals tm.EventId
+                          where t.TrialId == trialId && tm.UserId == userId
+                          select tm.EventTeamMemberId)
+                         .AnyAsync();
+        }
+
         // Builds a proposed run order for every entry in the trial (all classes at
         // once), NOT persisted - the caller reviews/edits this list and calls
         // SaveRunOrderAsync to actually commit it. Re-running this discards any

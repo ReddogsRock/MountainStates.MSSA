@@ -49,5 +49,11 @@ namespace MountainStates.MSSA.Module.MSSA_Events.Services
 
         // Users holding the Scorekeeper role, for assigning one to a Trial
         Task<List<UserOptionDto>> GetScorekeepersAsync(int siteId, int moduleId);
+
+        // Team members - other Trial Secretaries sharing management access to an Event
+        Task<List<UserOptionDto>> GetTrialSecretariesAsync(int siteId, int moduleId);
+        Task<List<UserOptionDto>> GetEventTeamAsync(int eventId, int siteId, int moduleId);
+        Task AddTeamMemberAsync(int eventId, int userId, int moduleId);
+        Task RemoveTeamMemberAsync(int eventId, int userId, int moduleId);
     }
 }

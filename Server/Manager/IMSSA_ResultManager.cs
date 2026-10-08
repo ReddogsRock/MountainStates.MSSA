@@ -11,6 +11,8 @@ namespace MountainStates.MSSA.Module.MSSA_Results.Manager
 
         Task<int?> GetEventOwnerForTrialAsync(int trialId, int moduleId);
         Task<int?> GetEventOwnerAsync(int eventId, int moduleId);
+        Task<bool> IsUserOnEventTeamForTrialAsync(int trialId, int userId, int moduleId);
+        Task<bool> IsUserOnEventTeamAsync(int eventId, int userId, int moduleId);
         Task<int?> GetTrialScorekeeperUserIdAsync(int trialId, int moduleId);
         Task<int> GetScoredRunCountAsync(int eventId, int moduleId);
 

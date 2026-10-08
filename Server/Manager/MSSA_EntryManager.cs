@@ -51,6 +51,11 @@ namespace MountainStates.MSSA.Module.MSSA_Entries.Manager
             return await _repository.GetEventOwnerForTrialAsync(trialId);
         }
 
+        public async Task<bool> IsUserOnEventTeamForTrialAsync(int trialId, int userId, int moduleId)
+        {
+            return await _repository.IsUserOnEventTeamForTrialAsync(trialId, userId);
+        }
+
         public async Task<List<RunOrderEntry>> GetProposedRunOrderAsync(int trialId, int moduleId)
         {
             return await _repository.GetProposedRunOrderAsync(trialId);

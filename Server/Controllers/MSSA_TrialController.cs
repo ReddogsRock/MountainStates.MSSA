@@ -187,7 +187,17 @@ namespace MountainStates.MSSA.Module.MSSA_Events.Controllers
             }
 
             var evt = await _manager.GetEventAsync(eventId, moduleId);
-            return evt != null && evt.CreatedByUserId.HasValue && evt.CreatedByUserId.Value == User.UserId();
+            if (evt == null)
+            {
+                return false;
+            }
+
+            if (evt.CreatedByUserId.HasValue && evt.CreatedByUserId.Value == User.UserId())
+            {
+                return true;
+            }
+
+            return await _manager.IsUserOnEventTeamAsync(eventId, User.UserId(), moduleId);
         }
     }
 }

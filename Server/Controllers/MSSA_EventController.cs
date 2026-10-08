@@ -19,6 +19,7 @@ using MountainStates.MSSA.Module.MSSA_Entries.Models;
 using MountainStates.MSSA.Module.MSSA_Results.Enums;
 using MountainStates.MSSA.Module.MSSA_Results.Manager;
 using System.Linq;
+using Oqtane.Repository;
 
 namespace MountainStates.MSSA.Module.MSSA_Events.Controllers
 {
@@ -28,13 +29,15 @@ namespace MountainStates.MSSA.Module.MSSA_Events.Controllers
         private readonly IMSSA_EventManager _manager;
         private readonly IWebHostEnvironment _hostEnvironment;
         private readonly IMSSA_ResultManager _resultManager;
+        private readonly IUserRoleRepository _userRoleRepository;
 
-        public MSSA_EventController(IMSSA_EventManager manager, IWebHostEnvironment hostEnvironment, IMSSA_ResultManager resultManager, ILogManager logger, IHttpContextAccessor httpContextAccessor)
+        public MSSA_EventController(IMSSA_EventManager manager, IWebHostEnvironment hostEnvironment, IMSSA_ResultManager resultManager, IUserRoleRepository userRoleRepository, ILogManager logger, IHttpContextAccessor httpContextAccessor)
             : base(logger, httpContextAccessor)
         {
             _manager = manager;
             _hostEnvironment = hostEnvironment;
             _resultManager = resultManager;
+            _userRoleRepository = userRoleRepository;
         }
 
         // GET: api/MSSA_Event?moduleid=x
@@ -45,7 +48,7 @@ namespace MountainStates.MSSA.Module.MSSA_Events.Controllers
             try
             {
                 var events = await _manager.GetEventsAsync(moduleId);
-                return events.Where(IsEventVisible);
+                return await FilterVisibleEventsAsync(events, moduleId);
             }
             catch (System.Exception ex)
             {
@@ -62,7 +65,7 @@ namespace MountainStates.MSSA.Module.MSSA_Events.Controllers
             try
             {
                 var evt = await _manager.GetEventAsync(id, moduleId);
-                return IsEventVisible(evt) ? evt : null;
+                return await IsEventVisibleAsync(evt, moduleId) ? evt : null;
             }
             catch (System.Exception ex)
             {
@@ -109,7 +112,7 @@ namespace MountainStates.MSSA.Module.MSSA_Events.Controllers
                     novice,
                     junior,
                     moduleId);
-                return events.Where(IsEventVisible);
+                return await FilterVisibleEventsAsync(events, moduleId);
             }
             catch (System.Exception ex)
             {
@@ -135,7 +138,7 @@ namespace MountainStates.MSSA.Module.MSSA_Events.Controllers
                 var first = entries.FirstOrDefault();
                 if (first != null
                     && first.EventResultsApprovalStatus == EventResultsStatus.PendingApproval
-                    && !IsAuthorizedForEvent(first.EventCreatedByUserId))
+                    && !await IsAuthorizedForEventAsync(first.EventCreatedByUserId, trialId, moduleId))
                 {
                     return new List<EntryListItem>();
                 }
@@ -175,7 +178,7 @@ namespace MountainStates.MSSA.Module.MSSA_Events.Controllers
                 // Admin can pay for any event; a Trial Secretary only the ones they
                 // created - same rule as editing the event, so self-service pay is
                 // limited to the person who'd know the run counts are right.
-                if (!IsAuthorizedForEvent(evt))
+                if (!await IsAuthorizedForEventAsync(evt, moduleId))
                 {
                     return Forbid();
                 }
@@ -200,16 +203,128 @@ namespace MountainStates.MSSA.Module.MSSA_Events.Controllers
             }
         }
 
-        private bool IsAuthorizedForEvent(int? eventOwnerUserId)
+        // For call sites that only have the entry/trial-level EventCreatedByUserId
+        // projection on hand (not a full MSSA_Event), rather than the owner id - a
+        // team member passes via trialId too.
+        private async Task<bool> IsAuthorizedForEventAsync(int? eventOwnerUserId, int trialId, int moduleId)
         {
             if (User.IsInRole(RoleNames.Admin))
             {
                 return true;
             }
 
-            return eventOwnerUserId.HasValue
-                && User.IsInRole(MSSARoles.TrialSecretary)
-                && eventOwnerUserId.Value == User.UserId();
+            if (!User.IsInRole(MSSARoles.TrialSecretary))
+            {
+                return false;
+            }
+
+            if (eventOwnerUserId.HasValue && eventOwnerUserId.Value == User.UserId())
+            {
+                return true;
+            }
+
+            return await _manager.IsUserOnEventTeamForTrialAsync(trialId, User.UserId(), moduleId);
+        }
+
+        // GET: api/MSSA_Event/trialsecretaries?siteId=x&moduleid=x
+        // Users holding the Trial Secretary role, for the Event edit form's team
+        // picker - mirrors MSSA_TrialController.GetScorekeepers.
+        [HttpGet("trialsecretaries")]
+        [Authorize(Policy = PolicyNames.ViewModule)]
+        public Task<IEnumerable<UserOptionDto>> GetTrialSecretaries(int siteId, int moduleId)
+        {
+            try
+            {
+                var userRoles = _userRoleRepository.GetUserRoles(siteId);
+                var result = userRoles
+                    .Where(ur => ur.Role.Name == MSSARoles.TrialSecretary)
+                    .Select(ur => new UserOptionDto { UserId = ur.UserId, DisplayName = ur.User.DisplayName })
+                    .OrderBy(u => u.DisplayName)
+                    .ToList();
+
+                return Task.FromResult<IEnumerable<UserOptionDto>>(result);
+            }
+            catch (System.Exception ex)
+            {
+                _logger.Log(LogLevel.Error, this, LogFunction.Read, ex, "Error getting trial secretaries");
+                throw;
+            }
+        }
+
+        // GET: api/MSSA_Event/5/team?siteId=x&moduleid=x
+        [HttpGet("{eventId}/team")]
+        [Authorize(Policy = PolicyNames.ViewModule)]
+        public async Task<List<UserOptionDto>> GetEventTeam(int eventId, int siteId, int moduleId)
+        {
+            try
+            {
+                var memberIds = await _manager.GetEventTeamMemberUserIdsAsync(eventId, moduleId);
+                var userRoles = _userRoleRepository.GetUserRoles(siteId);
+
+                return userRoles
+                    .Where(ur => memberIds.Contains(ur.UserId))
+                    .Select(ur => new UserOptionDto { UserId = ur.UserId, DisplayName = ur.User.DisplayName })
+                    .GroupBy(u => u.UserId).Select(g => g.First()) // a user can hold more than one role
+                    .OrderBy(u => u.DisplayName)
+                    .ToList();
+            }
+            catch (System.Exception ex)
+            {
+                _logger.Log(LogLevel.Error, this, LogFunction.Read, ex, "Error getting team for event {EventId}", eventId);
+                throw;
+            }
+        }
+
+        // POST: api/MSSA_Event/5/team/7?moduleid=x
+        // Only the Event's creator (or an Admin) may add teammates - not the
+        // teammates themselves, even once added.
+        [HttpPost("{eventId}/team/{userId}")]
+        [Authorize(Policy = PolicyNames.EditModule)]
+        public async Task<IActionResult> AddTeamMember(int eventId, int userId, int moduleId)
+        {
+            try
+            {
+                var existing = await _manager.GetEventAsync(eventId, moduleId);
+                if (!IsCreatorOrAdmin(existing))
+                {
+                    _logger.Log(LogLevel.Error, this, LogFunction.Security, "Unauthorized team member add attempt for event {EventId}", eventId);
+                    return Forbid();
+                }
+
+                await _manager.AddEventTeamMemberAsync(eventId, userId, moduleId);
+                _logger.Log(LogLevel.Information, this, LogFunction.Update, "User {UserId} added to team for event {EventId}", userId, eventId);
+                return Ok();
+            }
+            catch (System.Exception ex)
+            {
+                _logger.Log(LogLevel.Error, this, LogFunction.Update, ex, "Error adding team member {UserId} to event {EventId}", userId, eventId);
+                throw;
+            }
+        }
+
+        // DELETE: api/MSSA_Event/5/team/7?moduleid=x
+        [HttpDelete("{eventId}/team/{userId}")]
+        [Authorize(Policy = PolicyNames.EditModule)]
+        public async Task<IActionResult> RemoveTeamMember(int eventId, int userId, int moduleId)
+        {
+            try
+            {
+                var existing = await _manager.GetEventAsync(eventId, moduleId);
+                if (!IsCreatorOrAdmin(existing))
+                {
+                    _logger.Log(LogLevel.Error, this, LogFunction.Security, "Unauthorized team member remove attempt for event {EventId}", eventId);
+                    return Forbid();
+                }
+
+                await _manager.RemoveEventTeamMemberAsync(eventId, userId, moduleId);
+                _logger.Log(LogLevel.Information, this, LogFunction.Update, "User {UserId} removed from team for event {EventId}", userId, eventId);
+                return Ok();
+            }
+            catch (System.Exception ex)
+            {
+                _logger.Log(LogLevel.Error, this, LogFunction.Update, ex, "Error removing team member {UserId} from event {EventId}", userId, eventId);
+                throw;
+            }
         }
 
         // GET: api/MSSA_Event/5/offerings?moduleid=x
@@ -237,7 +352,7 @@ namespace MountainStates.MSSA.Module.MSSA_Events.Controllers
             try
             {
                 var existing = await _manager.GetEventAsync(eventId, moduleId);
-                if (!IsAuthorizedForEvent(existing))
+                if (!await IsAuthorizedForEventAsync(existing, moduleId))
                 {
                     _logger.Log(LogLevel.Error, this, LogFunction.Security, "Unauthorized offerings save attempt for event {EventId}", eventId);
                     HttpContext.Response.StatusCode = (int)System.Net.HttpStatusCode.Forbidden;
@@ -316,7 +431,7 @@ namespace MountainStates.MSSA.Module.MSSA_Events.Controllers
             {
                 var existing = await _manager.GetEventAsync(id, moduleId);
 
-                if (ModelState.IsValid && evt.EventId == id && existing != null && IsAuthorizedForEvent(existing))
+                if (ModelState.IsValid && evt.EventId == id && existing != null && await IsAuthorizedForEventAsync(existing, moduleId))
                 {
                     if (!IsValidFlyerUpload(evt))
                     {
@@ -403,7 +518,7 @@ namespace MountainStates.MSSA.Module.MSSA_Events.Controllers
             {
                 var existing = await _manager.GetEventAsync(id, moduleId);
 
-                if (IsAuthorizedForEvent(existing))
+                if (await IsAuthorizedForEventAsync(existing, moduleId))
                 {
                     await _manager.DeleteEventAsync(id, moduleId);
                     _logger.Log(LogLevel.Information, this, LogFunction.Delete, "Event deleted {EventId}", id);
@@ -502,9 +617,10 @@ namespace MountainStates.MSSA.Module.MSSA_Events.Controllers
             return User.IsInRole(role) || User.IsInRole(RoleNames.Admin);
         }
 
-        // Admins can edit/delete any event. Trial Secretaries only their own -
-        // ownership is always checked against the DB record, never the request payload.
-        private bool IsAuthorizedForEvent(MSSA_Event existing)
+        // Who can manage an event's team roster - the creator or an Admin only, not
+        // the teammates themselves (even once added). Narrower than
+        // IsAuthorizedForEventAsync below on purpose.
+        private bool IsCreatorOrAdmin(MSSA_Event existing)
         {
             if (User.IsInRole(RoleNames.Admin))
             {
@@ -517,13 +633,50 @@ namespace MountainStates.MSSA.Module.MSSA_Events.Controllers
                 && existing.CreatedByUserId.Value == User.UserId();
         }
 
-        // A Pending event is hidden from everyone except an Admin or the Trial
-        // Secretary who created it - same rule as who can edit it, so this just
-        // reuses IsAuthorizedForEvent. Approved events are visible to anyone with
-        // module view access, same as before this feature existed.
-        private bool IsEventVisible(MSSA_Event evt)
+        // Admins can edit/delete any event. Trial Secretaries their own, or an event
+        // they've been added to as a team member (see MSSA_EventTeamMembers) -
+        // ownership/team membership is always checked against the DB record, never
+        // the request payload.
+        private async Task<bool> IsAuthorizedForEventAsync(MSSA_Event existing, int moduleId)
         {
-            return evt != null && (evt.ApprovalStatus != EventApprovalStatus.Pending || IsAuthorizedForEvent(evt));
+            if (User.IsInRole(RoleNames.Admin))
+            {
+                return true;
+            }
+
+            if (existing == null || !User.IsInRole(MSSARoles.TrialSecretary))
+            {
+                return false;
+            }
+
+            if (existing.CreatedByUserId.HasValue && existing.CreatedByUserId.Value == User.UserId())
+            {
+                return true;
+            }
+
+            return await _manager.IsUserOnEventTeamAsync(existing.EventId, User.UserId(), moduleId);
+        }
+
+        // A Pending event is hidden from everyone except an Admin, the Trial
+        // Secretary who created it, or a team member - same rule as who can edit it,
+        // so this just reuses IsAuthorizedForEventAsync. Approved events are visible
+        // to anyone with module view access, same as before this feature existed.
+        private async Task<bool> IsEventVisibleAsync(MSSA_Event evt, int moduleId)
+        {
+            return evt != null && (evt.ApprovalStatus != EventApprovalStatus.Pending || await IsAuthorizedForEventAsync(evt, moduleId));
+        }
+
+        private async Task<IEnumerable<MSSA_Event>> FilterVisibleEventsAsync(IEnumerable<MSSA_Event> events, int moduleId)
+        {
+            var visible = new List<MSSA_Event>();
+            foreach (var evt in events)
+            {
+                if (await IsEventVisibleAsync(evt, moduleId))
+                {
+                    visible.Add(evt);
+                }
+            }
+            return visible;
         }
     }
 }

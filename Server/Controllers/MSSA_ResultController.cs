@@ -321,7 +321,12 @@ namespace MountainStates.MSSA.Module.MSSA_Results.Controllers
             }
 
             var ownerId = await _manager.GetEventOwnerForTrialAsync(trialId, moduleId);
-            return ownerId.HasValue && ownerId.Value == User.UserId();
+            if (ownerId.HasValue && ownerId.Value == User.UserId())
+            {
+                return true;
+            }
+
+            return await _manager.IsUserOnEventTeamForTrialAsync(trialId, User.UserId(), moduleId);
         }
 
         // Submitting an Event for approval is the event owner's call - it's about
@@ -340,7 +345,12 @@ namespace MountainStates.MSSA.Module.MSSA_Results.Controllers
             }
 
             var ownerId = await _manager.GetEventOwnerAsync(eventId, moduleId);
-            return ownerId.HasValue && ownerId.Value == User.UserId();
+            if (ownerId.HasValue && ownerId.Value == User.UserId())
+            {
+                return true;
+            }
+
+            return await _manager.IsUserOnEventTeamAsync(eventId, User.UserId(), moduleId);
         }
     }
 }

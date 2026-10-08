@@ -11,6 +11,13 @@ namespace MountainStates.MSSA.Module.MSSA_Events.Repository
         Task<IEnumerable<MSSA_Event>> GetEventsAsync(int moduleId);
         Task<MSSA_Event> MarkSanctionFeePaidAsync(int eventId, string stripePaymentIntentId, decimal amount);
         Task<MSSA_Event> GetEventAsync(int eventId);
+
+        // Team members
+        Task<List<int>> GetEventTeamMemberUserIdsAsync(int eventId);
+        Task AddEventTeamMemberAsync(int eventId, int userId);
+        Task RemoveEventTeamMemberAsync(int eventId, int userId);
+        Task<bool> IsUserOnEventTeamAsync(int eventId, int userId);
+        Task<bool> IsUserOnEventTeamForTrialAsync(int trialId, int userId);
         Task<MSSA_Event> AddEventAsync(MSSA_Event evt);
         Task<MSSA_Event> UpdateEventAsync(MSSA_Event evt);
         Task<MSSA_Event> ApproveEventAsync(int eventId, int approvedByUserId);

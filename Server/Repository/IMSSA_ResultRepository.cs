@@ -16,6 +16,8 @@ namespace MountainStates.MSSA.Module.MSSA_Results.Repository
         // the Results grid the same way MSSA_EntryRepository does for entries.
         Task<int?> GetEventOwnerForTrialAsync(int trialId);
         Task<int?> GetEventOwnerAsync(int eventId);
+        Task<bool> IsUserOnEventTeamForTrialAsync(int trialId, int userId);
+        Task<bool> IsUserOnEventTeamAsync(int eventId, int userId);
         Task<int?> GetTrialScorekeeperUserIdAsync(int trialId);
 
         // Count of scored runs (RunTime + a computed total score present) across every

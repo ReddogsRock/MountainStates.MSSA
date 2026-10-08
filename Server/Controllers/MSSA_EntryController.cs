@@ -111,7 +111,7 @@ namespace MountainStates.MSSA.Module.MSSA_Entries.Controllers
             {
                 var existing = await _manager.GetEntryAsync(id, moduleId);
 
-                if (ModelState.IsValid && entry.EntryId == id && existing != null && IsAuthorizedForEntry(existing))
+                if (ModelState.IsValid && entry.EntryId == id && existing != null && await IsAuthorizedForEntryAsync(existing, moduleId))
                 {
                     // Trial cannot be changed after creation (enforced client-side too) -
                     // pin it server-side so a tampered payload can't move an entry into a
@@ -144,7 +144,7 @@ namespace MountainStates.MSSA.Module.MSSA_Entries.Controllers
             {
                 var existing = await _manager.GetEntryAsync(id, moduleId);
 
-                if (IsAuthorizedForEntry(existing))
+                if (await IsAuthorizedForEntryAsync(existing, moduleId))
                 {
                     await _manager.DeleteEntryAsync(id, moduleId);
                     _logger.Log(LogLevel.Information, this, LogFunction.Delete, "Entry deleted {EntryId}", id);
@@ -254,7 +254,7 @@ namespace MountainStates.MSSA.Module.MSSA_Entries.Controllers
             foreach (var entryId in entryIds)
             {
                 var entry = await _manager.GetEntryAsync(entryId, moduleId);
-                if (!IsAuthorizedForEntry(entry))
+                if (!await IsAuthorizedForEntryAsync(entry, moduleId))
                 {
                     return false;
                 }
@@ -279,7 +279,12 @@ namespace MountainStates.MSSA.Module.MSSA_Entries.Controllers
             }
 
             var ownerId = await _manager.GetEventOwnerForTrialAsync(entry.TrialId, moduleId);
-            return ownerId.HasValue && ownerId.Value == User.UserId();
+            if (ownerId.HasValue && ownerId.Value == User.UserId())
+            {
+                return true;
+            }
+
+            return await _manager.IsUserOnEventTeamForTrialAsync(entry.TrialId, User.UserId(), moduleId);
         }
 
         // Only Admin, or a Trial Secretary on trials whose Event they own, can set run
@@ -302,7 +307,12 @@ namespace MountainStates.MSSA.Module.MSSA_Entries.Controllers
             foreach (var trialId in trialIds)
             {
                 var ownerId = await _manager.GetEventOwnerForTrialAsync(trialId, moduleId);
-                if (!ownerId.HasValue || ownerId.Value != User.UserId())
+                if (ownerId.HasValue && ownerId.Value == User.UserId())
+                {
+                    continue;
+                }
+
+                if (!await _manager.IsUserOnEventTeamForTrialAsync(trialId, User.UserId(), moduleId))
                 {
                     return false;
                 }
@@ -315,7 +325,7 @@ namespace MountainStates.MSSA.Module.MSSA_Entries.Controllers
         // Event they own. A Scorekeeper only an entry whose Trial they're assigned to -
         // they don't own the event, just the scoring for trials assigned to them. Checked
         // against the DB record, never the request payload.
-        private bool IsAuthorizedForEntry(MSSA_Entry existing)
+        private async Task<bool> IsAuthorizedForEntryAsync(MSSA_Entry existing, int moduleId)
         {
             if (User.IsInRole(RoleNames.Admin))
             {
@@ -327,11 +337,17 @@ namespace MountainStates.MSSA.Module.MSSA_Entries.Controllers
                 return false;
             }
 
-            if (User.IsInRole(MSSARoles.TrialSecretary)
-                && existing.EventCreatedByUserId.HasValue
-                && existing.EventCreatedByUserId.Value == User.UserId())
+            if (User.IsInRole(MSSARoles.TrialSecretary))
             {
-                return true;
+                if (existing.EventCreatedByUserId.HasValue && existing.EventCreatedByUserId.Value == User.UserId())
+                {
+                    return true;
+                }
+
+                if (await _manager.IsUserOnEventTeamForTrialAsync(existing.TrialId, User.UserId(), moduleId))
+                {
+                    return true;
+                }
             }
 
             return User.IsInRole(MSSARoles.Scorekeeper)

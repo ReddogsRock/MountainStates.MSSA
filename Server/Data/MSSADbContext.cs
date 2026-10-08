@@ -21,6 +21,7 @@ namespace MountainStates.MSSA.Module.MSSA_Handlers.Data
         public DbSet<MSSA_Dog> MSSA_Dogs { get; set; }
         public DbSet<MSSA_Event> MSSA_Events { get; set; }
         public DbSet<MSSA_EventClassOffering> MSSA_EventClassOfferings { get; set; }
+        public DbSet<MSSA_EventTeamMember> MSSA_EventTeamMembers { get; set; }
         public DbSet<MSSA_Trial> MSSA_Trials { get; set; }
         public DbSet<MSSA_Class> MSSA_Classes { get; set; }
         public DbSet<MSSA_Entry> MSSA_Entries { get; set; }
@@ -43,6 +44,7 @@ namespace MountainStates.MSSA.Module.MSSA_Handlers.Data
             modelBuilder.Entity<MSSA_Dog>().ToTable("MSSA_Dogs");
             modelBuilder.Entity<MSSA_Event>().ToTable("MSSA_Events");
             modelBuilder.Entity<MSSA_EventClassOffering>().ToTable("MSSA_EventClassOfferings");
+            modelBuilder.Entity<MSSA_EventTeamMember>().ToTable("MSSA_EventTeamMembers");
             modelBuilder.Entity<MSSA_Trial>().ToTable("MSSA_Trials");
             modelBuilder.Entity<MSSA_Class>().ToTable("MSSA_Classes");
             modelBuilder.Entity<MSSA_Entry>().ToTable("MSSA_Entries");
@@ -110,6 +112,16 @@ namespace MountainStates.MSSA.Module.MSSA_Handlers.Data
                 .WithMany()
                 .HasForeignKey(o => o.EventId)
                 .OnDelete(DeleteBehavior.Restrict);
+
+            modelBuilder.Entity<MSSA_EventTeamMember>()
+                .HasOne<MSSA_Event>()
+                .WithMany()
+                .HasForeignKey(tm => tm.EventId)
+                .OnDelete(DeleteBehavior.Restrict);
+
+            modelBuilder.Entity<MSSA_EventTeamMember>()
+                .HasIndex(tm => new { tm.EventId, tm.UserId })
+                .IsUnique();
 
             modelBuilder.Entity<MSSA_EventClassOffering>()
                 .HasOne<MSSA_Class>()

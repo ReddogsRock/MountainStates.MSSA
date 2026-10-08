@@ -289,6 +289,63 @@
             </div>
         </div>
 
+        @* Team (only for existing events, and only visible/manageable by the creator) *@
+        @if (eventId != -1 && IsCreator(evt))
+        {
+            <div class="card mb-3">
+                <div class="card-header">
+                    <h4>Team</h4>
+                </div>
+                <div class="card-body">
+                    <p class="text-muted">
+                        Other Trial Secretaries added here get the same management access
+                        to this event (trials, entries, submitting for approval) as you do.
+                    </p>
+                    @if (teamMembers != null && teamMembers.Any())
+                    {
+                        <ul class="list-group mb-3">
+                            @foreach (var member in teamMembers)
+                            {
+                                <li class="list-group-item d-flex justify-content-between align-items-center">
+                                    @member.DisplayName
+                                    <button type="button" class="btn btn-sm btn-outline-danger" @onclick="() => RemoveTeamMember(member.UserId)">
+                                        Remove
+                                    </button>
+                                </li>
+                            }
+                        </ul>
+                    }
+                    else
+                    {
+                        <p class="text-muted"><em>No teammates added yet.</em></p>
+                    }
+                    <div class="row g-2">
+                        <div class="col-md-6">
+                            <select class="form-select" @bind="selectedNewTeamMemberId">
+                                <option value="">Select a Trial Secretary...</option>
+                                @if (trialSecretaries != null)
+                                {
+                                    @foreach (var user in trialSecretaries.Where(u => u.UserId != evt.CreatedByUserId && (teamMembers == null || !teamMembers.Any(m => m.UserId == u.UserId))))
+                                    {
+                                        <option value="@user.UserId">@user.DisplayName</option>
+                                    }
+                                }
+                            </select>
+                        </div>
+                        <div class="col-md-3">
+                            <button type="button" class="btn btn-primary" disabled="@(!selectedNewTeamMemberId.HasValue)" @onclick="AddTeamMember">
+                                Add to Team
+                            </button>
+                        </div>
+                    </div>
+                    @if (!string.IsNullOrEmpty(teamError))
+                    {
+                        <div class="alert alert-danger mt-2 mb-0">@teamError</div>
+                    }
+                </div>
+            </div>
+        }
+
         @* Trials Management (only for existing events) *@
         @if (eventId != -1)
         {
@@ -462,6 +519,11 @@
     private MSSA_Trial currentTrial = new();
     private List<UserOptionDto> scorekeepers;
 
+    private List<UserOptionDto> teamMembers;
+    private List<UserOptionDto> trialSecretaries;
+    private int? selectedNewTeamMemberId;
+    private string teamError = "";
+
     private IBrowserFile selectedFlyer;
 
     protected override async Task OnInitializedAsync()
@@ -477,12 +539,20 @@
                 eventId = int.Parse(PageState.QueryString["id"]);
                 evt = await EventService.GetEventAsync(eventId, ModuleState.ModuleId);
 
+                teamMembers = await EventService.GetEventTeamAsync(eventId, PageState.Site.SiteId, ModuleState.ModuleId);
+
                 if (!CanEdit(evt))
                 {
-                    // Trial Secretary trying to edit an event they don't own - bounce out
-                    // before they fill in a form the server will just reject.
+                    // Trial Secretary trying to edit an event they don't own and isn't a
+                    // team member of - bounce out before they fill in a form the server
+                    // will just reject.
                     NavigationManager.NavigateTo(NavigateUrl());
                     return;
+                }
+
+                if (IsCreator(evt))
+                {
+                    trialSecretaries = await EventService.GetTrialSecretariesAsync(PageState.Site.SiteId, ModuleState.ModuleId);
                 }
 
                 evt.Offerings ??= new List<MSSA_EventClassOffering>();
@@ -512,10 +582,24 @@
     // enforcement mirrors this in MSSA_EventController.Put.
     private bool IsAdmin => UserSecurity.IsAuthorized(PageState.User, RoleNames.Admin);
 
-    // Admins can edit any event; Trial Secretaries only the ones they created.
-    // Only called for an existing event loaded by id - the "Add Event" (eventId == -1)
-    // path never reaches this check.
+    // Admins can edit any event; Trial Secretaries their own, or one they've been
+    // added to as a team member. Only called for an existing event loaded by id -
+    // the "Add Event" (eventId == -1) path never reaches this check.
     private bool CanEdit(MSSA_Event evt)
+    {
+        if (IsCreator(evt))
+        {
+            return true;
+        }
+
+        return UserSecurity.IsAuthorized(PageState.User, MSSARoles.TrialSecretary)
+            && teamMembers != null && teamMembers.Any(u => u.UserId == PageState.User.UserId);
+    }
+
+    // Only the event's own creator (or an Admin) manages the team roster - not the
+    // teammates themselves, even once added. Server-side enforcement mirrors this in
+    // MSSA_EventController.AddTeamMember/RemoveTeamMember.
+    private bool IsCreator(MSSA_Event evt)
     {
         if (UserSecurity.IsAuthorized(PageState.User, RoleNames.Admin))
         {
@@ -524,6 +608,42 @@
 
         return UserSecurity.IsAuthorized(PageState.User, MSSARoles.TrialSecretary)
             && evt.CreatedByUserId == PageState.User.UserId;
+    }
+
+    private async Task AddTeamMember()
+    {
+        try
+        {
+            teamError = "";
+            if (!selectedNewTeamMemberId.HasValue)
+            {
+                return;
+            }
+
+            await EventService.AddTeamMemberAsync(eventId, selectedNewTeamMemberId.Value, ModuleState.ModuleId);
+            teamMembers = await EventService.GetEventTeamAsync(eventId, PageState.Site.SiteId, ModuleState.ModuleId);
+            selectedNewTeamMemberId = null;
+        }
+        catch (Exception ex)
+        {
+            await logger.LogError(ex, "Error adding event team member");
+            teamError = "Error adding team member. Please try again.";
+        }
+    }
+
+    private async Task RemoveTeamMember(int userId)
+    {
+        try
+        {
+            teamError = "";
+            await EventService.RemoveTeamMemberAsync(eventId, userId, ModuleState.ModuleId);
+            teamMembers = await EventService.GetEventTeamAsync(eventId, PageState.Site.SiteId, ModuleState.ModuleId);
+        }
+        catch (Exception ex)
+        {
+            await logger.LogError(ex, "Error removing event team member");
+            teamError = "Error removing team member. Please try again.";
+        }
     }
 
     private void AddOffering()

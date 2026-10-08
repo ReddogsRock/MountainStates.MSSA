@@ -17,6 +17,7 @@ namespace MountainStates.MSSA.Module.MSSA_Entries.Repository
         // Resolves the owner of the Event a Trial belongs to (MSSA_Event.CreatedByUserId),
         // for authorizing entry creation before an Entry row exists.
         Task<int?> GetEventOwnerForTrialAsync(int trialId);
+        Task<bool> IsUserOnEventTeamForTrialAsync(int trialId, int userId);
 
         // Run order: propose (not persisted, all classes at once in fixed order) ->
         // review/edit client-side -> save (persists, returns the saved list back).

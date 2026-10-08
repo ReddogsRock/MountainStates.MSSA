@@ -169,5 +169,28 @@ namespace MountainStates.MSSA.Module.MSSA_Events.Services
             return await GetJsonAsync<List<UserOptionDto>>(
                 CreateAuthorizationPolicyUrl($"{url}/scorekeepers?siteId={siteId}&moduleid={moduleId}", EntityNames.Module, moduleId));
         }
+
+        // Team members
+        public async Task<List<UserOptionDto>> GetTrialSecretariesAsync(int siteId, int moduleId)
+        {
+            return await GetJsonAsync<List<UserOptionDto>>(
+                CreateAuthorizationPolicyUrl($"{ApiUrl}/trialsecretaries?siteId={siteId}&moduleid={moduleId}", EntityNames.Module, moduleId));
+        }
+
+        public async Task<List<UserOptionDto>> GetEventTeamAsync(int eventId, int siteId, int moduleId)
+        {
+            return await GetJsonAsync<List<UserOptionDto>>(
+                CreateAuthorizationPolicyUrl($"{ApiUrl}/{eventId}/team?siteId={siteId}&moduleid={moduleId}", EntityNames.Module, moduleId));
+        }
+
+        public async Task AddTeamMemberAsync(int eventId, int userId, int moduleId)
+        {
+            await PostAsync(CreateAuthorizationPolicyUrl($"{ApiUrl}/{eventId}/team/{userId}?moduleid={moduleId}", EntityNames.Module, moduleId));
+        }
+
+        public async Task RemoveTeamMemberAsync(int eventId, int userId, int moduleId)
+        {
+            await DeleteAsync(CreateAuthorizationPolicyUrl($"{ApiUrl}/{eventId}/team/{userId}?moduleid={moduleId}", EntityNames.Module, moduleId));
+        }
     }
 }

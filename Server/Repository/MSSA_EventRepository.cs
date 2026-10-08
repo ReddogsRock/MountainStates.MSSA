@@ -109,6 +109,70 @@ namespace MountainStates.MSSA.Module.MSSA_Events.Repository
             return evt;
         }
 
+        // Team members - other Trial Secretaries given the same management access as
+        // the Event's creator (see MSSA_EventTeamMembers).
+        public async Task<List<int>> GetEventTeamMemberUserIdsAsync(int eventId)
+        {
+            using var db = await _dbContextFactory.CreateDbContextAsync();
+
+            return await db.MSSA_EventTeamMembers
+                .Where(tm => tm.EventId == eventId)
+                .Select(tm => tm.UserId)
+                .ToListAsync();
+        }
+
+        public async Task AddEventTeamMemberAsync(int eventId, int userId)
+        {
+            using var db = await _dbContextFactory.CreateDbContextAsync();
+
+            var alreadyOnTeam = await db.MSSA_EventTeamMembers
+                .AnyAsync(tm => tm.EventId == eventId && tm.UserId == userId);
+
+            if (!alreadyOnTeam)
+            {
+                db.MSSA_EventTeamMembers.Add(new MSSA_EventTeamMember
+                {
+                    EventId = eventId,
+                    UserId = userId,
+                    CreatedDate = DateTime.UtcNow
+                });
+                await db.SaveChangesAsync();
+            }
+        }
+
+        public async Task RemoveEventTeamMemberAsync(int eventId, int userId)
+        {
+            using var db = await _dbContextFactory.CreateDbContextAsync();
+
+            var member = await db.MSSA_EventTeamMembers
+                .FirstOrDefaultAsync(tm => tm.EventId == eventId && tm.UserId == userId);
+
+            if (member != null)
+            {
+                db.MSSA_EventTeamMembers.Remove(member);
+                await db.SaveChangesAsync();
+            }
+        }
+
+        public async Task<bool> IsUserOnEventTeamAsync(int eventId, int userId)
+        {
+            using var db = await _dbContextFactory.CreateDbContextAsync();
+
+            return await db.MSSA_EventTeamMembers
+                .AnyAsync(tm => tm.EventId == eventId && tm.UserId == userId);
+        }
+
+        public async Task<bool> IsUserOnEventTeamForTrialAsync(int trialId, int userId)
+        {
+            using var db = await _dbContextFactory.CreateDbContextAsync();
+
+            return await (from t in db.MSSA_Trials
+                          join tm in db.MSSA_EventTeamMembers on t.EventId equals tm.EventId
+                          where t.TrialId == trialId && tm.UserId == userId
+                          select tm.EventTeamMemberId)
+                         .AnyAsync();
+        }
+
         public async Task<MSSA_Event> AddEventAsync(MSSA_Event evt)
         {
             using var db = await _dbContextFactory.CreateDbContextAsync();

@@ -14,6 +14,7 @@ namespace MountainStates.MSSA.Module.MSSA_Entries.Manager
         Task<MSSA_Entry> UpdateEntryAsync(MSSA_Entry entry, int moduleId);
         Task DeleteEntryAsync(int entryId, int moduleId);
         Task<int?> GetEventOwnerForTrialAsync(int trialId, int moduleId);
+        Task<bool> IsUserOnEventTeamForTrialAsync(int trialId, int userId, int moduleId);
 
         Task<List<RunOrderEntry>> GetProposedRunOrderAsync(int trialId, int moduleId);
         Task<List<RunOrderEntry>> SaveRunOrderAsync(List<RunOrderEntry> assignments, int moduleId);

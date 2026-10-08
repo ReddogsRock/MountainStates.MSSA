@@ -59,7 +59,12 @@ namespace MountainStates.MSSA.Module.MSSA_Results.Repository
 
             if (ownerUserId.HasValue)
             {
-                query = query.Where(e => e.CreatedByUserId == ownerUserId.Value);
+                // Qualifies if they created it, or were added as a team member
+                // (MSSA_EventTeamMembers) by whoever did.
+                var teamEventIds = db.MSSA_EventTeamMembers
+                    .Where(tm => tm.UserId == ownerUserId.Value)
+                    .Select(tm => tm.EventId);
+                query = query.Where(e => e.CreatedByUserId == ownerUserId.Value || teamEventIds.Contains(e.EventId));
             }
             else if (scorekeeperUserId.HasValue)
             {
@@ -161,6 +166,28 @@ namespace MountainStates.MSSA.Module.MSSA_Results.Repository
                 .Where(e => e.EventId == eventId)
                 .Select(e => e.CreatedByUserId)
                 .FirstOrDefaultAsync();
+        }
+
+        // Mirrors GetEventOwnerForTrialAsync above, but for a team member added via
+        // MSSA_EventTeamMembers instead of the event's own creator.
+        public async Task<bool> IsUserOnEventTeamForTrialAsync(int trialId, int userId)
+        {
+            using var db = await _dbContextFactory.CreateDbContextAsync();
+
+            return await (from t in db.MSSA_Trials
+                          join tm in db.MSSA_EventTeamMembers on t.EventId equals tm.EventId
+                          where t.TrialId == trialId && tm.UserId == userId
+                          select tm.EventTeamMemberId)
+                         .AnyAsync();
+        }
+
+        // Mirrors GetEventOwnerAsync above, but for a team member.
+        public async Task<bool> IsUserOnEventTeamAsync(int eventId, int userId)
+        {
+            using var db = await _dbContextFactory.CreateDbContextAsync();
+
+            return await db.MSSA_EventTeamMembers
+                .AnyAsync(tm => tm.EventId == eventId && tm.UserId == userId);
         }
 
         public async Task<int> GetScoredRunCountAsync(int eventId)

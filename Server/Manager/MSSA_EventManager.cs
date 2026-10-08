@@ -40,6 +40,31 @@ namespace MountainStates.MSSA.Module.MSSA_Events.Manager
             return await _repository.GetEventAsync(eventId);
         }
 
+        public async Task<List<int>> GetEventTeamMemberUserIdsAsync(int eventId, int moduleId)
+        {
+            return await _repository.GetEventTeamMemberUserIdsAsync(eventId);
+        }
+
+        public async Task AddEventTeamMemberAsync(int eventId, int userId, int moduleId)
+        {
+            await _repository.AddEventTeamMemberAsync(eventId, userId);
+        }
+
+        public async Task RemoveEventTeamMemberAsync(int eventId, int userId, int moduleId)
+        {
+            await _repository.RemoveEventTeamMemberAsync(eventId, userId);
+        }
+
+        public async Task<bool> IsUserOnEventTeamAsync(int eventId, int userId, int moduleId)
+        {
+            return await _repository.IsUserOnEventTeamAsync(eventId, userId);
+        }
+
+        public async Task<bool> IsUserOnEventTeamForTrialAsync(int trialId, int userId, int moduleId)
+        {
+            return await _repository.IsUserOnEventTeamForTrialAsync(trialId, userId);
+        }
+
         public async Task<MSSA_Event> AddEventAsync(MSSA_Event evt, int moduleId)
         {
             return await _repository.AddEventAsync(evt);
