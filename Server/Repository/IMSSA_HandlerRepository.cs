@@ -24,6 +24,7 @@ namespace MountainStates.MSSA.Module.MSSA_Handlers.Repository
 
         // Memberships
         Task<List<MSSA_Membership>> GetHandlerMembershipsAsync(int handlerId);
+        Task<MSSA_Membership> GetMembershipAsync(int membershipId);
         Task<MSSA_Membership> AddMembershipAsync(MSSA_Membership membership);
         Task<MSSA_Membership> UpdateMembershipAsync(MSSA_Membership membership);
         Task DeleteMembershipAsync(int membershipId);

@@ -43,18 +43,19 @@ namespace MountainStates.MSSA.Module.MSSA_Dogs.Manager
             }
         }
 
-        public async Task<string> CreateFuturityCheckoutSessionAsync(int participationId, string successUrl, string cancelUrl)
+        public async Task<string> CreateFuturityCheckoutSessionAsync(int participationId, string dogName, string ownerName, int year, string successUrl, string cancelUrl)
         {
             var productId = _configuration["Stripe:FuturityProductId"];
 
             return await CreateCheckoutSessionAsync(productId, successUrl, cancelUrl, new Dictionary<string, string>
             {
                 { "Purpose", "FuturityNomination" },
-                { "ParticipationId", participationId.ToString() }
-            });
+                { "ParticipationId", participationId.ToString() },
+                { "Year", year.ToString() }
+            }, $"Futurity Nomination – {dogName} ({ownerName})");
         }
 
-        public async Task<string> CreateMembershipCheckoutSessionAsync(int membershipId, string membershipType, string successUrl, string cancelUrl)
+        public async Task<string> CreateMembershipCheckoutSessionAsync(int membershipId, string membershipType, string memberName, int year, string successUrl, string cancelUrl)
         {
             var productId = _configuration[$"Stripe:MembershipProductIds:{membershipType}"];
             if (string.IsNullOrEmpty(productId))
@@ -66,11 +67,12 @@ namespace MountainStates.MSSA.Module.MSSA_Dogs.Manager
             return await CreateCheckoutSessionAsync(productId, successUrl, cancelUrl, new Dictionary<string, string>
             {
                 { "Purpose", "MembershipPurchase" },
-                { "MembershipId", membershipId.ToString() }
-            });
+                { "MembershipId", membershipId.ToString() },
+                { "Year", year.ToString() }
+            }, $"Membership Dues {year} – {memberName}");
         }
 
-        public async Task<string> CreateSanctioningFeeCheckoutSessionAsync(int eventId, int quantity, string successUrl, string cancelUrl)
+        public async Task<string> CreateSanctioningFeeCheckoutSessionAsync(int eventId, string eventName, int quantity, int year, string successUrl, string cancelUrl)
         {
             var productId = _configuration["Stripe:SanctioningFeeProductId"];
             if (string.IsNullOrEmpty(productId))
@@ -81,11 +83,12 @@ namespace MountainStates.MSSA.Module.MSSA_Dogs.Manager
             return await CreateCheckoutSessionAsync(productId, successUrl, cancelUrl, new Dictionary<string, string>
             {
                 { "Purpose", "SanctioningFee" },
-                { "EventId", eventId.ToString() }
-            }, quantity);
+                { "EventId", eventId.ToString() },
+                { "Year", year.ToString() }
+            }, $"Sanctioning Fee – {eventName}", quantity);
         }
 
-        private async Task<string> CreateCheckoutSessionAsync(string productId, string successUrl, string cancelUrl, Dictionary<string, string> metadata, int quantity = 1)
+        private async Task<string> CreateCheckoutSessionAsync(string productId, string successUrl, string cancelUrl, Dictionary<string, string> metadata, string description, int quantity = 1)
         {
             var priceId = await ResolveActivePriceIdAsync(productId);
 
@@ -107,7 +110,18 @@ namespace MountainStates.MSSA.Module.MSSA_Dogs.Manager
                 },
                 SuccessUrl = successUrl,
                 CancelUrl = cancelUrl,
-                Metadata = metadata
+                // Session-level metadata is what the webhook reads back (session.Metadata)
+                // to find its way to the right record - kept exactly as before. The same
+                // Description/Metadata are also set on the resulting PaymentIntent below,
+                // since that's what actually shows up in the Stripe Dashboard's payment
+                // list and on card/bank statements, which a bare Checkout Session has no
+                // field for on its own.
+                Metadata = metadata,
+                PaymentIntentData = new SessionPaymentIntentDataOptions
+                {
+                    Description = description,
+                    Metadata = metadata
+                }
             };
 
             var sessionService = new SessionService();

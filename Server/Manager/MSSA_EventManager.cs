@@ -1,3 +1,4 @@
+using System;
 using System.Collections.Generic;
 using System.Threading.Tasks;
 using Oqtane.Modules;
@@ -27,7 +28,15 @@ namespace MountainStates.MSSA.Module.MSSA_Events.Manager
 
         public async Task<string> CreateSanctioningFeeCheckoutSessionAsync(int eventId, int quantity, string successUrl, string cancelUrl, int moduleId)
         {
-            return await _stripeService.CreateSanctioningFeeCheckoutSessionAsync(eventId, quantity, successUrl, cancelUrl);
+            var evt = await _repository.GetEventAsync(eventId);
+
+            return await _stripeService.CreateSanctioningFeeCheckoutSessionAsync(
+                eventId,
+                evt?.EventName ?? "Unknown Event",
+                quantity,
+                evt?.PointYear ?? evt?.StartDate?.Year ?? DateTime.Now.Year,
+                successUrl,
+                cancelUrl);
         }
 
         public async Task<MSSA_Event> MarkSanctionFeePaidAsync(int eventId, string stripePaymentIntentId, decimal amount, int moduleId)

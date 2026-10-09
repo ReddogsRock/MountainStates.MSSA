@@ -286,6 +286,19 @@ namespace MountainStates.MSSA.Module.MSSA_Handlers.Repository
         // members - can be zero additional for Individual, any number for Family).
         // EndYear is computed from MembershipType + StartYear rather than trusting a
         // client-supplied value.
+        public async Task<MSSA_Membership> GetMembershipAsync(int membershipId)
+        {
+            using var db = await _dbContextFactory.CreateDbContextAsync();
+
+            var membership = await db.MSSA_Memberships.FindAsync(membershipId);
+            if (membership != null)
+            {
+                membership.Members = await LoadMembersAsync(db, membershipId);
+            }
+
+            return membership;
+        }
+
         public async Task<MSSA_Membership> AddMembershipAsync(MSSA_Membership membership)
         {
             using var db = await _dbContextFactory.CreateDbContextAsync();

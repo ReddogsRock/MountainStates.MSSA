@@ -1,4 +1,5 @@
-﻿using System.Collections.Generic;
+﻿using System;
+using System.Collections.Generic;
 using System.Linq;
 using System.Threading.Tasks;
 using Oqtane.Modules;
@@ -110,7 +111,16 @@ namespace MountainStates.MSSA.Module.MSSA_Handlers.Manager
 
         public async Task<string> CreateMembershipCheckoutSessionAsync(int membershipId, string membershipType, string successUrl, string cancelUrl, int moduleId)
         {
-            return await _stripeService.CreateMembershipCheckoutSessionAsync(membershipId, membershipType, successUrl, cancelUrl);
+            var membership = await _repository.GetMembershipAsync(membershipId);
+            var primaryMember = membership?.Members?.FirstOrDefault(m => m.IsPrimary) ?? membership?.Members?.FirstOrDefault();
+
+            return await _stripeService.CreateMembershipCheckoutSessionAsync(
+                membershipId,
+                membershipType,
+                primaryMember?.HandlerName ?? "Unknown Member",
+                membership?.StartYear ?? DateTime.Now.Year,
+                successUrl,
+                cancelUrl);
         }
 
         public async Task<List<MSSA_Membership>> SearchMembershipsAsync(string filter, string searchTerm, int moduleId)

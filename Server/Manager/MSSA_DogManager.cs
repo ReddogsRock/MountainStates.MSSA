@@ -120,7 +120,16 @@ namespace MountainStates.MSSA.Module.MSSA_Dogs.Manager
 
         public async Task<string> CreateFuturityCheckoutSessionAsync(int participationId, string successUrl, string cancelUrl, int moduleId)
         {
-            return await _stripeService.CreateFuturityCheckoutSessionAsync(participationId, successUrl, cancelUrl);
+            var participation = await _repository.GetFuturityParticipationAsync(participationId);
+            var dog = participation != null ? await _repository.GetDogAsync(participation.DogId) : null;
+
+            return await _stripeService.CreateFuturityCheckoutSessionAsync(
+                participationId,
+                dog?.Name ?? "Unknown Dog",
+                dog?.OwnerName ?? "Unknown Owner",
+                participation?.Year ?? DateTime.Now.Year,
+                successUrl,
+                cancelUrl);
         }
 
         // Entries
