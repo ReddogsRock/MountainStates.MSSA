@@ -83,15 +83,14 @@
         {
             // Results show as soon as they're posted, not gated on the event's results
             // being Approved - only the competition Points earned for placement wait
-            // for that (see Results.razor). Run Order is meant to be checked once an
-            // event has actually started too, not just looked back at afterward - but
-            // an event that hasn't started yet has nothing to show either way, so this
-            // still only lists events whose start date has arrived. Trials.razor
-            // further filters day-by-day for a multi-day event, so a not-yet-run day
-            // stays hidden even while the event overall is listed here.
+            // for that (see Results.razor). "Current" extends a week into the future so
+            // competitors can check Run Order ahead of an event, not just once it's
+            // started - past events never drop off. Trials.razor further filters
+            // day-by-day for a multi-day event, so a not-yet-run day stays hidden even
+            // while the event overall is listed here.
             var all = await EventService.GetEventsAsync(ModuleState.ModuleId);
             events = all
-                .Where(e => e.StartDate.HasValue && e.StartDate.Value.Date <= DateTime.Today)
+                .Where(e => e.StartDate.HasValue && e.StartDate.Value.Date <= DateTime.Today.AddDays(7))
                 .ToList();
         }
         catch (Exception ex)
