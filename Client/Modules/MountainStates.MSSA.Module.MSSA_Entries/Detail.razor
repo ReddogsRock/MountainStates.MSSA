@@ -1,11 +1,13 @@
 ﻿@using MountainStates.MSSA.Module.MSSA_Entries.Services
 @using MountainStates.MSSA.Module.MSSA_Entries.Models
+@using MountainStates.MSSA.Module.MSSA_Events.Services
 @using MountainStates.MSSA.Module.MSSA_Handlers.Enums
 @using Oqtane.Modules.Controls
 
 @namespace MountainStates.MSSA.Module.MSSA_Entries
 @inherits ModuleBase
 @inject IMSSA_EntryService EntryService
+@inject IMSSA_EventService EventService
 @inject NavigationManager NavigationManager
 
 @if (entry == null)
@@ -180,6 +182,7 @@ else
 
 @code {
     private MSSA_Entry entry;
+    private bool isOnEventTeam;
 
     protected override async Task OnInitializedAsync()
     {
@@ -187,6 +190,15 @@ else
         {
             int entryId = int.Parse(PageState.QueryString["id"]);
             entry = await EntryService.GetEntryAsync(entryId, ModuleState.ModuleId);
+
+            if (entry != null
+                && entry.EventCreatedByUserId != PageState.User.UserId
+                && UserSecurity.IsAuthorized(PageState.User, MSSARoles.TrialSecretary))
+            {
+                var trial = await EventService.GetTrialAsync(entry.TrialId, ModuleState.ModuleId);
+                var myTeamEventIds = await EventService.GetMyTeamEventIdsAsync(ModuleState.ModuleId);
+                isOnEventTeam = trial != null && myTeamEventIds.Contains(trial.EventId);
+            }
         }
         catch (Exception ex)
         {
@@ -195,8 +207,9 @@ else
         }
     }
 
-    // Admin can edit any entry. A Trial Secretary only entries whose Event they own.
-    // A Scorekeeper only entries whose Trial they're assigned to.
+    // Admin can edit any entry. A Trial Secretary only entries whose Event they own,
+    // or one they've been added to as a team member (see isOnEventTeam). A Scorekeeper
+    // only entries whose Trial they're assigned to.
     private bool CanEdit()
     {
         if (UserSecurity.IsAuthorized(PageState.User, RoleNames.Admin))
@@ -205,7 +218,7 @@ else
         }
 
         if (UserSecurity.IsAuthorized(PageState.User, MSSARoles.TrialSecretary)
-            && entry.EventCreatedByUserId == PageState.User.UserId)
+            && (entry.EventCreatedByUserId == PageState.User.UserId || isOnEventTeam))
         {
             return true;
         }

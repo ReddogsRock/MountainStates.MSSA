@@ -65,6 +65,11 @@ namespace MountainStates.MSSA.Module.MSSA_Events.Manager
             return await _repository.IsUserOnEventTeamForTrialAsync(trialId, userId);
         }
 
+        public async Task<List<int>> GetEventIdsForTeamMemberAsync(int userId, int moduleId)
+        {
+            return await _repository.GetEventIdsForTeamMemberAsync(userId);
+        }
+
         public async Task<MSSA_Event> AddEventAsync(MSSA_Event evt, int moduleId)
         {
             return await _repository.AddEventAsync(evt);

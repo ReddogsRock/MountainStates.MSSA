@@ -666,9 +666,11 @@ else
     private MSSA_Dog newDog = new();
 
     private HashSet<(int OfferingId, int TrialId)> checkedCells = new();
+    private List<int> myTeamEventIds = new();
 
-    // Admin can add entries to any event; a Trial Secretary only to events they own.
-    // A Scorekeeper doesn't create entries at all, so they get nothing here. Used for
+    // Admin can add entries to any event; a Trial Secretary only to events they own,
+    // or one they've been added to as a team member (see myTeamEventIds). A
+    // Scorekeeper doesn't create entries at all, so they get nothing here. Used for
     // the Add-mode Event dropdown.
     private IEnumerable<MSSA_Event> AddableEvents
     {
@@ -681,23 +683,32 @@ else
                 return events;
             }
 
-            return events.Where(e => e.CreatedByUserId == PageState.User.UserId);
+            return events.Where(e => e.CreatedByUserId == PageState.User.UserId || myTeamEventIds.Contains(e.EventId));
         }
     }
 
-    // Admin can edit any entry. A Trial Secretary only entries whose Event they own.
-    // A Scorekeeper only entries whose Trial they're assigned to.
-    private bool CanEditEntry(MSSA_Entry entry)
+    // Admin can edit any entry. A Trial Secretary only entries whose Event they own,
+    // or one they've been added to as a team member. A Scorekeeper only entries whose
+    // Trial they're assigned to.
+    private async Task<bool> CanEditEntryAsync(MSSA_Entry entry)
     {
         if (UserSecurity.IsAuthorized(PageState.User, RoleNames.Admin))
         {
             return true;
         }
 
-        if (UserSecurity.IsAuthorized(PageState.User, MSSARoles.TrialSecretary)
-            && entry.EventCreatedByUserId == PageState.User.UserId)
+        if (UserSecurity.IsAuthorized(PageState.User, MSSARoles.TrialSecretary))
         {
-            return true;
+            if (entry.EventCreatedByUserId == PageState.User.UserId)
+            {
+                return true;
+            }
+
+            var trial = await EventService.GetTrialAsync(entry.TrialId, ModuleState.ModuleId);
+            if (trial != null && myTeamEventIds.Contains(trial.EventId))
+            {
+                return true;
+            }
         }
 
         return UserSecurity.IsAuthorized(PageState.User, MSSARoles.Scorekeeper)
@@ -711,6 +722,11 @@ else
             events = await EventService.GetEventsAsync(ModuleState.ModuleId);
             classes = await EntryService.GetClassesAsync(ModuleState.ModuleId);
 
+            if (UserSecurity.IsAuthorized(PageState.User, MSSARoles.TrialSecretary))
+            {
+                myTeamEventIds = await EventService.GetMyTeamEventIdsAsync(ModuleState.ModuleId);
+            }
+
             if (PageState.QueryString.ContainsKey("id"))
             {
                 entryId = int.Parse(PageState.QueryString["id"]);
@@ -721,7 +737,7 @@ else
 
                 entry = await EntryService.GetEntryAsync(entryId, ModuleState.ModuleId);
 
-                if (!CanEditEntry(entry))
+                if (!await CanEditEntryAsync(entry))
                 {
                     // Trial Secretary trying to edit an entry outside an event they own -
                     // bounce out before they fill in a form the server will just reject.

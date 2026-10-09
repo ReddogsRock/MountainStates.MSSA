@@ -162,6 +162,19 @@ namespace MountainStates.MSSA.Module.MSSA_Events.Repository
                 .AnyAsync(tm => tm.EventId == eventId && tm.UserId == userId);
         }
 
+        // Reverse of the above - every Event a user is a team member of, for the Events
+        // list page to show the Edit action on the right rows without a round trip per
+        // event.
+        public async Task<List<int>> GetEventIdsForTeamMemberAsync(int userId)
+        {
+            using var db = await _dbContextFactory.CreateDbContextAsync();
+
+            return await db.MSSA_EventTeamMembers
+                .Where(tm => tm.UserId == userId)
+                .Select(tm => tm.EventId)
+                .ToListAsync();
+        }
+
         public async Task<bool> IsUserOnEventTeamForTrialAsync(int trialId, int userId)
         {
             using var db = await _dbContextFactory.CreateDbContextAsync();

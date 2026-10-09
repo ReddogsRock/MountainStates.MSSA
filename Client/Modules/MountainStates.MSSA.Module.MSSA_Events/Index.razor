@@ -238,6 +238,7 @@
 @code {
     private List<MSSA_Event> events;
     private List<MSSA_State> states;
+    private List<int> myTeamEventIds = new();
 
     private string searchTerm = "";
     private string selectedState = "";
@@ -269,6 +270,12 @@
             _sortDescending = bool.Parse(SettingService.GetSetting(ModuleState.Settings, "SortDescending", "true"));
 
             states = await StateService.GetStatesAsync(ModuleState.ModuleId);
+
+            if (UserSecurity.IsAuthorized(PageState.User, MSSARoles.TrialSecretary))
+            {
+                myTeamEventIds = await EventService.GetMyTeamEventIdsAsync(ModuleState.ModuleId);
+            }
+
             await LoadEvents();
         }
         catch (Exception ex)
@@ -367,7 +374,8 @@
         showFilters = !showFilters;
     }
 
-    // Admins can edit any event; Trial Secretaries only the ones they created.
+    // Admins can edit any event; Trial Secretaries their own, or one they've been
+    // added to as a team member (see myTeamEventIds).
     private bool CanEdit(MSSA_Event evt)
     {
         if (UserSecurity.IsAuthorized(PageState.User, RoleNames.Admin))
@@ -376,7 +384,7 @@
         }
 
         return UserSecurity.IsAuthorized(PageState.User, MSSARoles.TrialSecretary)
-            && evt.CreatedByUserId == PageState.User.UserId;
+            && (evt.CreatedByUserId == PageState.User.UserId || myTeamEventIds.Contains(evt.EventId));
     }
 
     private async Task ApproveEvent(MSSA_Event evt)

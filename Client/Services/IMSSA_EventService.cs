@@ -51,6 +51,7 @@ namespace MountainStates.MSSA.Module.MSSA_Events.Services
         Task<List<UserOptionDto>> GetScorekeepersAsync(int siteId, int moduleId);
 
         // Team members - other Trial Secretaries sharing management access to an Event
+        Task<List<int>> GetMyTeamEventIdsAsync(int moduleId);
         Task<List<UserOptionDto>> GetTrialSecretariesAsync(int siteId, int moduleId);
         Task<List<UserOptionDto>> GetEventTeamAsync(int eventId, int siteId, int moduleId);
         Task AddTeamMemberAsync(int eventId, int userId, int moduleId);

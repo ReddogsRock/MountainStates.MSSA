@@ -469,11 +469,13 @@
     private List<EntryListItem> entries;
     private List<MSSA_Class> classes;
     private List<UserOptionDto> scorekeepers;
+    private List<int> myTeamEventIds = new();
 
     private int selectedEventId = 0;
     private int selectedTrialId = 0;
 
-    // Admin/Scorekeeper see every event; a Trial Secretary only events they own.
+    // Admin/Scorekeeper see every event; a Trial Secretary only events they own, or
+    // one they've been added to as a team member (see myTeamEventIds).
     private IEnumerable<MSSA_Event> VisibleEvents
     {
         get
@@ -486,7 +488,7 @@
                 return events;
             }
 
-            return events.Where(e => e.CreatedByUserId == PageState.User.UserId);
+            return events.Where(e => e.CreatedByUserId == PageState.User.UserId || myTeamEventIds.Contains(e.EventId));
         }
     }
 
@@ -518,6 +520,11 @@
             events = await EventService.GetEventsAsync(ModuleState.ModuleId);
             classes = await EntryService.GetClassesAsync(ModuleState.ModuleId);
             scorekeepers = await EventService.GetScorekeepersAsync(PageState.Site.SiteId, ModuleState.ModuleId);
+
+            if (UserSecurity.IsAuthorized(PageState.User, MSSARoles.TrialSecretary))
+            {
+                myTeamEventIds = await EventService.GetMyTeamEventIdsAsync(ModuleState.ModuleId);
+            }
 
             // If we have a trial ID in query string, pre-select it
             if (PageState.QueryString.ContainsKey("trialId"))
@@ -564,9 +571,10 @@
         }
     }
 
-    // Admin can edit any entry. A Trial Secretary only entries whose Event they own.
-    // A Scorekeeper only entries whose Trial they're assigned to - they don't create
-    // entries, so they have no ownership claim otherwise.
+    // Admin can edit any entry. A Trial Secretary only entries whose Event they own, or
+    // one they've been added to as a team member. A Scorekeeper only entries whose
+    // Trial they're assigned to - they don't create entries, so they have no ownership
+    // claim otherwise.
     private bool CanEdit(EntryListItem entry)
     {
         if (UserSecurity.IsAuthorized(PageState.User, RoleNames.Admin))
@@ -575,7 +583,7 @@
         }
 
         if (UserSecurity.IsAuthorized(PageState.User, MSSARoles.TrialSecretary)
-            && entry.EventCreatedByUserId == PageState.User.UserId)
+            && (entry.EventCreatedByUserId == PageState.User.UserId || myTeamEventIds.Contains(SelectedTrial?.EventId ?? 0)))
         {
             return true;
         }

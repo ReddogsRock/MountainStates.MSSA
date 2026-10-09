@@ -171,6 +171,12 @@ namespace MountainStates.MSSA.Module.MSSA_Events.Services
         }
 
         // Team members
+        public async Task<List<int>> GetMyTeamEventIdsAsync(int moduleId)
+        {
+            return await GetJsonAsync<List<int>>(
+                CreateAuthorizationPolicyUrl($"{ApiUrl}/myteam?moduleid={moduleId}", EntityNames.Module, moduleId));
+        }
+
         public async Task<List<UserOptionDto>> GetTrialSecretariesAsync(int siteId, int moduleId)
         {
             return await GetJsonAsync<List<UserOptionDto>>(

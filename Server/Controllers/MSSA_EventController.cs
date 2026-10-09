@@ -229,6 +229,25 @@ namespace MountainStates.MSSA.Module.MSSA_Events.Controllers
             return await _manager.IsUserOnEventTeamForTrialAsync(trialId, User.UserId(), moduleId);
         }
 
+        // GET: api/MSSA_Event/myteam?moduleid=x
+        // Every Event the CURRENT user is a team member of (never another user's -
+        // always resolved from the token, never a parameter) - lets the Events list
+        // show the Edit action on the right rows without a round trip per event.
+        [HttpGet("myteam")]
+        [Authorize(Policy = PolicyNames.ViewModule)]
+        public async Task<List<int>> GetMyTeamEventIds(int moduleId)
+        {
+            try
+            {
+                return await _manager.GetEventIdsForTeamMemberAsync(User.UserId(), moduleId);
+            }
+            catch (System.Exception ex)
+            {
+                _logger.Log(LogLevel.Error, this, LogFunction.Read, ex, "Error getting team event ids for current user");
+                throw;
+            }
+        }
+
         // GET: api/MSSA_Event/trialsecretaries?siteId=x&moduleid=x
         // Users holding the Trial Secretary role, for the Event edit form's team
         // picker - mirrors MSSA_TrialController.GetScorekeepers.

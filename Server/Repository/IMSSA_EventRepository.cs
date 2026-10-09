@@ -18,6 +18,7 @@ namespace MountainStates.MSSA.Module.MSSA_Events.Repository
         Task RemoveEventTeamMemberAsync(int eventId, int userId);
         Task<bool> IsUserOnEventTeamAsync(int eventId, int userId);
         Task<bool> IsUserOnEventTeamForTrialAsync(int trialId, int userId);
+        Task<List<int>> GetEventIdsForTeamMemberAsync(int userId);
         Task<MSSA_Event> AddEventAsync(MSSA_Event evt);
         Task<MSSA_Event> UpdateEventAsync(MSSA_Event evt);
         Task<MSSA_Event> ApproveEventAsync(int eventId, int approvedByUserId);
