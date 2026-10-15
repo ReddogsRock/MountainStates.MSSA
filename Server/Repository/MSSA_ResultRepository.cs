@@ -364,16 +364,18 @@ namespace MountainStates.MSSA.Module.MSSA_Results.Repository
                     var tiedGroup = ranked.GetRange(i, groupSize);
 
                     // What each occupied placement in this range would individually be
-                    // worth, ignoring membership - the "pool" tied members split.
+                    // worth, ignoring membership - the pool every tied competitor's own
+                    // placement contributes to, split evenly per tied competitor (not per
+                    // tied member - a non-member in the group simply forfeits their own
+                    // share below instead of it rolling over to the other tied member(s)).
                     var slotValues = new List<int>();
                     for (int r = rank; r < rank + groupSize; r++)
                     {
                         slotValues.Add(Math.Max(basePoints - (r - 1) * 100, 0));
                     }
 
-                    var memberCount = tiedGroup.Count(e => activeMemberHandlerIds.Contains(e.HandlerId));
-                    int? sharedPoints = (groupSize > 1 && memberCount > 0)
-                        ? (int)Math.Round(slotValues.Sum() / (decimal)memberCount, MidpointRounding.AwayFromZero)
+                    int? sharedPoints = groupSize > 1
+                        ? (int)Math.Round(slotValues.Sum() / (decimal)groupSize, MidpointRounding.AwayFromZero)
                         : (int?)null;
 
                     foreach (var entry in tiedGroup)
