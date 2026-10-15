@@ -532,14 +532,7 @@
                 selectedTrialId = int.Parse(PageState.QueryString["trialId"]);
 
                 // Find the event for this trial
-                var allTrials = new List<MSSA_Trial>();
-                foreach (var evt in events)
-                {
-                    var eventTrials = await EventService.GetEventTrialsAsync(evt.EventId, ModuleState.ModuleId);
-                    allTrials.AddRange(eventTrials);
-                }
-
-                var selectedTrial = allTrials.FirstOrDefault(t => t.TrialId == selectedTrialId);
+                var selectedTrial = await EventService.GetTrialAsync(selectedTrialId, ModuleState.ModuleId);
                 if (selectedTrial != null)
                 {
                     selectedEventId = selectedTrial.EventId;

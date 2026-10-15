@@ -449,32 +449,204 @@ else
             </div>
             <div class="card-body">
                 <div class="row mb-3">
-                    <div class="col-md-4">
-                        <label for="handlerSelect" class="form-label">Handler <span class="text-danger">*</span></label>
-                        <select id="handlerSelect" class="form-select" @bind="entry.HandlerId">
-                            <option value="0">-- Select Handler --</option>
-                            @if (handlers != null)
+                    <div class="col-md-6">
+                        <label class="form-label">Handler <span class="text-danger">*</span></label>
+                        @if (selectedHandler != null)
+                        {
+                            <div class="alert alert-success d-flex justify-content-between align-items-center mb-0">
+                                <span>@selectedHandler.FullName</span>
+                                <button type="button" class="btn btn-sm btn-outline-secondary" @onclick="ClearHandlerSelection">Change</button>
+                            </div>
+                        }
+                        else
+                        {
+                            <div class="row g-2 align-items-end">
+                                <div class="col-3">
+                                    <input class="form-control" placeholder="ID" @bind="handlerIdSearchTerm" @bind:event="oninput"
+                                           @onkeyup="@(async e => { if (e.Key == "Enter") await SearchHandlers(); })" />
+                                </div>
+                                <div class="col-6">
+                                    <input class="form-control" placeholder="Search by name" @bind="handlerSearchTerm" @bind:event="oninput"
+                                           @onkeyup="@(async e => { if (e.Key == "Enter") await SearchHandlers(); })" />
+                                </div>
+                                <div class="col-3">
+                                    <button type="button" class="btn btn-primary w-100" @onclick="SearchHandlers">Search</button>
+                                </div>
+                            </div>
+
+                            @if (handlerSearchResults != null)
                             {
-                                @foreach (var handler in handlers.OrderBy(h => h.LastName).ThenBy(h => h.FirstName))
+                                @if (!handlerSearchResults.Any())
                                 {
-                                    <option value="@handler.HandlerId">@handler.FullName</option>
+                                    <p class="text-muted mt-2 mb-2"><em>No handlers found.</em></p>
+                                }
+                                else
+                                {
+                                    <table class="table table-sm mt-2">
+                                        <thead>
+                                            <tr>
+                                                <th>ID</th>
+                                                <th>Name</th>
+                                                <th>State</th>
+                                                <th></th>
+                                            </tr>
+                                        </thead>
+                                        <tbody>
+                                            @foreach (var h in handlerSearchResults)
+                                            {
+                                                <tr>
+                                                    <td>@h.HandlerId</td>
+                                                    <td>@h.FullName</td>
+                                                    <td>@h.StateCode</td>
+                                                    <td class="text-end">
+                                                        <button type="button" class="btn btn-sm btn-primary" @onclick="() => SelectHandler(h)">Select</button>
+                                                    </td>
+                                                </tr>
+                                            }
+                                        </tbody>
+                                    </table>
+                                }
+
+                                @if (!showAddHandlerForm)
+                                {
+                                    <button type="button" class="btn btn-sm btn-outline-primary" @onclick="() => ShowAddHandler()">
+                                        + Add New Handler
+                                    </button>
                                 }
                             }
-                        </select>
-                    </div>
-                    <div class="col-md-4">
-                        <label for="dogSelect" class="form-label">Dog <span class="text-danger">*</span></label>
-                        <select id="dogSelect" class="form-select" @bind="entry.DogId">
-                            <option value="0">-- Select Dog --</option>
-                            @if (dogs != null)
+
+                            @if (showAddHandlerForm)
                             {
-                                @foreach (var dog in dogs.OrderBy(d => d.Name))
+                                <div class="border p-3 mt-2 bg-light">
+                                    <h6>New Handler</h6>
+                                    <div class="row g-2">
+                                        <div class="col-md-4">
+                                            <label class="form-label">First Name <span class="text-danger">*</span></label>
+                                            <input class="form-control" @bind="newHandler.FirstName" />
+                                        </div>
+                                        <div class="col-md-4">
+                                            <label class="form-label">Last Name <span class="text-danger">*</span></label>
+                                            <input class="form-control" @bind="newHandler.LastName" />
+                                        </div>
+                                        <div class="col-md-4">
+                                            <label class="form-label">State</label>
+                                            <select class="form-select" @bind="newHandler.StateCode">
+                                                <option value="">-- Select --</option>
+                                                @if (states != null)
+                                                {
+                                                    @foreach (var st in states)
+                                                    {
+                                                        <option value="@st.StateCode">@st.StateName</option>
+                                                    }
+                                                }
+                                            </select>
+                                        </div>
+                                    </div>
+                                    <div class="mt-2">
+                                        <button type="button" class="btn btn-sm btn-success me-2" @onclick="SaveNewHandler">Save &amp; Select</button>
+                                        <button type="button" class="btn btn-sm btn-secondary" @onclick="() => showAddHandlerForm = false">Cancel</button>
+                                    </div>
+                                </div>
+                            }
+                        }
+                    </div>
+                    <div class="col-md-6">
+                        <label class="form-label">Dog <span class="text-danger">*</span></label>
+                        @if (selectedDog != null)
+                        {
+                            <div class="alert alert-success d-flex justify-content-between align-items-center mb-0">
+                                <span>@selectedDog.Name @(!string.IsNullOrEmpty(selectedDog.Breed) ? $"({selectedDog.Breed})" : "")</span>
+                                <button type="button" class="btn btn-sm btn-outline-secondary" @onclick="ClearDogSelection">Change</button>
+                            </div>
+                        }
+                        else
+                        {
+                            <div class="row g-2 align-items-end">
+                                <div class="col-3">
+                                    <input class="form-control" placeholder="ID" @bind="dogIdSearchTerm" @bind:event="oninput"
+                                           @onkeyup="@(async e => { if (e.Key == "Enter") await SearchDogs(); })" />
+                                </div>
+                                <div class="col-6">
+                                    <input class="form-control" placeholder="Search by name" @bind="dogSearchTerm" @bind:event="oninput"
+                                           @onkeyup="@(async e => { if (e.Key == "Enter") await SearchDogs(); })" />
+                                </div>
+                                <div class="col-3">
+                                    <button type="button" class="btn btn-primary w-100" @onclick="SearchDogs">Search</button>
+                                </div>
+                            </div>
+
+                            @if (dogSearchResults != null)
+                            {
+                                @if (!dogSearchResults.Any())
                                 {
-                                    <option value="@dog.DogId">@dog.Name (@dog.Breed)</option>
+                                    <p class="text-muted mt-2 mb-2"><em>No dogs found.</em></p>
+                                }
+                                else
+                                {
+                                    <table class="table table-sm mt-2">
+                                        <thead>
+                                            <tr>
+                                                <th>ID</th>
+                                                <th>Name</th>
+                                                <th>Breed</th>
+                                                <th>Owner</th>
+                                                <th></th>
+                                            </tr>
+                                        </thead>
+                                        <tbody>
+                                            @foreach (var d in dogSearchResults)
+                                            {
+                                                <tr>
+                                                    <td>@d.DogId</td>
+                                                    <td>@d.Name</td>
+                                                    <td>@d.Breed</td>
+                                                    <td>@d.OwnerName</td>
+                                                    <td class="text-end">
+                                                        <button type="button" class="btn btn-sm btn-primary" @onclick="() => SelectDog(d)">Select</button>
+                                                    </td>
+                                                </tr>
+                                            }
+                                        </tbody>
+                                    </table>
+                                }
+
+                                @if (!showAddDogForm)
+                                {
+                                    <button type="button" class="btn btn-sm btn-outline-primary" @onclick="() => ShowAddDog()">
+                                        + Add New Dog
+                                    </button>
                                 }
                             }
-                        </select>
+
+                            @if (showAddDogForm)
+                            {
+                                <div class="border p-3 mt-2 bg-light">
+                                    <h6>New Dog</h6>
+                                    <div class="row g-2">
+                                        <div class="col-md-4">
+                                            <label class="form-label">Dog Name <span class="text-danger">*</span></label>
+                                            <input class="form-control" @bind="newDog.Name" />
+                                        </div>
+                                        <div class="col-md-4">
+                                            <label class="form-label">Breed</label>
+                                            <input class="form-control" @bind="newDog.Breed" />
+                                        </div>
+                                        <div class="col-md-4">
+                                            <label class="form-label">Owner Name</label>
+                                            <input class="form-control" @bind="newDog.OwnerName" />
+                                        </div>
+                                    </div>
+                                    <div class="mt-2">
+                                        <button type="button" class="btn btn-sm btn-success me-2" @onclick="SaveNewDog">Save &amp; Select</button>
+                                        <button type="button" class="btn btn-sm btn-secondary" @onclick="() => showAddDogForm = false">Cancel</button>
+                                    </div>
+                                </div>
+                            }
+                        }
                     </div>
+                </div>
+
+                <div class="row mb-3">
                     <div class="col-md-4">
                         <label for="classSelect" class="form-label">Class <span class="text-danger">*</span></label>
                         <select id="classSelect" class="form-select" @bind="entry.ClassId">
@@ -488,9 +660,6 @@ else
                             }
                         </select>
                     </div>
-                </div>
-
-                <div class="row mb-3">
                     <div class="col-md-3">
                         <label for="runOrder" class="form-label">Run Order</label>
                         <input id="runOrder" type="number" class="form-control" @bind="entry.RunOrder" min="1" />
@@ -616,10 +785,10 @@ else
                 <button type="submit" class="btn btn-success me-2">
                     <span class="oi oi-check"></span> Save
                 </button>
-                <ActionLink Action="Index" Text="Cancel" ResourceKey="Cancel" Class="btn btn-secondary me-2" />
+                <ActionLink Action="Index" Parameters="@($"trialId={entry.TrialId}")" Text="Cancel" ResourceKey="Cancel" Class="btn btn-secondary me-2" />
                 @if (entryId != -1)
                 {
-                    <ActionLink Action="Detail" Parameters="@($"id={entryId}")" Text="View Details"
+                    <ActionLink Action="Detail" Parameters="@($"id={entryId}&trialId={entry.TrialId}")" Text="View Details"
                                 ResourceKey="ViewDetails" Class="btn btn-info me-2" />
                     <button type="button" class="btn btn-danger" @onclick="DeleteEntry">
                         <span class="oi oi-trash"></span> Delete
@@ -636,8 +805,6 @@ else
     private MSSA_Entry entry = new();
     private List<MSSA_Event> events;
     private List<MSSA_Trial> trials;
-    private List<MSSA_Handler> handlers;
-    private List<MSSA_Dog> dogs;
     private List<MSSA_Class> classes;
 
     private int selectedEventId = 0;
@@ -648,8 +815,10 @@ else
 
     // Add-mode only
     private List<MSSA_EventClassOffering> offerings;
-    private List<MSSA_State> states;
     private List<EntryListItem> eventEntries;
+
+    // Shared by the Handler/Dog quick-add forms in both Add and Edit mode.
+    private List<MSSA_State> states;
 
     private MSSA_Handler selectedHandler;
     private string handlerSearchTerm = "";
@@ -727,13 +896,12 @@ else
                 myTeamEventIds = await EventService.GetMyTeamEventIdsAsync(ModuleState.ModuleId);
             }
 
+            // Needed for the quick-add Handler form in both Add and Edit mode.
+            states = await StateService.GetStatesAsync(ModuleState.ModuleId);
+
             if (PageState.QueryString.ContainsKey("id"))
             {
                 entryId = int.Parse(PageState.QueryString["id"]);
-
-                // Edit mode needs full handler/dog lists for its dropdowns.
-                handlers = await HandlerService.GetHandlersAsync(ModuleState.ModuleId);
-                dogs = await DogService.GetDogsAsync(ModuleState.ModuleId);
 
                 entry = await EntryService.GetEntryAsync(entryId, ModuleState.ModuleId);
 
@@ -745,15 +913,12 @@ else
                     return;
                 }
 
-                // Load the event and trials for this entry
-                var allTrials = new List<MSSA_Trial>();
-                foreach (var evt in events)
-                {
-                    var eventTrials = await EventService.GetEventTrialsAsync(evt.EventId, ModuleState.ModuleId);
-                    allTrials.AddRange(eventTrials);
-                }
+                // Pre-populate the Handler/Dog search pickers with the entry's current values.
+                selectedHandler = entry.HandlerId > 0 ? await HandlerService.GetHandlerAsync(entry.HandlerId, ModuleState.ModuleId) : null;
+                selectedDog = entry.DogId > 0 ? await DogService.GetDogAsync(entry.DogId, ModuleState.ModuleId) : null;
 
-                var selectedTrial = allTrials.FirstOrDefault(t => t.TrialId == entry.TrialId);
+                // Load the event and trials for this entry
+                var selectedTrial = await EventService.GetTrialAsync(entry.TrialId, ModuleState.ModuleId);
                 if (selectedTrial != null)
                 {
                     selectedEventId = selectedTrial.EventId;
@@ -769,11 +934,6 @@ else
                 {
                     tieBreakerTimeString = $"{(int)entry.TieBreakerTime.Value.TotalMinutes}:{entry.TieBreakerTime.Value.Seconds:D2}";
                 }
-            }
-            else
-            {
-                // Add mode: states are needed for the quick-add Handler form.
-                states = await StateService.GetStatesAsync(ModuleState.ModuleId);
             }
         }
         catch (Exception ex)
@@ -846,6 +1006,7 @@ else
     private void SelectHandler(MSSA_Handler h)
     {
         selectedHandler = h;
+        entry.HandlerId = h.HandlerId;
         handlerSearchResults = null;
         handlerSearchTerm = "";
         handlerIdSearchTerm = "";
@@ -854,6 +1015,7 @@ else
     private void ClearHandlerSelection()
     {
         selectedHandler = null;
+        entry.HandlerId = 0;
         handlerSearchResults = null;
         handlerSearchTerm = "";
         handlerIdSearchTerm = "";
@@ -904,6 +1066,7 @@ else
     private void SelectDog(MSSA_Dog d)
     {
         selectedDog = d;
+        entry.DogId = d.DogId;
         dogSearchResults = null;
         dogSearchTerm = "";
         dogIdSearchTerm = "";
@@ -912,6 +1075,7 @@ else
     private void ClearDogSelection()
     {
         selectedDog = null;
+        entry.DogId = 0;
         dogSearchResults = null;
         dogSearchTerm = "";
         dogIdSearchTerm = "";

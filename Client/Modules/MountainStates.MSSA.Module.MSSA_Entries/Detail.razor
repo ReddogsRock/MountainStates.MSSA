@@ -22,7 +22,7 @@ else
                 <h2>Entry Details</h2>
             </div>
             <div class="col-auto">
-                <ActionLink Action="Index" Text="Back to List" ResourceKey="BackToList" Class="btn btn-secondary me-2" />
+                <ActionLink Action="Index" Parameters="@($"trialId={entry.TrialId}")" Text="Back to List" ResourceKey="BackToList" Class="btn btn-secondary me-2" />
                 @if (CanEdit())
                 {
                     <ActionLink Action="Edit" Parameters="@($"id={entry.EntryId}")"
