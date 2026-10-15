@@ -110,6 +110,15 @@ namespace MountainStates.MSSA.Module.MSSA_Entries.Models
                     return EnteredTotalScore;
                 }
 
+                bool anyScoreEntered = ObstacleScore1.HasValue || ObstacleScore2.HasValue || ObstacleScore3.HasValue ||
+                                        ObstacleScore4.HasValue || ObstacleScore5.HasValue || ObstacleScore6.HasValue ||
+                                        ObstacleScore7.HasValue || ObstacleScore8.HasValue || ObstacleScore9.HasValue ||
+                                        Penalty.HasValue;
+                if (!anyScoreEntered)
+                {
+                    return null;
+                }
+
                 decimal sum = 0;
                 if (ObstacleScore1.HasValue) sum += ObstacleScore1.Value;
                 if (ObstacleScore2.HasValue) sum += ObstacleScore2.Value;
@@ -121,7 +130,7 @@ namespace MountainStates.MSSA.Module.MSSA_Entries.Models
                 if (ObstacleScore8.HasValue) sum += ObstacleScore8.Value;
                 if (ObstacleScore9.HasValue) sum += ObstacleScore9.Value;
                 if (Penalty.HasValue) sum -= Penalty.Value;
-                return sum > 0 ? sum : (decimal?)null;
+                return sum;
             }
         }
     }
