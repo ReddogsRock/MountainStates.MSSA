@@ -9,7 +9,6 @@
 @namespace MountainStates.MSSA.Module.MSSA_Dogs
 @inherits ModuleBase
 @inject IMSSA_DogService DogService
-@inject IMSSA_HandlerService HandlerService
 @inject IMSSA_StateService StateService
 @inject NavigationManager NavigationManager
 
@@ -32,6 +31,25 @@
         {
             <div class="alert alert-danger" role="alert">
                 @errorMessage
+            </div>
+        }
+
+        @if (similarDogMatches != null && similarDogMatches.Any())
+        {
+            <div class="alert alert-warning">
+                <p class="mb-2"><strong>This looks similar to an existing dog - is this a duplicate?</strong></p>
+                <ul class="mb-2">
+                    @foreach (var match in similarDogMatches)
+                    {
+                        <li class="d-flex justify-content-between align-items-center mb-1">
+                            <span>@match.Name @(!string.IsNullOrEmpty(match.OwnerName) ? $"- owner {match.OwnerName}" : "") - ID @match.DogId</span>
+                            <ActionLink Action="Detail" Parameters="@($"id={match.DogId}")" Text="View This Dog" Class="btn btn-sm btn-primary ms-2" />
+                        </li>
+                    }
+                </ul>
+                <button type="button" class="btn btn-sm btn-outline-secondary" @onclick="CreateAnyway">
+                    This Is Not a Duplicate - Create Anyway
+                </button>
             </div>
         }
 
@@ -96,96 +114,7 @@
                 }
                 else
                 {
-                    <div class="row g-2 align-items-end">
-                        <div class="col-md-3">
-                            <label class="form-label">ID</label>
-                            <input class="form-control" @bind="ownerIdSearchTerm" @bind:event="oninput"
-                                   @onkeyup="@(async e => { if (e.Key == "Enter") await SearchOwnerHandlers(); })" />
-                        </div>
-                        <div class="col-md-5">
-                            <label class="form-label">Search by name</label>
-                            <input class="form-control" @bind="ownerSearchTerm" @bind:event="oninput"
-                                   @onkeyup="@(async e => { if (e.Key == "Enter") await SearchOwnerHandlers(); })" />
-                        </div>
-                        <div class="col-md-4">
-                            <button type="button" class="btn btn-primary w-100" @onclick="SearchOwnerHandlers">Search</button>
-                        </div>
-                    </div>
-
-                    @if (ownerSearchResults != null)
-                    {
-                        @if (!ownerSearchResults.Any())
-                        {
-                            <p class="text-muted mt-2 mb-2"><em>No handlers found.</em></p>
-                        }
-                        else
-                        {
-                            <table class="table table-sm mt-2">
-                                <thead>
-                                    <tr>
-                                        <th>ID</th>
-                                        <th>Name</th>
-                                        <th>State</th>
-                                        <th></th>
-                                    </tr>
-                                </thead>
-                                <tbody>
-                                    @foreach (var h in ownerSearchResults)
-                                    {
-                                        <tr>
-                                            <td>@h.HandlerId</td>
-                                            <td>@h.FullName</td>
-                                            <td>@h.StateCode</td>
-                                            <td class="text-end">
-                                                <button type="button" class="btn btn-sm btn-primary" @onclick="() => SelectOwnerHandler(h)">Select</button>
-                                            </td>
-                                        </tr>
-                                    }
-                                </tbody>
-                            </table>
-                        }
-
-                        @if (!showAddOwnerHandlerForm)
-                        {
-                            <button type="button" class="btn btn-sm btn-outline-primary" @onclick="ShowAddOwnerHandler">
-                                + Add New Handler
-                            </button>
-                        }
-                    }
-
-                    @if (showAddOwnerHandlerForm)
-                    {
-                        <div class="border p-3 mt-2 bg-light">
-                            <h6>New Handler</h6>
-                            <div class="row g-2">
-                                <div class="col-md-4">
-                                    <label class="form-label">First Name <span class="text-danger">*</span></label>
-                                    <input class="form-control" @bind="newOwnerHandler.FirstName" />
-                                </div>
-                                <div class="col-md-4">
-                                    <label class="form-label">Last Name <span class="text-danger">*</span></label>
-                                    <input class="form-control" @bind="newOwnerHandler.LastName" />
-                                </div>
-                                <div class="col-md-4">
-                                    <label class="form-label">State</label>
-                                    <select class="form-select" @bind="newOwnerHandler.StateCode">
-                                        <option value="">-- Select --</option>
-                                        @if (states != null)
-                                        {
-                                            @foreach (var st in states)
-                                            {
-                                                <option value="@st.StateCode">@st.StateName</option>
-                                            }
-                                        }
-                                    </select>
-                                </div>
-                            </div>
-                            <div class="mt-2">
-                                <button type="button" class="btn btn-sm btn-success me-2" @onclick="SaveNewOwnerHandler">Save &amp; Select</button>
-                                <button type="button" class="btn btn-sm btn-secondary" @onclick="() => showAddOwnerHandlerForm = false">Cancel</button>
-                            </div>
-                        </div>
-                    }
+                    <MSSA_HandlerPicker ModuleId="ModuleState.ModuleId" States="states" OnSelected="SelectOwnerHandler" />
 
                     @if (!string.IsNullOrEmpty(dog.OwnerName))
                     {
@@ -382,17 +311,16 @@
     private string errorMessage = "";
     private bool isSaving = false;
 
+    // Fuzzy duplicate check on the dog itself (not the owner) - see SaveDog.
+    private List<MSSA_Dog> similarDogMatches;
+    private bool confirmedCreateAnyway = false;
+
     // Owner Name search - not a foreign key (MSSA_Dog.OwnerName is a plain string, same
     // as MSSA_DogOwnershipHistory), just a search-or-add UI on top of it so staff pick an
-    // existing Handler's name instead of retyping it. Same pattern as the Handler
-    // search/quick-add in Entries/Edit.razor.
+    // existing Handler's name instead of retyping it. Search/quick-add UI itself lives in
+    // the shared MSSA_HandlerPicker component (also used by Handlers/Edit and Entries/Edit).
     private List<MSSA_State> states;
     private bool ownerSearchActive = false;
-    private string ownerSearchTerm = "";
-    private string ownerIdSearchTerm = "";
-    private List<MSSA_Handler> ownerSearchResults;
-    private bool showAddOwnerHandlerForm = false;
-    private MSSA_Handler newOwnerHandler = new();
 
     // Futurity form state (edit mode - existing dogs)
     private bool showFuturityForm = false;
@@ -465,63 +393,15 @@
         if (value) dog.IsActive = false;
     }
 
-    private async Task SearchOwnerHandlers()
-    {
-        if (int.TryParse(ownerIdSearchTerm, out var id) && id > 0)
-        {
-            var handler = await HandlerService.GetHandlerAsync(id, ModuleState.ModuleId);
-            ownerSearchResults = handler != null ? new List<MSSA_Handler> { handler } : new List<MSSA_Handler>();
-        }
-        else
-        {
-            ownerSearchResults = await HandlerService.SearchHandlersAsync(ownerSearchTerm, null, null, ModuleState.ModuleId);
-        }
-        showAddOwnerHandlerForm = false;
-    }
-
     private void SelectOwnerHandler(MSSA_Handler h)
     {
         dog.OwnerName = h.FullName;
         ownerSearchActive = false;
-        ownerSearchResults = null;
-        ownerSearchTerm = "";
-        ownerIdSearchTerm = "";
-        showAddOwnerHandlerForm = false;
-    }
-
-    private void ShowAddOwnerHandler()
-    {
-        newOwnerHandler = new MSSA_Handler { IsActive = true };
-        showAddOwnerHandlerForm = true;
-    }
-
-    private async Task SaveNewOwnerHandler()
-    {
-        try
-        {
-            if (string.IsNullOrWhiteSpace(newOwnerHandler.FirstName) || string.IsNullOrWhiteSpace(newOwnerHandler.LastName))
-            {
-                errorMessage = "First and Last Name are required for a new handler.";
-                return;
-            }
-            errorMessage = "";
-            var saved = await HandlerService.AddHandlerAsync(newOwnerHandler, ModuleState.ModuleId);
-            SelectOwnerHandler(saved);
-        }
-        catch (Exception ex)
-        {
-            await logger.LogError(ex, "Error adding handler");
-            errorMessage = "Error adding handler. Please try again.";
-        }
     }
 
     private void CancelOwnerSearch()
     {
         ownerSearchActive = string.IsNullOrEmpty(dog.OwnerName);
-        ownerSearchResults = null;
-        ownerSearchTerm = "";
-        ownerIdSearchTerm = "";
-        showAddOwnerHandlerForm = false;
     }
 
     private async Task SaveDog()
@@ -549,6 +429,18 @@
             {
                 errorMessage = "Age documentation is required to enroll in Futurity.";
                 return;
+            }
+
+            // Fuzzy duplicate check - only for a brand new dog, and only on the first
+            // Save attempt (confirmedCreateAnyway is set once the user explicitly
+            // dismisses the warning below, so a second Save click goes straight through).
+            if (dogId == -1 && !confirmedCreateAnyway)
+            {
+                similarDogMatches = (await DogService.FindSimilarDogsAsync(dog.Name, dog.OwnerName, ModuleState.ModuleId))?.ToList();
+                if (similarDogMatches != null && similarDogMatches.Any())
+                {
+                    return;
+                }
             }
 
             if (selectedNurseryDocument != null)
@@ -613,6 +505,13 @@
         {
             isSaving = false;
         }
+    }
+
+    private async Task CreateAnyway()
+    {
+        confirmedCreateAnyway = true;
+        similarDogMatches = null;
+        await SaveDog();
     }
 
     private void OnFuturityDocumentSelected(InputFileChangeEventArgs e)

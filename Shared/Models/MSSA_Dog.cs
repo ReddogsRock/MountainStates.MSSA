@@ -106,5 +106,10 @@ namespace MountainStates.MSSA.Module.MSSA_Dogs.Models
         // rather than guessing.
         [NotMapped]
         public int? OwnerHandlerId { get; set; }
+
+        // Populated only by FindSimilarDogsAsync (fuzzy duplicate check on create) - not
+        // persisted, not set by any other query.
+        [NotMapped]
+        public double? MatchScore { get; set; }
     }
 }

@@ -25,6 +25,25 @@
             </div>
         }
 
+        @if (similarHandlerMatches != null && similarHandlerMatches.Any())
+        {
+            <div class="alert alert-warning">
+                <p class="mb-2"><strong>This looks similar to an existing handler - is this a duplicate?</strong></p>
+                <ul class="mb-2">
+                    @foreach (var match in similarHandlerMatches)
+                    {
+                        <li class="d-flex justify-content-between align-items-center mb-1">
+                            <span>@match.FullName @(!string.IsNullOrEmpty(match.StateCode) ? $"({match.StateCode})" : "") - ID @match.HandlerId</span>
+                            <ActionLink Action="Detail" Parameters="@($"id={match.HandlerId}")" Text="View This Handler" Class="btn btn-sm btn-primary ms-2" />
+                        </li>
+                    }
+                </ul>
+                <button type="button" class="btn btn-sm btn-outline-secondary" @onclick="CreateAnyway">
+                    This Is Not a Duplicate - Create Anyway
+                </button>
+            </div>
+        }
+
         @* Personal Information *@
         <div class="card mb-3">
             <div class="card-header">
@@ -238,85 +257,7 @@
                             else
                             {
                                 <div class="border p-2 mb-2 bg-white">
-                                    <div class="row g-2 align-items-end">
-                                        <div class="col-md-3">
-                                            <label class="form-label">ID</label>
-                                            <input class="form-control" @bind="memberIdSearchTerm" />
-                                        </div>
-                                        <div class="col-md-5">
-                                            <label class="form-label">Search by name</label>
-                                            <input class="form-control" @bind="memberSearchTerm" />
-                                        </div>
-                                        <div class="col-md-4">
-                                            <button type="button" class="btn btn-primary w-100" @onclick="SearchMembers">Search</button>
-                                        </div>
-                                    </div>
-
-                                    @if (memberSearchResults != null)
-                                    {
-                                        @if (!memberSearchResults.Any())
-                                        {
-                                            <p class="text-muted mt-2 mb-2"><em>No handlers found.</em></p>
-                                        }
-                                        else
-                                        {
-                                            <table class="table table-sm mt-2">
-                                                <tbody>
-                                                    @foreach (var h in memberSearchResults)
-                                                    {
-                                                        <tr>
-                                                            <td>@h.HandlerId</td>
-                                                            <td>@h.FullName</td>
-                                                            <td class="text-end">
-                                                                <button type="button" class="btn btn-sm btn-primary" @onclick="() => AddMemberToForm(h)">Select</button>
-                                                            </td>
-                                                        </tr>
-                                                    }
-                                                </tbody>
-                                            </table>
-                                        }
-
-                                        @if (!showAddNewMemberForm)
-                                        {
-                                            <button type="button" class="btn btn-sm btn-outline-primary" @onclick="ShowAddNewMemberHandler">
-                                                + Add New Handler
-                                            </button>
-                                        }
-                                    }
-
-                                    @if (showAddNewMemberForm)
-                                    {
-                                        <div class="border p-3 mt-2 bg-light">
-                                            <h6>New Handler</h6>
-                                            <div class="row g-2">
-                                                <div class="col-md-4">
-                                                    <label class="form-label">First Name <span class="text-danger">*</span></label>
-                                                    <input class="form-control" @bind="newMemberHandler.FirstName" />
-                                                </div>
-                                                <div class="col-md-4">
-                                                    <label class="form-label">Last Name <span class="text-danger">*</span></label>
-                                                    <input class="form-control" @bind="newMemberHandler.LastName" />
-                                                </div>
-                                                <div class="col-md-4">
-                                                    <label class="form-label">State</label>
-                                                    <select class="form-select" @bind="newMemberHandler.StateCode">
-                                                        <option value="">-- Select --</option>
-                                                        @if (states != null)
-                                                        {
-                                                            @foreach (var st in states)
-                                                            {
-                                                                <option value="@st.StateCode">@st.StateName</option>
-                                                            }
-                                                        }
-                                                    </select>
-                                                </div>
-                                            </div>
-                                            <div class="mt-2">
-                                                <button type="button" class="btn btn-sm btn-success me-2" @onclick="SaveNewMemberHandler">Save &amp; Add</button>
-                                                <button type="button" class="btn btn-sm btn-secondary" @onclick="() => showAddNewMemberForm = false">Cancel</button>
-                                            </div>
-                                        </div>
-                                    }
+                                    <MSSA_HandlerPicker ModuleId="ModuleState.ModuleId" States="states" OnSelected="AddMemberToForm" />
 
                                     <div class="mt-2">
                                         <button type="button" class="btn btn-sm btn-secondary" @onclick="CloseMemberSearch">Done Adding</button>
@@ -418,18 +359,18 @@
     private List<MSSA_State> states;
     private string errorMessage = "";
 
+    // Fuzzy duplicate check on the handler itself - see SaveHandler.
+    private List<MSSA_Handler> similarHandlerMatches;
+    private bool confirmedCreateAnyway = false;
+
     // Membership form state
     private bool showMembershipForm = false;
     private MSSA_Membership currentMembership = new();
     private List<MembershipMemberInfo> membershipMembers = new();
 
+    // Member search/quick-add UI itself lives in the shared MSSA_HandlerPicker component
+    // (also used by Dogs/Edit and Entries/Edit).
     private bool showMemberSearch = false;
-    private string memberSearchTerm = "";
-    private string memberIdSearchTerm = "";
-    private List<MSSA_Handler> memberSearchResults;
-
-    private bool showAddNewMemberForm = false;
-    private MSSA_Handler newMemberHandler = new();
 
     protected override async Task OnInitializedAsync()
     {
@@ -470,6 +411,18 @@
                 return;
             }
 
+            // Fuzzy duplicate check - only for a brand new handler, and only on the
+            // first Save attempt (confirmedCreateAnyway is set once the user explicitly
+            // dismisses the warning below, so a second Save click goes straight through).
+            if (handlerId == -1 && !confirmedCreateAnyway)
+            {
+                similarHandlerMatches = (await HandlerService.FindSimilarHandlersAsync(handler.FirstName, handler.LastName, ModuleState.ModuleId))?.ToList();
+                if (similarHandlerMatches != null && similarHandlerMatches.Any())
+                {
+                    return;
+                }
+            }
+
             if (handlerId == -1)
             {
                 handler = await HandlerService.AddHandlerAsync(handler, ModuleState.ModuleId);
@@ -488,6 +441,13 @@
             await logger.LogError(ex, "Error saving handler");
             errorMessage = "Error saving handler. Please try again.";
         }
+    }
+
+    private async Task CreateAnyway()
+    {
+        confirmedCreateAnyway = true;
+        similarHandlerMatches = null;
+        await SaveHandler();
     }
 
     private async Task DeleteHandler()
@@ -530,22 +490,6 @@
 
         showMembershipForm = true;
         showMemberSearch = false;
-        memberSearchResults = null;
-        showAddNewMemberForm = false;
-    }
-
-    private async Task SearchMembers()
-    {
-        if (int.TryParse(memberIdSearchTerm, out var id) && id > 0)
-        {
-            var h = await HandlerService.GetHandlerAsync(id, ModuleState.ModuleId);
-            memberSearchResults = h != null ? new List<MSSA_Handler> { h } : new List<MSSA_Handler>();
-        }
-        else
-        {
-            memberSearchResults = await HandlerService.SearchHandlersAsync(memberSearchTerm, null, null, ModuleState.ModuleId);
-        }
-        showAddNewMemberForm = false;
     }
 
     private void AddMemberToForm(MSSA_Handler h)
@@ -554,9 +498,6 @@
         {
             membershipMembers.Add(new MembershipMemberInfo { HandlerId = h.HandlerId, HandlerName = h.FullName, IsPrimary = false });
         }
-        memberSearchResults = null;
-        memberSearchTerm = "";
-        memberIdSearchTerm = "";
     }
 
     private void RemoveMemberFromForm(int removeHandlerId)
@@ -572,38 +513,9 @@
         }
     }
 
-    private void ShowAddNewMemberHandler()
-    {
-        newMemberHandler = new MSSA_Handler { IsActive = true };
-        showAddNewMemberForm = true;
-    }
-
-    private async Task SaveNewMemberHandler()
-    {
-        try
-        {
-            if (string.IsNullOrWhiteSpace(newMemberHandler.FirstName) || string.IsNullOrWhiteSpace(newMemberHandler.LastName))
-            {
-                errorMessage = "First and Last Name are required for a new handler.";
-                return;
-            }
-            errorMessage = "";
-            var saved = await HandlerService.AddHandlerAsync(newMemberHandler, ModuleState.ModuleId);
-            AddMemberToForm(saved);
-            showAddNewMemberForm = false;
-        }
-        catch (Exception ex)
-        {
-            await logger.LogError(ex, "Error adding handler");
-            errorMessage = "Error adding handler. Please try again.";
-        }
-    }
-
     private void CloseMemberSearch()
     {
         showMemberSearch = false;
-        memberSearchResults = null;
-        showAddNewMemberForm = false;
     }
 
     private async Task SaveMembership()
@@ -650,8 +562,6 @@
         currentMembership = new();
         membershipMembers = new();
         showMemberSearch = false;
-        memberSearchResults = null;
-        showAddNewMemberForm = false;
     }
 
     private async Task DeleteMembership(int membershipId)

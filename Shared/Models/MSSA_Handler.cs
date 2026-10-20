@@ -67,5 +67,10 @@ namespace MountainStates.MSSA.Module.MSSA_Handlers.Models
 
         [NotMapped]
         public bool HasActiveMembership => Memberships != null && Memberships.Any(m => m.IsCurrentlyActive);
+
+        // Populated only by FindSimilarHandlersAsync (fuzzy duplicate check on create) -
+        // not persisted, not set by any other query.
+        [NotMapped]
+        public double? MatchScore { get; set; }
     }
 }

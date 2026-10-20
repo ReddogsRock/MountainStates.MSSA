@@ -2,6 +2,7 @@
 using System.Collections.Generic;
 using System.Linq;
 using System.Threading.Tasks;
+using FuzzySharp;
 using Microsoft.EntityFrameworkCore;
 using Oqtane.Modules;
 using MountainStates.MSSA.Module.MSSA_Handlers.Models;
@@ -238,6 +239,42 @@ namespace MountainStates.MSSA.Module.MSSA_Handlers.Repository
             }
 
             return handlers;
+        }
+
+        // Fuzzy duplicate check, run before creating a new handler (see Handlers/Edit.razor,
+        // Dogs/Edit.razor's owner quick-add, and Entries/Edit.razor's handler quick-add).
+        // Unlike SearchHandlersAsync's substring match, this is meant to catch typos/
+        // near-misses, and TokenSortRatio tolerates "Smith John" vs "John Smith" too.
+        private const int HandlerNameMatchThreshold = 80;
+
+        public async Task<IEnumerable<MSSA_Handler>> FindSimilarHandlersAsync(string firstName, string lastName)
+        {
+            var fullName = $"{firstName} {lastName}".Trim();
+            if (string.IsNullOrWhiteSpace(fullName))
+            {
+                return Enumerable.Empty<MSSA_Handler>();
+            }
+
+            using var db = await _dbContextFactory.CreateDbContextAsync();
+
+            var handlers = await db.MSSA_Handlers
+                .Where(h => h.IsActive)
+                .ToListAsync();
+
+            // FuzzySharp's ratio scorers are case-sensitive - normalize case here so a
+            // handler typed in different case than an existing one still matches (see
+            // MSSA_DogRepository.FindSimilarDogsAsync for the reasoning/numbers).
+            var normalizedFullName = fullName.ToLowerInvariant();
+            foreach (var handler in handlers)
+            {
+                handler.MatchScore = Fuzz.TokenSortRatio(normalizedFullName, (handler.FullName ?? "").ToLowerInvariant());
+            }
+
+            return handlers
+                .Where(h => h.MatchScore >= HandlerNameMatchThreshold)
+                .OrderByDescending(h => h.MatchScore)
+                .Take(5)
+                .ToList();
         }
 
         // Entries

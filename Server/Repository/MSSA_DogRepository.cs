@@ -1,4 +1,5 @@
-﻿using Microsoft.EntityFrameworkCore;
+﻿using FuzzySharp;
+using Microsoft.EntityFrameworkCore;
 using MountainStates.MSSA.Module.MSSA_Dogs.Enums;
 using MountainStates.MSSA.Module.MSSA_Dogs.Models;
 using MountainStates.MSSA.Module.MSSA_Finals.Models;
@@ -290,6 +291,64 @@ namespace MountainStates.MSSA.Module.MSSA_Dogs.Repository
 
             await PopulateOwnerHandlerIdsAsync(db, dogs);
             return dogs;
+        }
+
+        // Fuzzy duplicate check, run before creating a new dog (see Dogs/Edit.razor and
+        // Entries/Edit.razor's quick-add forms). Unlike SearchDogsAsync's substring match,
+        // this is meant to catch typos/near-misses a staff member wouldn't find by
+        // searching themselves. Name alone isn't enough to flag a match - "Duke" or "Jack"
+        // repeat across unrelated owners - so both the name and the owner have to be
+        // similar for a dog to come back as a candidate.
+        private const int NameMatchThreshold = 80;
+        private const int OwnerMatchThreshold = 70;
+
+        public async Task<IEnumerable<MSSA_Dog>> FindSimilarDogsAsync(string name, string ownerName)
+        {
+            if (string.IsNullOrWhiteSpace(name))
+            {
+                return Enumerable.Empty<MSSA_Dog>();
+            }
+
+            using var db = await _dbContextFactory.CreateDbContextAsync();
+
+            var dogs = await db.MSSA_Dogs
+                .Where(d => d.IsActive)
+                .ToListAsync();
+
+            // FuzzySharp's ratio scorers are case-sensitive ("riplee" vs "Riplei" scores
+            // 67, but "riplee" vs "riplei" scores 83) - normalize case here so a dog typed
+            // in different case than an existing one still matches.
+            var normalizedName = (name ?? "").ToLowerInvariant();
+            var normalizedOwnerName = (ownerName ?? "").ToLowerInvariant();
+
+            var matches = new List<MSSA_Dog>();
+            foreach (var dog in dogs)
+            {
+                var nameScore = Fuzz.TokenSortRatio(normalizedName, (dog.Name ?? "").ToLowerInvariant());
+                if (nameScore < NameMatchThreshold)
+                {
+                    continue;
+                }
+
+                // Without an owner to compare, fall back to name alone (e.g. a brand new
+                // dog with no owner picked yet) - otherwise require both to be similar.
+                double ownerScore = 100;
+                if (!string.IsNullOrWhiteSpace(ownerName) || !string.IsNullOrWhiteSpace(dog.OwnerName))
+                {
+                    ownerScore = Fuzz.TokenSortRatio(normalizedOwnerName, (dog.OwnerName ?? "").ToLowerInvariant());
+                    if (ownerScore < OwnerMatchThreshold)
+                    {
+                        continue;
+                    }
+                }
+
+                dog.MatchScore = (nameScore + ownerScore) / 2.0;
+                matches.Add(dog);
+            }
+
+            var ranked = matches.OrderByDescending(d => d.MatchScore).Take(5).ToList();
+            await PopulateOwnerHandlerIdsAsync(db, ranked);
+            return ranked;
         }
 
         // Every dog nominated for Futurity in a given year (or every year, if null),

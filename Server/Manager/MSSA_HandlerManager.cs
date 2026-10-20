@@ -62,6 +62,11 @@ namespace MountainStates.MSSA.Module.MSSA_Handlers.Manager
                 handlerLevel);
         }
 
+        public async Task<IEnumerable<MSSA_Handler>> FindSimilarHandlersAsync(string firstName, string lastName, int moduleId)
+        {
+            return await _repository.FindSimilarHandlersAsync(firstName, lastName);
+        }
+
         // Entries
         public async Task<IEnumerable<MSSA_HandlerEntry>> GetHandlerEntriesAsync(int handlerId, int moduleId)
         {

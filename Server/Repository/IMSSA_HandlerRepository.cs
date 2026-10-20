@@ -19,6 +19,9 @@ namespace MountainStates.MSSA.Module.MSSA_Handlers.Repository
             string stateCode = null,
             string handlerLevel = null);
 
+        // Fuzzy duplicate check, used before creating a new handler - see MSSA_Handler.MatchScore.
+        Task<IEnumerable<MSSA_Handler>> FindSimilarHandlersAsync(string firstName, string lastName);
+
         // Entries for detail view
         Task<IEnumerable<MSSA_HandlerEntry>> GetHandlerEntriesAsync(int handlerId);
 

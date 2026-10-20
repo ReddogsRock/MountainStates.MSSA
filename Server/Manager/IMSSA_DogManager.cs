@@ -23,6 +23,8 @@ namespace MountainStates.MSSA.Module.MSSA_Dogs.Manager
             bool? includeInactive,
             int moduleId);
 
+        Task<IEnumerable<MSSA_Dog>> FindSimilarDogsAsync(string name, string ownerName, int moduleId);
+
         // Futurity
         Task<IEnumerable<MSSA_DogFuturityParticipation>> GetDogFuturityParticipationAsync(int dogId, int moduleId);
         Task<List<FuturityRosterEntry>> GetFuturityRosterAsync(int? year, int moduleId);

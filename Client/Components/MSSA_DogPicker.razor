@@ -1,0 +1,203 @@
+@* Shared search-or-quick-add UI for picking an existing Dog or creating a new one.
+   Used by Entries/Edit (dog selection, both the bulk-add and single-entry forms).
+   Same fuzzy-duplicate-check pattern as MSSA_HandlerPicker - see that file's comment. *@
+
+@namespace MountainStates.MSSA.Client.Components
+@using MountainStates.MSSA.Module.MSSA_Dogs.Services
+@using MountainStates.MSSA.Module.MSSA_Dogs.Models
+@inject IMSSA_DogService DogService
+
+<div class="row g-2 align-items-end">
+    <div class="col-md-3">
+        <label class="form-label">ID</label>
+        <input class="form-control" @bind="idSearchTerm" @bind:event="oninput"
+               @onkeyup="@(async e => { if (e.Key == "Enter") await Search(); })" />
+    </div>
+    <div class="col-md-5">
+        <label class="form-label">Search by name</label>
+        <input class="form-control" @bind="nameSearchTerm" @bind:event="oninput"
+               @onkeyup="@(async e => { if (e.Key == "Enter") await Search(); })" />
+    </div>
+    <div class="col-md-4">
+        <button type="button" class="btn btn-primary w-100" @onclick="Search">Search</button>
+    </div>
+</div>
+
+@if (!string.IsNullOrEmpty(errorMessage))
+{
+    <p class="text-danger mt-2 mb-2">@errorMessage</p>
+}
+
+@if (searchResults != null)
+{
+    @if (!searchResults.Any())
+    {
+        <p class="text-muted mt-2 mb-2"><em>No dogs found.</em></p>
+    }
+    else
+    {
+        <table class="table table-sm mt-2">
+            <thead>
+                <tr>
+                    <th>ID</th>
+                    <th>Name</th>
+                    <th>Owner</th>
+                    <th></th>
+                </tr>
+            </thead>
+            <tbody>
+                @foreach (var d in searchResults)
+                {
+                    <tr>
+                        <td>@d.DogId</td>
+                        <td>@d.Name @(!string.IsNullOrEmpty(d.Breed) ? $"({d.Breed})" : "")</td>
+                        <td>@d.OwnerName</td>
+                        <td class="text-end">
+                            <button type="button" class="btn btn-sm btn-primary" @onclick="() => Choose(d)">Select</button>
+                        </td>
+                    </tr>
+                }
+            </tbody>
+        </table>
+    }
+
+    @if (!showAddForm)
+    {
+        <button type="button" class="btn btn-sm btn-outline-primary" @onclick="ShowAddForm">
+            + Add New Dog
+        </button>
+    }
+}
+
+@if (showAddForm)
+{
+    <div class="border p-3 mt-2 bg-light">
+        <h6>New Dog</h6>
+        <div class="row g-2">
+            <div class="col-md-4">
+                <label class="form-label">Name <span class="text-danger">*</span></label>
+                <input class="form-control" @bind="newDog.Name" />
+            </div>
+            <div class="col-md-4">
+                <label class="form-label">Breed</label>
+                <input class="form-control" @bind="newDog.Breed" />
+            </div>
+            <div class="col-md-4">
+                <label class="form-label">Owner Name</label>
+                <input class="form-control" @bind="newDog.OwnerName" />
+            </div>
+        </div>
+
+        @if (similarMatches != null && similarMatches.Any())
+        {
+            <div class="alert alert-warning mt-3 mb-2">
+                <p class="mb-2"><strong>This looks similar to an existing dog:</strong></p>
+                <ul class="mb-2">
+                    @foreach (var match in similarMatches)
+                    {
+                        <li class="d-flex justify-content-between align-items-center mb-1">
+                            <span>@match.Name @(!string.IsNullOrEmpty(match.OwnerName) ? $"- owner {match.OwnerName}" : "") - ID @match.DogId</span>
+                            <button type="button" class="btn btn-sm btn-primary ms-2" @onclick="() => Choose(match)">Use This Instead</button>
+                        </li>
+                    }
+                </ul>
+                <button type="button" class="btn btn-sm btn-outline-secondary" @onclick="CreateAnyway">
+                    Create Anyway
+                </button>
+            </div>
+        }
+        else
+        {
+            <div class="mt-2">
+                <button type="button" class="btn btn-sm btn-success me-2" @onclick="SaveNewDog">Save &amp; Select</button>
+                <button type="button" class="btn btn-sm btn-secondary" @onclick="CancelAddForm">Cancel</button>
+            </div>
+        }
+    </div>
+}
+
+@code {
+    [Parameter] public int ModuleId { get; set; }
+    [Parameter] public EventCallback<MSSA_Dog> OnSelected { get; set; }
+    [Parameter] public Func<MSSA_Dog> NewDogFactory { get; set; }
+
+    private string idSearchTerm = "";
+    private string nameSearchTerm = "";
+    private List<MSSA_Dog> searchResults;
+    private bool showAddForm = false;
+    private MSSA_Dog newDog = new();
+    private List<MSSA_Dog> similarMatches;
+    private string errorMessage = "";
+
+    private async Task Search()
+    {
+        errorMessage = "";
+        if (int.TryParse(idSearchTerm, out var id) && id > 0)
+        {
+            var dog = await DogService.GetDogAsync(id, ModuleId);
+            searchResults = dog != null ? new List<MSSA_Dog> { dog } : new List<MSSA_Dog>();
+        }
+        else
+        {
+            searchResults = await DogService.SearchDogsAsync(nameSearchTerm, null, null, null, ModuleId);
+        }
+        showAddForm = false;
+        similarMatches = null;
+    }
+
+    private async Task Choose(MSSA_Dog d)
+    {
+        searchResults = null;
+        showAddForm = false;
+        similarMatches = null;
+        idSearchTerm = "";
+        nameSearchTerm = "";
+        await OnSelected.InvokeAsync(d);
+    }
+
+    private void ShowAddForm()
+    {
+        newDog = NewDogFactory != null ? NewDogFactory() : new MSSA_Dog { IsActive = true };
+        similarMatches = null;
+        showAddForm = true;
+        errorMessage = "";
+    }
+
+    private void CancelAddForm()
+    {
+        showAddForm = false;
+        similarMatches = null;
+    }
+
+    private async Task SaveNewDog()
+    {
+        if (string.IsNullOrWhiteSpace(newDog.Name))
+        {
+            errorMessage = "Dog Name is required for a new dog.";
+            return;
+        }
+        errorMessage = "";
+
+        similarMatches = (await DogService.FindSimilarDogsAsync(newDog.Name, newDog.OwnerName, ModuleId))?.ToList();
+        if (similarMatches != null && similarMatches.Any())
+        {
+            return;
+        }
+
+        await CreateAnyway();
+    }
+
+    private async Task CreateAnyway()
+    {
+        try
+        {
+            errorMessage = "";
+            var saved = await DogService.AddDogAsync(newDog, ModuleId);
+            await Choose(saved);
+        }
+        catch (Exception)
+        {
+            errorMessage = "Error adding dog. Please try again.";
+        }
+    }
+}

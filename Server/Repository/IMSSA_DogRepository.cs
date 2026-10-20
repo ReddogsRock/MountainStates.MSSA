@@ -23,6 +23,9 @@ namespace MountainStates.MSSA.Module.MSSA_Dogs.Repository
             bool? ownerIsMember = null,
             bool? includeInactive = null);
 
+        // Fuzzy duplicate check, used before creating a new dog - see MSSA_Dog.MatchScore.
+        Task<IEnumerable<MSSA_Dog>> FindSimilarDogsAsync(string name, string ownerName);
+
         // Futurity
         Task<IEnumerable<MSSA_DogFuturityParticipation>> GetDogFuturityParticipationAsync(int dogId);
         Task<List<FuturityRosterEntry>> GetFuturityRosterAsync(int? year);

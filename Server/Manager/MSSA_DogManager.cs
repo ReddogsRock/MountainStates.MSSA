@@ -72,6 +72,11 @@ namespace MountainStates.MSSA.Module.MSSA_Dogs.Manager
                 includeInactive);
         }
 
+        public async Task<IEnumerable<MSSA_Dog>> FindSimilarDogsAsync(string name, string ownerName, int moduleId)
+        {
+            return await _repository.FindSimilarDogsAsync(name, ownerName);
+        }
+
         // Futurity
         public async Task<IEnumerable<MSSA_DogFuturityParticipation>> GetDogFuturityParticipationAsync(int dogId, int moduleId)
         {

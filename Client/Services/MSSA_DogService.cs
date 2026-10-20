@@ -81,6 +81,16 @@ namespace MountainStates.MSSA.Module.MSSA_Dogs.Services
             return await GetJsonAsync<List<MSSA_Dog>>(CreateAuthorizationPolicyUrl(url, EntityNames.Module, moduleId));
         }
 
+        public async Task<List<MSSA_Dog>> FindSimilarDogsAsync(string name, string ownerName, int moduleId)
+        {
+            var queryParams = new List<string> { $"moduleid={moduleId}", $"name={System.Uri.EscapeDataString(name)}" };
+            if (!string.IsNullOrWhiteSpace(ownerName))
+                queryParams.Add($"ownerName={System.Uri.EscapeDataString(ownerName)}");
+
+            var url = $"{ApiUrl}/similar?{string.Join("&", queryParams)}";
+            return await GetJsonAsync<List<MSSA_Dog>>(CreateAuthorizationPolicyUrl(url, EntityNames.Module, moduleId));
+        }
+
         // Futurity
         public async Task<List<MSSA_DogFuturityParticipation>> GetDogFuturityParticipationAsync(int dogId, int moduleId)
         {

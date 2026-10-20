@@ -81,6 +81,25 @@ namespace MountainStates.MSSA.Module.MSSA_Handlers.Controllers
             }
         }
 
+        // GET: api/MSSA_Handler/similar?firstName=John&lastName=Smith&moduleId=x
+        // Fuzzy duplicate check used by the handler quick-add forms before posting a new
+        // handler - see MSSA_HandlerRepository.FindSimilarHandlersAsync. Read-only, same
+        // policy as Search above.
+        [HttpGet("similar")]
+        [Authorize(Policy = PolicyNames.ViewModule)]
+        public async Task<IEnumerable<MSSA_Handler>> Similar(string firstName, string lastName = null, int moduleId = -1)
+        {
+            try
+            {
+                return await _manager.FindSimilarHandlersAsync(firstName, lastName, moduleId);
+            }
+            catch (System.Exception ex)
+            {
+                _logger.Log(LogLevel.Error, this, LogFunction.Read, ex, "Error finding similar handlers");
+                throw;
+            }
+        }
+
         // POST: api/MSSA_Handler?moduleid=x
         // Open to everyone (including anonymous visitors) per project decision:
         // there is currently no link between an authenticated person and handler

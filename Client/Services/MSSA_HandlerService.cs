@@ -66,6 +66,16 @@ namespace MountainStates.MSSA.Module.MSSA_Handlers.Services
             return await GetJsonAsync<List<MSSA_Handler>>(CreateAuthorizationPolicyUrl(url, EntityNames.Module, moduleId));
         }
 
+        public async Task<List<MSSA_Handler>> FindSimilarHandlersAsync(string firstName, string lastName, int moduleId)
+        {
+            var queryParams = new List<string> { $"moduleid={moduleId}", $"firstName={System.Uri.EscapeDataString(firstName)}" };
+            if (!string.IsNullOrWhiteSpace(lastName))
+                queryParams.Add($"lastName={System.Uri.EscapeDataString(lastName)}");
+
+            var url = $"{ApiUrl}/similar?{string.Join("&", queryParams)}";
+            return await GetJsonAsync<List<MSSA_Handler>>(CreateAuthorizationPolicyUrl(url, EntityNames.Module, moduleId));
+        }
+
         // Entries
         public async Task<List<MSSA_HandlerEntry>> GetHandlerEntriesAsync(int handlerId, int moduleId)
         {

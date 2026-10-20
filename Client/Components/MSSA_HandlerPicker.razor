@@ -1,0 +1,218 @@
+@* Shared search-or-quick-add UI for picking an existing Handler or creating a new one.
+   Used by Dogs/Edit (owner), Handlers/Edit (membership member), and Entries/Edit
+   (handler selection) - previously each had its own copy of this markup and its own
+   AddHandlerAsync call with no duplicate check beyond a plain substring search. This
+   component adds one: before a quick-add actually posts, it checks FindSimilarHandlersAsync
+   and offers the close match instead of blindly creating a new record. *@
+
+@namespace MountainStates.MSSA.Client.Components
+@using MountainStates.MSSA.Module.MSSA_Handlers.Services
+@using MountainStates.MSSA.Module.MSSA_Handlers.Models
+@inject IMSSA_HandlerService HandlerService
+
+<div class="row g-2 align-items-end">
+    <div class="col-md-3">
+        <label class="form-label">ID</label>
+        <input class="form-control" @bind="idSearchTerm" @bind:event="oninput"
+               @onkeyup="@(async e => { if (e.Key == "Enter") await Search(); })" />
+    </div>
+    <div class="col-md-5">
+        <label class="form-label">Search by name</label>
+        <input class="form-control" @bind="nameSearchTerm" @bind:event="oninput"
+               @onkeyup="@(async e => { if (e.Key == "Enter") await Search(); })" />
+    </div>
+    <div class="col-md-4">
+        <button type="button" class="btn btn-primary w-100" @onclick="Search">Search</button>
+    </div>
+</div>
+
+@if (!string.IsNullOrEmpty(errorMessage))
+{
+    <p class="text-danger mt-2 mb-2">@errorMessage</p>
+}
+
+@if (searchResults != null)
+{
+    @if (!searchResults.Any())
+    {
+        <p class="text-muted mt-2 mb-2"><em>No handlers found.</em></p>
+    }
+    else
+    {
+        <table class="table table-sm mt-2">
+            <thead>
+                <tr>
+                    <th>ID</th>
+                    <th>Name</th>
+                    <th>State</th>
+                    <th></th>
+                </tr>
+            </thead>
+            <tbody>
+                @foreach (var h in searchResults)
+                {
+                    <tr>
+                        <td>@h.HandlerId</td>
+                        <td>@h.FullName</td>
+                        <td>@h.StateCode</td>
+                        <td class="text-end">
+                            <button type="button" class="btn btn-sm btn-primary" @onclick="() => Choose(h)">Select</button>
+                        </td>
+                    </tr>
+                }
+            </tbody>
+        </table>
+    }
+
+    @if (!showAddForm)
+    {
+        <button type="button" class="btn btn-sm btn-outline-primary" @onclick="ShowAddForm">
+            + Add New Handler
+        </button>
+    }
+}
+
+@if (showAddForm)
+{
+    <div class="border p-3 mt-2 bg-light">
+        <h6>New Handler</h6>
+        <div class="row g-2">
+            <div class="col-md-4">
+                <label class="form-label">First Name <span class="text-danger">*</span></label>
+                <input class="form-control" @bind="newHandler.FirstName" />
+            </div>
+            <div class="col-md-4">
+                <label class="form-label">Last Name <span class="text-danger">*</span></label>
+                <input class="form-control" @bind="newHandler.LastName" />
+            </div>
+            <div class="col-md-4">
+                <label class="form-label">State</label>
+                <select class="form-select" @bind="newHandler.StateCode">
+                    <option value="">-- Select --</option>
+                    @if (States != null)
+                    {
+                        @foreach (var st in States)
+                        {
+                            <option value="@st.StateCode">@st.StateName</option>
+                        }
+                    }
+                </select>
+            </div>
+        </div>
+
+        @if (similarMatches != null && similarMatches.Any())
+        {
+            <div class="alert alert-warning mt-3 mb-2">
+                <p class="mb-2"><strong>This looks similar to an existing handler:</strong></p>
+                <ul class="mb-2">
+                    @foreach (var match in similarMatches)
+                    {
+                        <li class="d-flex justify-content-between align-items-center mb-1">
+                            <span>@match.FullName @(!string.IsNullOrEmpty(match.StateCode) ? $"({match.StateCode})" : "") - ID @match.HandlerId</span>
+                            <button type="button" class="btn btn-sm btn-primary ms-2" @onclick="() => Choose(match)">Use This Instead</button>
+                        </li>
+                    }
+                </ul>
+                <button type="button" class="btn btn-sm btn-outline-secondary" @onclick="CreateAnyway">
+                    Create Anyway
+                </button>
+            </div>
+        }
+        else
+        {
+            <div class="mt-2">
+                <button type="button" class="btn btn-sm btn-success me-2" @onclick="SaveNewHandler">Save &amp; Select</button>
+                <button type="button" class="btn btn-sm btn-secondary" @onclick="CancelAddForm">Cancel</button>
+            </div>
+        }
+    </div>
+}
+
+@code {
+    [Parameter] public int ModuleId { get; set; }
+    [Parameter] public List<MSSA_State> States { get; set; }
+    [Parameter] public EventCallback<MSSA_Handler> OnSelected { get; set; }
+    [Parameter] public Func<MSSA_Handler> NewHandlerFactory { get; set; }
+
+    private string idSearchTerm = "";
+    private string nameSearchTerm = "";
+    private List<MSSA_Handler> searchResults;
+    private bool showAddForm = false;
+    private MSSA_Handler newHandler = new();
+    private List<MSSA_Handler> similarMatches;
+    private string errorMessage = "";
+
+    private async Task Search()
+    {
+        errorMessage = "";
+        if (int.TryParse(idSearchTerm, out var id) && id > 0)
+        {
+            var handler = await HandlerService.GetHandlerAsync(id, ModuleId);
+            searchResults = handler != null ? new List<MSSA_Handler> { handler } : new List<MSSA_Handler>();
+        }
+        else
+        {
+            searchResults = await HandlerService.SearchHandlersAsync(nameSearchTerm, null, null, ModuleId);
+        }
+        showAddForm = false;
+        similarMatches = null;
+    }
+
+    private async Task Choose(MSSA_Handler h)
+    {
+        searchResults = null;
+        showAddForm = false;
+        similarMatches = null;
+        idSearchTerm = "";
+        nameSearchTerm = "";
+        await OnSelected.InvokeAsync(h);
+    }
+
+    private void ShowAddForm()
+    {
+        newHandler = NewHandlerFactory != null ? NewHandlerFactory() : new MSSA_Handler { IsActive = true };
+        similarMatches = null;
+        showAddForm = true;
+        errorMessage = "";
+    }
+
+    private void CancelAddForm()
+    {
+        showAddForm = false;
+        similarMatches = null;
+    }
+
+    private async Task SaveNewHandler()
+    {
+        if (string.IsNullOrWhiteSpace(newHandler.FirstName) || string.IsNullOrWhiteSpace(newHandler.LastName))
+        {
+            errorMessage = "First and Last Name are required for a new handler.";
+            return;
+        }
+        errorMessage = "";
+
+        similarMatches = (await HandlerService.FindSimilarHandlersAsync(newHandler.FirstName, newHandler.LastName, ModuleId))?.ToList();
+        if (similarMatches != null && similarMatches.Any())
+        {
+            // Hold off on creating - let the user pick one of these or explicitly
+            // continue via CreateAnyway below.
+            return;
+        }
+
+        await CreateAnyway();
+    }
+
+    private async Task CreateAnyway()
+    {
+        try
+        {
+            errorMessage = "";
+            var saved = await HandlerService.AddHandlerAsync(newHandler, ModuleId);
+            await Choose(saved);
+        }
+        catch (Exception)
+        {
+            errorMessage = "Error adding handler. Please try again.";
+        }
+    }
+}
