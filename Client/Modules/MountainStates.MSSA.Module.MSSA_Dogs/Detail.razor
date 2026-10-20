@@ -49,6 +49,14 @@ else
                     pending. Contact MSSA if you'd like help completing payment.
                 </div>
             }
+            else if (PageState.QueryString["futurity"] == "pending")
+            {
+                <div class="alert alert-info">
+                    @dog.Name has been added and enrolled in Futurity. Use the
+                    <strong>Pay Now</strong> button below to complete the nomination
+                    payment via a secure Stripe checkout.
+                </div>
+            }
         }
 
         @* Dog Information *@

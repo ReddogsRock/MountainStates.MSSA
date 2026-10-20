@@ -290,8 +290,8 @@
                         </div>
                         <p class="text-muted small mb-0">
                             This also establishes Nursery eligibility, so there's no need to upload
-                            documentation again below. After you submit, you'll be taken to a secure
-                            Stripe checkout page to pay the nomination fee.
+                            documentation again below. After you submit, you'll land on the dog's
+                            page where you can pay the nomination fee via a secure Stripe checkout.
                         </p>
                     }
                 </div>
@@ -358,8 +358,8 @@
         @* Action Buttons *@
         <div class="row">
             <div class="col">
-                <button type="submit" class="btn btn-success me-2">
-                    <span class="oi oi-check"></span> Save
+                <button type="submit" class="btn btn-success me-2" disabled="@isSaving">
+                    <span class="oi oi-check"></span> @(isSaving ? "Saving..." : "Save")
                 </button>
                 <ActionLink Action="Index" Text="Cancel" ResourceKey="Cancel" Class="btn btn-secondary me-2" />
                 @if (dogId != -1)
@@ -380,6 +380,7 @@
     private MSSA_Dog dog = new();
     private List<MSSA_DogFuturityParticipation> futurityParticipation;
     private string errorMessage = "";
+    private bool isSaving = false;
 
     // Owner Name search - not a foreign key (MSSA_Dog.OwnerName is a plain string, same
     // as MSSA_DogOwnershipHistory), just a search-or-add UI on top of it so staff pick an
@@ -525,8 +526,17 @@
 
     private async Task SaveDog()
     {
+        if (isSaving)
+        {
+            // Guards against a double-click/double-submit creating a duplicate dog -
+            // without this, clicking Save twice before the first request returns re-enters
+            // this method and adds the dog (and its Futurity participation) a second time.
+            return;
+        }
+
         try
         {
+            isSaving = true;
             errorMessage = "";
 
             if (string.IsNullOrWhiteSpace(dog.Name))
@@ -574,21 +584,13 @@
 
                     await UploadFuturityDocument(participation.ParticipationId);
 
-                    // Stripe Checkout requires absolute URLs to redirect back to.
-                    var successUrl = NavigationManager.ToAbsoluteUri(EditUrl("Detail", $"id={dog.DogId}&futurity=success")).ToString();
-                    var cancelUrl = NavigationManager.ToAbsoluteUri(EditUrl("Detail", $"id={dog.DogId}&futurity=cancelled")).ToString();
-
-                    var checkout = await DogService.CreateFuturityCheckoutSessionAsync(
-                        new CreateFuturityCheckoutDto
-                        {
-                            ParticipationId = participation.ParticipationId,
-                            SuccessUrl = successUrl,
-                            CancelUrl = cancelUrl
-                        },
-                        ModuleState.ModuleId);
-
-                    await logger.LogInformation("Redirecting to Stripe checkout for participation {ParticipationId}", participation.ParticipationId);
-                    await JSRuntime.InvokeVoidAsync("window.location.assign", checkout.CheckoutUrl);
+                    // Land on the dog's page rather than redirecting straight to Stripe here -
+                    // that redirect used to happen as part of this same submit, and if the
+                    // Stripe API call was slow, people assumed Save had failed and clicked it
+                    // again, creating a second dog. Detail page already has a "Pay Now" button
+                    // for a Pending participation (also used for payment retries), which is now
+                    // the explicit second step; futurity=pending tells that page to point it out.
+                    NavigationManager.NavigateTo(EditUrl("Detail", $"id={dog.DogId}&futurity=pending"));
                     return;
                 }
 
@@ -606,6 +608,10 @@
         {
             await logger.LogError(ex, "Error saving dog");
             errorMessage = "Error saving dog. Please try again.";
+        }
+        finally
+        {
+            isSaving = false;
         }
     }
 
