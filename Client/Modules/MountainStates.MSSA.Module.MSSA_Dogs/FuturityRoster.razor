@@ -21,93 +21,117 @@
         </div>
     </div>
 
-    @if (!UserSecurity.IsAuthorized(PageState.User, RoleNames.Admin))
+    <div class="row mb-3">
+        <div class="col-md-3">
+            <label for="yearFilter" class="form-label">Year</label>
+            <select id="yearFilter" class="form-select" @bind="selectedYear" @bind:after="LoadRoster">
+                <option value="">All Years</option>
+                @foreach (var y in YearOptions)
+                {
+                    <option value="@y">@y</option>
+                }
+            </select>
+        </div>
+    </div>
+
+    @if (entries == null)
     {
-        <div class="alert alert-warning">This report is only available to Administrators.</div>
+        <p><em>Loading...</em></p>
+    }
+    else if (!entries.Any())
+    {
+        <p class="text-muted"><em>No Futurity nominations found@(selectedYear.HasValue ? $" for {selectedYear}" : "").</em></p>
+    }
+    else if (isAdmin)
+    {
+        <p class="text-muted">@entries.Count nominated</p>
+        <div class="table-responsive">
+            <table class="table table-sm table-striped align-middle">
+                <thead>
+                    <tr>
+                        <th>Year</th>
+                        <th>Dog</th>
+                        <th>Owner</th>
+                        <th>Payment Status</th>
+                        <th>Amount</th>
+                        <th>Date Received</th>
+                        <th>Documentation</th>
+                        <th></th>
+                    </tr>
+                </thead>
+                <tbody>
+                    @foreach (var entry in entries)
+                    {
+                        <tr>
+                            <td>@entry.Year</td>
+                            <td>
+                                <ActionLink Action="Detail" Parameters="@($"id={entry.DogId}")" Text="@entry.DogName" ResourceKey="ViewDogName" />
+                            </td>
+                            <td>@(entry.OwnerName ?? "-")</td>
+                            <td>
+                                @if (entry.Status == FuturityPaymentStatus.Paid)
+                                {
+                                    <span class="badge bg-success">Paid</span>
+                                }
+                                else if (entry.Status == FuturityPaymentStatus.Failed)
+                                {
+                                    <span class="badge bg-danger">Failed - Retry Needed</span>
+                                }
+                                else
+                                {
+                                    <span class="badge bg-warning text-dark">Pending Payment</span>
+                                }
+                            </td>
+                            <td>@(entry.Amount?.ToString("C") ?? "-")</td>
+                            <td>@(entry.DateReceived?.ToString("MMM dd, yyyy") ?? "-")</td>
+                            <td>@(entry.HasDocument ? "Yes" : "No")</td>
+                            <td>
+                                @if (entry.Status != FuturityPaymentStatus.Paid)
+                                {
+                                    <button type="button" class="btn btn-sm btn-success me-1" @onclick="() => ShowMarkPaid(entry)">
+                                        Mark Paid
+                                    </button>
+                                    <button type="button" class="btn btn-sm btn-outline-danger" @onclick="() => MarkFailed(entry)">
+                                        Mark Failed
+                                    </button>
+                                }
+                            </td>
+                        </tr>
+                    }
+                </tbody>
+            </table>
+        </div>
     }
     else
     {
-        <div class="row mb-3">
-            <div class="col-md-3">
-                <label for="yearFilter" class="form-label">Year</label>
-                <select id="yearFilter" class="form-select" @bind="selectedYear" @bind:after="LoadRoster">
-                    <option value="">All Years</option>
-                    @foreach (var y in YearOptions)
+        @* Public view - payment/documentation details are staff-only, so only the
+           plain nomination facts are shown here: who's nominated, not who's paid.
+           Owner, not Handler - a dog's owner isn't necessarily who's handling it
+           at a given trial, but Owner is the only fixed attribute tracked per dog. *@
+        <p class="text-muted">@entries.Count nominated</p>
+        <div class="table-responsive">
+            <table class="table table-sm table-striped align-middle">
+                <thead>
+                    <tr>
+                        <th>Year</th>
+                        <th>Dog</th>
+                        <th>Owner</th>
+                    </tr>
+                </thead>
+                <tbody>
+                    @foreach (var entry in entries)
                     {
-                        <option value="@y">@y</option>
-                    }
-                </select>
-            </div>
-        </div>
-
-        @if (entries == null)
-        {
-            <p><em>Loading...</em></p>
-        }
-        else if (!entries.Any())
-        {
-            <p class="text-muted"><em>No Futurity nominations found@(selectedYear.HasValue ? $" for {selectedYear}" : "").</em></p>
-        }
-        else
-        {
-            <p class="text-muted">@entries.Count nominated</p>
-            <div class="table-responsive">
-                <table class="table table-sm table-striped align-middle">
-                    <thead>
                         <tr>
-                            <th>Year</th>
-                            <th>Dog</th>
-                            <th>Owner</th>
-                            <th>Payment Status</th>
-                            <th>Amount</th>
-                            <th>Date Received</th>
-                            <th>Documentation</th>
-                            <th></th>
+                            <td>@entry.Year</td>
+                            <td>
+                                <ActionLink Action="Detail" Parameters="@($"id={entry.DogId}")" Text="@entry.DogName" ResourceKey="ViewDogName" />
+                            </td>
+                            <td>@(entry.OwnerName ?? "-")</td>
                         </tr>
-                    </thead>
-                    <tbody>
-                        @foreach (var entry in entries)
-                        {
-                            <tr>
-                                <td>@entry.Year</td>
-                                <td>
-                                    <ActionLink Action="Detail" Parameters="@($"id={entry.DogId}")" Text="@entry.DogName" ResourceKey="ViewDogName" />
-                                </td>
-                                <td>@(entry.OwnerName ?? "-")</td>
-                                <td>
-                                    @if (entry.Status == FuturityPaymentStatus.Paid)
-                                    {
-                                        <span class="badge bg-success">Paid</span>
-                                    }
-                                    else if (entry.Status == FuturityPaymentStatus.Failed)
-                                    {
-                                        <span class="badge bg-danger">Failed - Retry Needed</span>
-                                    }
-                                    else
-                                    {
-                                        <span class="badge bg-warning text-dark">Pending Payment</span>
-                                    }
-                                </td>
-                                <td>@(entry.Amount?.ToString("C") ?? "-")</td>
-                                <td>@(entry.DateReceived?.ToString("MMM dd, yyyy") ?? "-")</td>
-                                <td>@(entry.HasDocument ? "Yes" : "No")</td>
-                                <td>
-                                    @if (entry.Status != FuturityPaymentStatus.Paid)
-                                    {
-                                        <button type="button" class="btn btn-sm btn-success me-1" @onclick="() => ShowMarkPaid(entry)">
-                                            Mark Paid
-                                        </button>
-                                        <button type="button" class="btn btn-sm btn-outline-danger" @onclick="() => MarkFailed(entry)">
-                                            Mark Failed
-                                        </button>
-                                    }
-                                </td>
-                            </tr>
-                        }
-                    </tbody>
-                </table>
-            </div>
-        }
+                    }
+                </tbody>
+            </table>
+        </div>
     }
 
     @* Mark Paid Modal *@
@@ -162,6 +186,7 @@
 @code {
     private List<FuturityRosterEntry> entries;
     private int? selectedYear;
+    private bool isAdmin;
 
     private bool showMarkPaidModal = false;
     private FuturityRosterEntry markPaidEntry;
@@ -182,11 +207,7 @@
 
     protected override async Task OnInitializedAsync()
     {
-        if (!UserSecurity.IsAuthorized(PageState.User, RoleNames.Admin))
-        {
-            return;
-        }
-
+        isAdmin = UserSecurity.IsAuthorized(PageState.User, RoleNames.Admin);
         selectedYear = CurrentCompetitionYear;
         await LoadRoster();
     }
