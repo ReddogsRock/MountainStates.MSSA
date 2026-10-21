@@ -27,6 +27,13 @@ namespace MountainStates.MSSA.Module.MSSA_YearEndStandings.Repository
 
         private const string FuturityLevel = "Futurity";
 
+        // Lifetime standings combine every sanctioned level into one ranking (by Dog
+        // only - see GetStandingsAsync) rather than scoping to a single class like every
+        // other Year/Level combination does. Futurity is deliberately NOT included here
+        // (it's a Nursery sub-population, not a real class - combining it in would
+        // double-count those points).
+        private const string AllLevelsOption = "All Levels";
+
         public MSSA_YearEndStandingsRepository(IDbContextFactory<MSSADbContext> dbContextFactory)
         {
             _dbContextFactory = dbContextFactory;
@@ -37,19 +44,35 @@ namespace MountainStates.MSSA.Module.MSSA_YearEndStandings.Repository
             using var db = await _dbContextFactory.CreateDbContextAsync();
 
             bool isFuturity = string.Equals(level, FuturityLevel, StringComparison.OrdinalIgnoreCase);
-            var lookupClassName = isFuturity ? "Nursery" : level;
+            bool isAllLevels = string.Equals(level, AllLevelsOption, StringComparison.OrdinalIgnoreCase);
 
-            var matchingClasses = await db.MSSA_Classes
-                .Where(c => c.ClassName == lookupClassName)
-                .ToListAsync();
+            List<int> classIds;
+            bool dogOnly;
 
-            if (!matchingClasses.Any())
+            if (isAllLevels)
             {
-                return new List<MSSA_YearEndStanding>();
+                classIds = await db.MSSA_Classes
+                    .Where(c => c.IsSanctioned)
+                    .Select(c => c.ClassId)
+                    .ToListAsync();
+                dogOnly = true;
             }
+            else
+            {
+                var lookupClassName = isFuturity ? "Nursery" : level;
 
-            var classIds = matchingClasses.Select(c => c.ClassId).ToList();
-            var dogOnly = matchingClasses.First().PointsAccumulateByDogOnly;
+                var matchingClasses = await db.MSSA_Classes
+                    .Where(c => c.ClassName == lookupClassName)
+                    .ToListAsync();
+
+                if (!matchingClasses.Any())
+                {
+                    return new List<MSSA_YearEndStanding>();
+                }
+
+                classIds = matchingClasses.Select(c => c.ClassId).ToList();
+                dogOnly = matchingClasses.First().PointsAccumulateByDogOnly;
+            }
 
             var baseQuery = from e in db.MSSA_Entries
                              join t in db.MSSA_Trials on e.TrialId equals t.TrialId
@@ -157,19 +180,32 @@ namespace MountainStates.MSSA.Module.MSSA_YearEndStandings.Repository
             using var db = await _dbContextFactory.CreateDbContextAsync();
 
             bool isFuturity = string.Equals(level, FuturityLevel, StringComparison.OrdinalIgnoreCase);
-            var lookupClassName = isFuturity ? "Nursery" : level;
+            bool isAllLevels = string.Equals(level, AllLevelsOption, StringComparison.OrdinalIgnoreCase);
 
-            var classIds = await db.MSSA_Classes
-                .Where(c => c.ClassName == lookupClassName)
-                .Select(c => c.ClassId)
-                .ToListAsync();
+            List<int> classIds;
+            if (isAllLevels)
+            {
+                classIds = await db.MSSA_Classes
+                    .Where(c => c.IsSanctioned)
+                    .Select(c => c.ClassId)
+                    .ToListAsync();
+            }
+            else
+            {
+                var lookupClassName = isFuturity ? "Nursery" : level;
+                classIds = await db.MSSA_Classes
+                    .Where(c => c.ClassName == lookupClassName)
+                    .Select(c => c.ClassId)
+                    .ToListAsync();
+            }
 
             var query = from e in db.MSSA_Entries
                         join t in db.MSSA_Trials on e.TrialId equals t.TrialId
                         join ev in db.MSSA_Events on t.EventId equals ev.EventId
                         join h in db.MSSA_Handlers on e.HandlerId equals h.HandlerId
+                        join c in db.MSSA_Classes on e.ClassId equals c.ClassId
                         where classIds.Contains(e.ClassId) && e.TrialPoints.HasValue && e.DogId == dogId && ev.ResultsApprovalStatus == EventResultsStatus.Approved
-                        select new { e, t, ev, h };
+                        select new { e, t, ev, h, c };
 
             if (!string.IsNullOrEmpty(species) && !string.Equals(species, "All", StringComparison.OrdinalIgnoreCase))
             {
@@ -197,6 +233,7 @@ namespace MountainStates.MSSA.Module.MSSA_YearEndStandings.Repository
                     TrialDate = x.t.TrialDate,
                     HandlerName = x.h.FullName,
                     Stock = x.t.Stock,
+                    Level = x.c.ClassName,
                     Points = x.e.TrialPoints.Value,
                     PointYear = x.ev.PointYear
                 })

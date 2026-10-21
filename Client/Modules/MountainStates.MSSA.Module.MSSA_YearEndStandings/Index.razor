@@ -18,8 +18,9 @@
             <div class="row g-2">
                 <div class="col-md-3">
                     <label for="yearSelect" class="form-label">Year</label>
-                    <select id="yearSelect" class="form-select" @bind="selectedYearOption" @bind:after="LoadStandings">
+                    <select id="yearSelect" class="form-select" @bind="selectedYearOption" @bind:after="OnYearChanged">
                         <option value="">-- Select Year --</option>
+                        <option value="Lifetime">Lifetime</option>
                         @if (years != null)
                         {
                             @foreach (var y in years)
@@ -27,21 +28,29 @@
                                 <option value="@y">@y</option>
                             }
                         }
-                        <option value="Lifetime">Lifetime</option>
                     </select>
                 </div>
                 <div class="col-md-3">
                     <label for="levelSelect" class="form-label">Level</label>
-                    <select id="levelSelect" class="form-select" @bind="selectedLevel" @bind:after="OnLevelChanged">
-                        <option value="">-- Select Level --</option>
-                        @if (levels != null)
-                        {
-                            @foreach (var l in OrderedLevelOptions())
+                    @if (IsLifetime)
+                    {
+                        <select id="levelSelect" class="form-select" disabled>
+                            <option>All Levels</option>
+                        </select>
+                    }
+                    else
+                    {
+                        <select id="levelSelect" class="form-select" @bind="selectedLevel" @bind:after="OnLevelChanged">
+                            <option value="">-- Select Level --</option>
+                            @if (levels != null)
                             {
-                                <option value="@l">@l</option>
+                                @foreach (var l in OrderedLevelOptions())
+                                {
+                                    <option value="@l">@l</option>
+                                }
                             }
-                        }
-                    </select>
+                        </select>
+                    }
                 </div>
                 <div class="col-md-3">
                     <label for="speciesSelect" class="form-label">Species</label>
@@ -154,7 +163,8 @@
                                         <th>Trial</th>
                                         <th>Date</th>
                                         <th>Stock</th>
-                                        <th>@HandlerColumnLabel</th>
+                                        <th>Level</th>
+                                        <th>Handler</th>
                                         <th>Points</th>
                                     </tr>
                                 </thead>
@@ -170,6 +180,7 @@
                                             <td>@detail.TrialName</td>
                                             <td>@detail.TrialDate.ToString("MMM dd, yyyy")</td>
                                             <td>@detail.Stock</td>
+                                            <td>@detail.Level</td>
                                             <td>@detail.HandlerName</td>
                                             <td>@detail.Points</td>
                                         </tr>
@@ -177,7 +188,7 @@
                                 </tbody>
                                 <tfoot>
                                     <tr class="fw-bold">
-                                        <td colspan="@(selectedStandingYear == null ? 6 : 5)">Total:</td>
+                                        <td colspan="@(selectedStandingYear == null ? 7 : 6)">Total:</td>
                                         <td>@detailsResults.Sum(d => d.Points)</td>
                                     </tr>
                                 </tfoot>
@@ -212,11 +223,25 @@
 
     private bool ReadyToShow => !string.IsNullOrEmpty(selectedYearOption) && !string.IsNullOrEmpty(selectedLevel) && !string.IsNullOrEmpty(selectedSpecies);
 
+    // Lifetime standings combine every sanctioned level into one Dog-only ranking rather
+    // than scoping to a single class - the Level dropdown becomes moot, so it's replaced
+    // with this fixed value instead of asking the user to pick one. Must match
+    // MSSA_YearEndStandingsRepository.AllLevelsOption exactly.
+    private const string AllLevelsOption = "All Levels";
+    private bool IsLifetime => selectedYearOption == "Lifetime";
+
+    private async Task OnYearChanged()
+    {
+        selectedLevel = IsLifetime ? AllLevelsOption : "";
+        await LoadStandings();
+    }
+
     // Open and Nursery standings are scored to the dog's owner, not whoever handled
     // it that day (correct, per the underlying data) - the column header needs to
     // say so, or it reads as a Handler name to anyone not already aware of that rule.
     private bool IsOwnerLevel => string.Equals(selectedLevel, "Open", StringComparison.OrdinalIgnoreCase)
-        || string.Equals(selectedLevel, "Nursery", StringComparison.OrdinalIgnoreCase);
+        || string.Equals(selectedLevel, "Nursery", StringComparison.OrdinalIgnoreCase)
+        || string.Equals(selectedLevel, AllLevelsOption, StringComparison.OrdinalIgnoreCase);
 
     private string HandlerColumnLabel => IsOwnerLevel ? "Owner" : "Handler";
 
