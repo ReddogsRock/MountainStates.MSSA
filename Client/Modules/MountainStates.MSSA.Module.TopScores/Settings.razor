@@ -2,8 +2,10 @@
 @using Oqtane.Services
 @using Oqtane.Shared
 @using MountainStates.MSSA.Module.MSSA_TopScores.Services
+@using MountainStates.MSSA.Module.MSSA_Entries.Services
 @inherits ModuleBase
 @inject IMSSA_TopScoresService TopScoresService
+@inject IMSSA_EntryService EntryService
 @inject ISettingService SettingService
 @inject NavigationManager NavigationManager
 
@@ -25,12 +27,10 @@
         <div class="col-sm-9">
             <select class="form-select" @bind="@_className">
                 <option value="">Select Level...</option>
-                <option value="Open">Open</option>
-                <option value="Nursery">Nursery</option>
-                <option value="Intermediate">Intermediate</option>
-                <option value="Novice">Novice</option>
-                <option value="Jr Handler">Jr Handler</option>
-                <option value="Pro Novice">Pro Novice</option>
+                @foreach (var className in _availableClassNames)
+                {
+                    <option value="@className">@className</option>
+                }
             </select>
         </div>
     </div>
@@ -66,6 +66,7 @@
     private string _stock = "";
     private int _quantity = 10;
     private List<int> _availableYears = new List<int>();
+    private List<string> _availableClassNames = new List<string>();
 
     protected override async Task OnInitializedAsync()
     {
@@ -74,6 +75,16 @@
             // Load available years
             var years = await TopScoresService.GetAvailableYearsAsync(ModuleState.ModuleId);
             _availableYears = years.ToList();
+
+            // Sanctioned classes only - Pro Novice/Misc Unsanctioned never accumulate
+            // points, so there's nothing for a TopScores widget to show for them.
+            var classes = await EntryService.GetClassesAsync(ModuleState.ModuleId);
+            _availableClassNames = classes
+                .Where(c => c.IsSanctioned)
+                .Select(c => c.ClassName)
+                .Distinct()
+                .OrderBy(n => n)
+                .ToList();
 
             // Load saved settings
             _year = int.Parse(SettingService.GetSetting(ModuleState.Settings, "Year", "0"));

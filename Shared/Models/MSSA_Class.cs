@@ -21,5 +21,9 @@ namespace MountainStates.MSSA.Module.MSSA_Entries.Models
         public int? PrintOrder { get; set; }
 
         public bool IsActive { get; set; } = true;
+
+        // Non-sanctioned classes (e.g. "Pro Novice", "Misc Unsanctioned") never accumulate
+        // competition points - see MSSA_ResultRepository.CalculatePlacingAndPointsAsync.
+        public bool IsSanctioned { get; set; } = true;
     }
 }

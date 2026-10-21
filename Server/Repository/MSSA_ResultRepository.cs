@@ -316,6 +316,14 @@ namespace MountainStates.MSSA.Module.MSSA_Results.Repository
                 return;
             }
 
+            // Non-sanctioned classes (Pro Novice, Misc Unsanctioned) still get ranked -
+            // organizers want to see placements - but never accumulate points, regardless
+            // of membership.
+            var entryClassIds = entries.Select(e => e.ClassId).Distinct().ToList();
+            var sanctionedByClassId = await db.MSSA_Classes
+                .Where(c => entryClassIds.Contains(c.ClassId))
+                .ToDictionaryAsync(c => c.ClassId, c => c.IsSanctioned);
+
             // Points depend on membership as of the trial's own date, checked live here
             // rather than trusting each entry's stored HandlerIsMSSAMember flag - that
             // flag is a manual checkbox (unchecked by default on the one-at-a-time Add
@@ -338,6 +346,8 @@ namespace MountainStates.MSSA.Module.MSSA_Results.Repository
 
             foreach (var classGroup in entries.GroupBy(e => e.ClassId))
             {
+                bool isSanctioned = !sanctionedByClassId.TryGetValue(classGroup.Key, out var sanctioned) || sanctioned;
+
                 // Rank: score desc, then run time asc, then tie-breaker time asc. Missing
                 // values sort last within their class.
                 var ranked = classGroup
@@ -386,7 +396,15 @@ namespace MountainStates.MSSA.Module.MSSA_Results.Repository
                         // on the Entry form), even though points no longer depend on it.
                         entry.HandlerIsMSSAMember = activeMemberHandlerIds.Contains(entry.HandlerId);
 
-                        if (!entry.HandlerIsMSSAMember)
+                        if (!isSanctioned)
+                        {
+                            // Non-sanctioned classes (Pro Novice, Misc Unsanctioned) never
+                            // accumulate points - null (not 0) so standings/TopScores'
+                            // existing e.TrialPoints.HasValue filters exclude these entries
+                            // entirely rather than counting them as "scored zero".
+                            entry.TrialPoints = null;
+                        }
+                        else if (!entry.HandlerIsMSSAMember)
                         {
                             entry.TrialPoints = 0;
                         }

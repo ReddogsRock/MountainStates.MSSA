@@ -225,25 +225,14 @@ namespace MountainStates.MSSA.Module.MSSA_YearEndStandings.Repository
             using var db = await _dbContextFactory.CreateDbContextAsync();
 
             var names = await db.MSSA_Classes
-                .Where(c => c.IsActive)
+                .Where(c => c.IsActive && c.IsSanctioned)
                 .Select(c => c.ClassName)
                 .Distinct()
                 .ToListAsync();
 
             return names
-                .Where(n => !IsProNovice(n))
                 .OrderBy(n => n)
                 .ToList();
-        }
-
-        private static bool IsProNovice(string className)
-        {
-            if (string.IsNullOrEmpty(className))
-            {
-                return false;
-            }
-            var normalized = className.Replace("-", " ").Trim();
-            return string.Equals(normalized, "Pro Novice", StringComparison.OrdinalIgnoreCase);
         }
     }
 }

@@ -143,11 +143,24 @@ namespace MountainStates.MSSA.Module.MSSA_Finals.Repository
         {
             using var db = await _dbContextFactory.CreateDbContextAsync();
 
-            return await db.vw_AllFinalsResults
+            // vw_AllFinalsResults has no join back to MSSA_Classes (it's sourced from the
+            // separately-imported MSSA_Finals/vw_UltimateStandings data), so non-sanctioned
+            // classes have to be filtered out in-memory by name rather than in the query.
+            var unsanctionedNames = await db.MSSA_Classes
+                .Where(c => !c.IsSanctioned)
+                .Select(c => c.ClassName)
+                .Distinct()
+                .ToListAsync();
+
+            var levels = await db.vw_AllFinalsResults
                 .Select(r => r.Level)
                 .Distinct()
-                .OrderBy(l => l)
                 .ToListAsync();
+
+            return levels
+                .Where(l => !unsanctionedNames.Contains(l, StringComparer.OrdinalIgnoreCase))
+                .OrderBy(l => l)
+                .ToList();
         }
 
         public async Task<IEnumerable<string>> GetAvailableStocksAsync()
