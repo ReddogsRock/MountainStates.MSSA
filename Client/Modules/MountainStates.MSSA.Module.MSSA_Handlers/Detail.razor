@@ -215,10 +215,10 @@ else
                                         }
                                     </td>
                                     <td>
-                                        @if (!m.DateReceived.HasValue)
+                                        @if (!m.DateReceived.HasValue && !m.IsLapsed)
                                         {
                                             <button type="button" class="btn btn-sm btn-primary" disabled="@retryingMembershipId.HasValue"
-                                                    @onclick="() => RetryMembershipPayment(m)">
+                                                    @onclick="() => ShowRetryTypeModal(m)">
                                                 @(retryingMembershipId == m.MembershipId ? "Redirecting..." : "Pay Now")
                                             </button>
                                         }
@@ -335,6 +335,112 @@ else
                                 @(creatingMembershipCheckout ? "Redirecting to payment..." : "Continue to Payment")
                             </button>
                             <button type="button" class="btn btn-secondary" @onclick="CloseMembershipModal">Cancel</button>
+                        </div>
+                    </div>
+                </div>
+            </div>
+        }
+
+        @* Confirm Membership Type Modal - shown on "Pay Now" for an existing pending
+           membership, so the type can be corrected (e.g. a migrated "Unknown"
+           placeholder) or switched (e.g. Individual <-> Family) before paying,
+           without having to start over as a brand new membership. *@
+        @if (showRetryTypeModal && retryMembership != null)
+        {
+            <div class="modal fade show d-block" tabindex="-1" style="background-color: rgba(0,0,0,0.5);">
+                <div class="modal-dialog">
+                    <div class="modal-content">
+                        <div class="modal-header">
+                            <h5 class="modal-title">Confirm Membership Type</h5>
+                            <button type="button" class="btn-close" @onclick="CloseRetryTypeModal"></button>
+                        </div>
+                        <div class="modal-body">
+                            <p class="text-muted">
+                                Confirm the membership type for @retryMembership.StartYear&ndash;@(retryMembership.EndYear?.ToString() ?? "Lifetime")
+                                before continuing to payment - change it here if it's wrong, or if you'd rather switch between Individual and Family.
+                            </p>
+                            <label class="form-label">Membership Type</label>
+                            <select class="form-select" @bind="retryMembershipType">
+                                <option value="">-- Select --</option>
+                                <option value="AI">Annual Individual</option>
+                                <option value="AF">Annual Family</option>
+                                <option value="3I">3 Year Individual</option>
+                                <option value="3F">3 Year Family</option>
+                                <option value="Lifetime">Lifetime</option>
+                            </select>
+
+                            @if (retryMembershipType == "AF" || retryMembershipType == "3F")
+                            {
+                                <hr />
+                                <p class="mb-2">
+                                    <strong>Family members</strong> - @handler.FullName is included automatically.
+                                    Add or remove anyone else this membership should cover.
+                                </p>
+
+                                <div class="row g-2">
+                                    <div class="col-md-8">
+                                        <input class="form-control" placeholder="Search by name" @bind="retryFamilySearchTerm" @bind:event="oninput"
+                                               @onkeyup="@(async e => { if (e.Key == "Enter") await SearchRetryFamilyMembers(); })" />
+                                    </div>
+                                    <div class="col-md-4">
+                                        <button type="button" class="btn btn-outline-primary w-100" @onclick="SearchRetryFamilyMembers">Search</button>
+                                    </div>
+                                </div>
+
+                                @if (retryFamilySearchResults != null)
+                                {
+                                    @if (!retryFamilySearchResults.Any())
+                                    {
+                                        <p class="text-muted mt-2 mb-0"><em>No handlers found.</em></p>
+                                    }
+                                    else
+                                    {
+                                        <table class="table table-sm mt-2">
+                                            <tbody>
+                                                @foreach (var h in retryFamilySearchResults)
+                                                {
+                                                    <tr>
+                                                        <td>@h.FullName</td>
+                                                        <td>@h.StateCode</td>
+                                                        <td class="text-end">
+                                                            <button type="button" class="btn btn-sm btn-outline-primary"
+                                                                    disabled="@retryFamilyMembers.Any(x => x.HandlerId == h.HandlerId)"
+                                                                    @onclick="() => AddRetryFamilyMember(h)">
+                                                                Add
+                                                            </button>
+                                                        </td>
+                                                    </tr>
+                                                }
+                                            </tbody>
+                                        </table>
+                                    }
+                                }
+
+                                @if (retryFamilyMembers.Any())
+                                {
+                                    <p class="mb-1 mt-2"><strong>Also covered:</strong></p>
+                                    <ul class="list-group">
+                                        @foreach (var m in retryFamilyMembers)
+                                        {
+                                            <li class="list-group-item d-flex justify-content-between align-items-center py-1">
+                                                @m.FullName
+                                                <button type="button" class="btn btn-sm btn-outline-danger" @onclick="() => RemoveRetryFamilyMember(m.HandlerId)">Remove</button>
+                                            </li>
+                                        }
+                                    </ul>
+                                }
+                            }
+
+                            @if (!string.IsNullOrEmpty(membershipPaymentError))
+                            {
+                                <div class="alert alert-danger mt-3 mb-0">@membershipPaymentError</div>
+                            }
+                        </div>
+                        <div class="modal-footer">
+                            <button type="button" class="btn btn-primary" disabled="@retryingMembershipId.HasValue" @onclick="ConfirmRetryType">
+                                Continue to Payment
+                            </button>
+                            <button type="button" class="btn btn-secondary" @onclick="CloseRetryTypeModal">Cancel</button>
                         </div>
                     </div>
                 </div>
@@ -487,6 +593,14 @@ else
 
     private int? retryingMembershipId;
     private string membershipPaymentError = "";
+
+    private static readonly HashSet<string> ValidMembershipTypes = new() { "AI", "AF", "3I", "3F", "Lifetime" };
+    private bool showRetryTypeModal = false;
+    private MSSA_Membership retryMembership;
+    private string retryMembershipType = "";
+    private string retryFamilySearchTerm = "";
+    private List<MSSA_Handler> retryFamilySearchResults;
+    private List<MSSA_Handler> retryFamilyMembers = new();
 
     protected override async Task OnInitializedAsync()
     {
@@ -659,6 +773,13 @@ else
                 CancelUrl = cancelUrl
             }, ModuleState.ModuleId);
 
+            if (!string.IsNullOrEmpty(checkout.ErrorMessage))
+            {
+                membershipErrorMessage = checkout.ErrorMessage;
+                creatingMembershipCheckout = false;
+                return;
+            }
+
             await JSRuntime.InvokeVoidAsync("window.location.assign", checkout.CheckoutUrl);
         }
         catch (Exception ex)
@@ -667,6 +788,103 @@ else
             membershipErrorMessage = "Error starting payment. Please try again.";
             creatingMembershipCheckout = false;
         }
+    }
+
+    private void ShowRetryTypeModal(MSSA_Membership m)
+    {
+        retryMembership = m;
+        retryMembershipType = ValidMembershipTypes.Contains(m.MembershipType) ? m.MembershipType : "";
+
+        // Pre-fill from whoever is already covered, excluding this page's own handler -
+        // same "included automatically" convention as the Purchase/Renew modal.
+        retryFamilyMembers = (m.Members ?? new List<MembershipMemberInfo>())
+            .Where(x => x.HandlerId != handler.HandlerId)
+            .Select(x => new MSSA_Handler { HandlerId = x.HandlerId, FullName = x.HandlerName })
+            .ToList();
+        retryFamilySearchTerm = "";
+        retryFamilySearchResults = null;
+
+        membershipPaymentError = "";
+        showRetryTypeModal = true;
+    }
+
+    private void CloseRetryTypeModal()
+    {
+        showRetryTypeModal = false;
+        retryMembership = null;
+    }
+
+    private async Task SearchRetryFamilyMembers()
+    {
+        if (string.IsNullOrWhiteSpace(retryFamilySearchTerm))
+        {
+            retryFamilySearchResults = new List<MSSA_Handler>();
+            return;
+        }
+
+        var results = await HandlerService.SearchHandlersAsync(retryFamilySearchTerm, null, null, ModuleState.ModuleId);
+        retryFamilySearchResults = results.Where(h => h.HandlerId != handler.HandlerId).ToList();
+    }
+
+    private void AddRetryFamilyMember(MSSA_Handler h)
+    {
+        if (!retryFamilyMembers.Any(x => x.HandlerId == h.HandlerId))
+        {
+            retryFamilyMembers.Add(h);
+        }
+    }
+
+    private void RemoveRetryFamilyMember(int handlerId)
+    {
+        retryFamilyMembers.RemoveAll(x => x.HandlerId == handlerId);
+    }
+
+    private async Task ConfirmRetryType()
+    {
+        if (string.IsNullOrEmpty(retryMembershipType))
+        {
+            membershipPaymentError = "Please select a membership type.";
+            return;
+        }
+
+        var membership = retryMembership;
+        showRetryTypeModal = false;
+
+        try
+        {
+            if (membership.MembershipType != retryMembershipType)
+            {
+                membership.MembershipType = retryMembershipType;
+                await HandlerService.UpdateMembershipAsync(membership, ModuleState.ModuleId);
+            }
+
+            // Reconcile covered members - only meaningful for Family types; switching to
+            // an Individual/Lifetime type drops anyone else that was on it, same as a
+            // fresh Individual purchase never has family members to begin with.
+            bool isFamily = retryMembershipType == "AF" || retryMembershipType == "3F";
+            var targetFamilyIds = isFamily ? retryFamilyMembers.Select(h => h.HandlerId).ToHashSet() : new HashSet<int>();
+            var currentFamilyIds = (membership.Members ?? new List<MembershipMemberInfo>())
+                .Where(x => x.HandlerId != handler.HandlerId)
+                .Select(x => x.HandlerId)
+                .ToHashSet();
+
+            foreach (var toAdd in targetFamilyIds.Except(currentFamilyIds))
+            {
+                await HandlerService.AddMemberToMembershipAsync(membership.MembershipId, toAdd, ModuleState.ModuleId);
+            }
+            foreach (var toRemove in currentFamilyIds.Except(targetFamilyIds))
+            {
+                await HandlerService.RemoveMemberFromMembershipAsync(membership.MembershipId, toRemove, ModuleState.ModuleId);
+            }
+        }
+        catch (Exception ex)
+        {
+            await logger.LogError(ex, "Error updating membership type/members for membership {MembershipId}", membership.MembershipId);
+            membershipPaymentError = "Error updating membership. Please try again.";
+            return;
+        }
+
+        await RetryMembershipPayment(membership);
     }
 
     private async Task RetryMembershipPayment(MSSA_Membership membership)
@@ -686,6 +904,13 @@ else
                 SuccessUrl = successUrl,
                 CancelUrl = cancelUrl
             }, ModuleState.ModuleId);
+
+            if (!string.IsNullOrEmpty(checkout.ErrorMessage))
+            {
+                membershipPaymentError = checkout.ErrorMessage;
+                retryingMembershipId = null;
+                return;
+            }
 
             await JSRuntime.InvokeVoidAsync("window.location.assign", checkout.CheckoutUrl);
         }

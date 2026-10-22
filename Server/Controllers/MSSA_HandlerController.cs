@@ -381,7 +381,25 @@ namespace MountainStates.MSSA.Module.MSSA_Handlers.Controllers
                     return null;
                 }
 
-                var checkoutUrl = await _manager.CreateMembershipCheckoutSessionAsync(membershipId, dto.MembershipType, dto.SuccessUrl, dto.CancelUrl, moduleId);
+                string checkoutUrl;
+                try
+                {
+                    checkoutUrl = await _manager.CreateMembershipCheckoutSessionAsync(membershipId, dto.MembershipType, dto.SuccessUrl, dto.CancelUrl, moduleId);
+                }
+                catch (System.InvalidOperationException ex)
+                {
+                    // A membership whose MembershipType has no Stripe product configured
+                    // (e.g. "Unknown" - a data-quality placeholder from the Access import,
+                    // not a real purchasable type) - a handled, user-facing condition, not
+                    // a server error. Still logged, since it means a membership needs its
+                    // type corrected before anyone can pay it online.
+                    _logger.Log(LogLevel.Error, this, LogFunction.Create, ex, "Membership {MembershipId} cannot be checked out - invalid type", membershipId);
+                    return new MembershipCheckoutResult
+                    {
+                        ErrorMessage = "This membership's type needs to be corrected before it can be paid online - contact the club admin."
+                    };
+                }
+
                 _logger.Log(LogLevel.Information, this, LogFunction.Create, "Membership checkout session created for membership {MembershipId}", membershipId);
 
                 return new MembershipCheckoutResult { CheckoutUrl = checkoutUrl };

@@ -74,6 +74,12 @@ namespace MountainStates.MSSA.Module.MSSA_Handlers.Models
             }
         }
 
+        // A membership period that's already fully in the past - used to hide "Pay Now"
+        // on old unpaid rows (mainly pre-Stripe history imported with no DateReceived)
+        // rather than inviting payment on a period that's long over.
+        [NotMapped]
+        public bool IsLapsed => EndYear.HasValue && EndYear.Value < DateTime.Today.Year;
+
         // Display-friendly name for the stored code - one place to maintain this
         // mapping so every page that shows a membership uses the same wording.
         [NotMapped]
