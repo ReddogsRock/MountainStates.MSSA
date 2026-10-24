@@ -659,9 +659,12 @@
         }
     }
 
-    // Swaps an item with its neighbor and renumbers 1..N. The caller only enables the
-    // arrow buttons when the swap stays within the same class block, so this never
-    // needs to re-check that itself.
+    // Swaps an item with its neighbor and renumbers. The caller only enables the arrow
+    // buttons when the swap stays within the same class block, so this never needs to
+    // re-check that itself - but the renumbering below still has to restart at 1 for
+    // every class (matching GetProposedRunOrderAsync's own numbering), not run a single
+    // flat count across the whole list - otherwise a swap in an earlier class would
+    // bump every later class's numbers past 1, N again.
     private void MoveProposalRow(int index, int direction)
     {
         var targetIndex = index + direction;
@@ -672,9 +675,21 @@
 
         (proposedRunOrder[index], proposedRunOrder[targetIndex]) = (proposedRunOrder[targetIndex], proposedRunOrder[index]);
 
-        for (int i = 0; i < proposedRunOrder.Count; i++)
+        RenumberProposalRowsPerClass();
+    }
+
+    private void RenumberProposalRowsPerClass()
+    {
+        string lastClassName = null;
+        int runOrder = 1;
+        foreach (var item in proposedRunOrder)
         {
-            proposedRunOrder[i].RunOrder = i + 1;
+            if (item.ClassName != lastClassName)
+            {
+                runOrder = 1;
+                lastClassName = item.ClassName;
+            }
+            item.RunOrder = runOrder++;
         }
     }
 
