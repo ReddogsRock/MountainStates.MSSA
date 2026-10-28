@@ -59,6 +59,28 @@ namespace MountainStates.MSSA.Module.MSSA_Entries.Controllers
             }
         }
 
+        // GET: api/MSSA_Entry/trial/5/scoringworkbook?classKey=X&moduleid=x
+        // Scribe sheet - a blank-column workbook for ringside hand-entry, one worksheet
+        // tab per Class. classKey (ClassName|SubClassName, optional) scopes it to a
+        // single class's tab instead of every class in the trial.
+        [HttpGet("trial/{trialId}/scoringworkbook")]
+        [Authorize(Policy = PolicyNames.ViewModule)]
+        public async Task<IActionResult> GetScoringWorkbook(int trialId, string classKey, int moduleId)
+        {
+            try
+            {
+                var fileData = await _manager.GenerateScoringWorkbookAsync(trialId, classKey, moduleId);
+                return File(fileData,
+                    "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
+                    $"Scoring_Trial{trialId}_{System.DateTime.Now:yyyyMMdd}.xlsx");
+            }
+            catch (System.Exception ex)
+            {
+                _logger.Log(LogLevel.Error, this, LogFunction.Read, ex, "Error generating scoring workbook for trial {TrialId}", trialId);
+                throw;
+            }
+        }
+
         // GET: api/MSSA_Entry/5?moduleid=x
         [HttpGet("{id}")]
         [Authorize(Policy = PolicyNames.ViewModule)]

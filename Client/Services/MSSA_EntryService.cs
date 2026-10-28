@@ -1,3 +1,4 @@
+using System;
 using System.Collections.Generic;
 using System.Linq;
 using System.Net.Http;
@@ -75,6 +76,13 @@ namespace MountainStates.MSSA.Module.MSSA_Entries.Services
         {
             var url = CreateApiUrl("MSSA_Class");
             return await GetJsonAsync<MSSA_Class>(CreateAuthorizationPolicyUrl($"{url}/{classId}?moduleid={moduleId}", EntityNames.Module, moduleId));
+        }
+
+        public async Task<byte[]> GetScoringWorkbookAsync(int trialId, string classKey, int moduleId)
+        {
+            var classKeyParam = Uri.EscapeDataString(classKey ?? "");
+            return await GetByteArrayAsync(
+                CreateAuthorizationPolicyUrl($"{ApiUrl}/trial/{trialId}/scoringworkbook?classKey={classKeyParam}&moduleid={moduleId}", EntityNames.Module, moduleId));
         }
     }
 }

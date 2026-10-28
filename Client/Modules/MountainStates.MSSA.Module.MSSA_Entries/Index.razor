@@ -41,8 +41,11 @@
         });
     };
 
-    // Landscape, gridlined table export - used by the "Export to PDF" button.
-    window.mssaExportPdf = async (fileName, title, headers, rows, logoUrl) => {
+    // Landscape, gridlined scribe sheet - used by the "Export to PDF" button. One
+    // section per Class, each with its own gridlined table under a shared letterhead;
+    // pageBreakPerSection forces every class onto its own page (the "All Classes" scope),
+    // otherwise (a single class picked) there's only ever one section anyway.
+    window.mssaExportPdf = async (fileName, title, sections, tableHead, logoUrl, pageBreakPerSection) => {
         if (!window.jspdf) {
             await window.mssaLoadScript('https://cdnjs.cloudflare.com/ajax/libs/jspdf/2.5.1/jspdf.umd.min.js');
         }
@@ -66,22 +69,39 @@
         doc.setFontSize(14);
         doc.text(title, textX, 22);
 
-        doc.autoTable({
-            head: [headers],
-            body: rows,
-            startY: logoDataUrl ? 28 : 27,
-            theme: 'grid',
-            styles: { fontSize: 8, lineWidth: 0.1, lineColor: [0, 0, 0] },
-            headStyles: { fillColor: [230, 230, 230], textColor: [0, 0, 0] },
-            // autoTable stretches columns to fill the page width, which otherwise gives
-            // Class/Run Order/Handler far more room than their content needs - cap them
-            // so the numeric/blank columns get the space instead.
-            columnStyles: {
-                0: { cellWidth: 26 },  // Class
-                1: { cellWidth: 14 },  // Run Order
-                2: { cellWidth: 24 }   // Handler
+        let y = logoDataUrl ? 28 : 27;
+        let firstSection = true;
+        for (const section of sections) {
+            if ((pageBreakPerSection && !firstSection) || y > 180) {
+                doc.addPage();
+                y = 16;
             }
-        });
+            firstSection = false;
+
+            doc.setFontSize(12);
+            doc.text(section.className, 14, y);
+            y += 5;
+
+            doc.autoTable({
+                head: [tableHead],
+                body: section.rows,
+                startY: y,
+                theme: 'grid',
+                styles: { fontSize: 8, lineWidth: 0.1, lineColor: [0, 0, 0] },
+                headStyles: { fillColor: [230, 230, 230], textColor: [0, 0, 0] },
+                // autoTable stretches columns to fill the page width, which otherwise
+                // gives Run Order/Handler far more room than their content needs - cap
+                // them so the numeric/blank columns get the space instead.
+                columnStyles: {
+                    0: { cellWidth: 14 },  // Run Order
+                    1: { cellWidth: 24 }   // Handler
+                },
+                margin: { left: 14, right: 14 }
+            });
+
+            y = doc.lastAutoTable.finalY + 10;
+        }
+
         doc.save(fileName);
     };
 
@@ -230,6 +250,15 @@
                             <span class="oi oi-random"></span> Generate Run Order
                         </button>
                     }
+                    <label for="scribeSheetClassKey" class="form-label me-1 mb-0">Scribe Sheet:</label>
+                    <select id="scribeSheetClassKey" class="form-select form-select-sm d-inline-block me-2"
+                            style="width:auto" @bind="scribeSheetClassKey" disabled="@(entries == null || !entries.Any())">
+                        <option value="">All Classes (own page in PDF, own tab in Excel)</option>
+                        @foreach (var option in ScribeSheetClassOptions)
+                        {
+                            <option value="@option.Key">Only: @option.Label</option>
+                        }
+                    </select>
                     <button class="btn btn-outline-secondary btn-sm me-2" @onclick="ExportToExcel" disabled="@(entries == null || !entries.Any())">
                         Export to Excel
                     </button>
@@ -474,6 +503,27 @@
     private int selectedEventId = 0;
     private int selectedTrialId = 0;
 
+    // Scribe sheet (Export to Excel / Export to PDF) class scope: empty = every class
+    // in the trial, otherwise a "ClassName|SubClassName" key restricting the export to
+    // just that one class.
+    private string scribeSheetClassKey = "";
+
+    private IEnumerable<(string Key, string Label)> ScribeSheetClassOptions =>
+        (entries ?? new List<EntryListItem>())
+            .GroupBy(e => new { e.ClassName, e.SubClassName })
+            .OrderBy(g => classes?.FirstOrDefault(c => c.ClassName == g.Key.ClassName && c.SubClassName == g.Key.SubClassName)?.PrintOrder ?? 999)
+            .Select(g => ($"{g.Key.ClassName}|{g.Key.SubClassName}", $"{g.Key.ClassName} {g.Key.SubClassName}".Trim()));
+
+    private IEnumerable<EntryListItem> ScribeSheetFilteredEntries(IEnumerable<EntryListItem> source)
+    {
+        if (string.IsNullOrEmpty(scribeSheetClassKey))
+        {
+            return source;
+        }
+
+        return source.Where(e => $"{e.ClassName}|{e.SubClassName}" == scribeSheetClassKey);
+    }
+
     // Admin/Scorekeeper see every event; a Trial Secretary only events they own, or
     // one they've been added to as a team member (see myTeamEventIds).
     private IEnumerable<MSSA_Event> VisibleEvents
@@ -715,6 +765,9 @@
         proposedRunOrder = null;
     }
 
+    // A real multi-tab workbook (not CSV, which has no concept of separate sheets) -
+    // one worksheet per Class, or just the one class picked from the Scribe Sheet
+    // dropdown. Generated server-side (see MSSA_EntryRepository.GenerateScoringWorkbookAsync).
     private async Task ExportToExcel()
     {
         if (entries == null || !entries.Any())
@@ -722,49 +775,24 @@
             return;
         }
 
-        var sb = new StringBuilder();
-        sb.AppendLine("EntryId,RunOrder,Class,Handler,Dog,Obstacle1,Obstacle2,Obstacle3,Obstacle4,Obstacle5,Obstacle6,Obstacle7,Obstacle8,Obstacle9,Penalty,TieBreakerTime,RunTime,Placing,Points,Comments");
-
-        // Class block first, then RunOrder within that class - RunOrder starts back
-        // at 1 for every class, so sorting by RunOrder alone would interleave classes.
-        var ordered = entries
-            .OrderBy(e => classes?.FirstOrDefault(c => c.ClassName == e.ClassName && c.SubClassName == e.SubClassName)?.PrintOrder ?? 999)
-            .ThenBy(e => e.RunOrder ?? int.MaxValue);
-
-        foreach (var e in ordered)
+        try
         {
-            sb.AppendLine(string.Join(",",
-                e.EntryId,
-                e.RunOrder?.ToString() ?? "",
-                CsvEscape($"{e.ClassName} {e.SubClassName}"),
-                CsvEscape(e.HandlerName),
-                CsvEscape(e.DogName),
-                e.ObstacleScore1?.ToString() ?? "",
-                e.ObstacleScore2?.ToString() ?? "",
-                e.ObstacleScore3?.ToString() ?? "",
-                e.ObstacleScore4?.ToString() ?? "",
-                e.ObstacleScore5?.ToString() ?? "",
-                e.ObstacleScore6?.ToString() ?? "",
-                e.ObstacleScore7?.ToString() ?? "",
-                e.ObstacleScore8?.ToString() ?? "",
-                e.ObstacleScore9?.ToString() ?? "",
-                e.Penalty?.ToString() ?? "",
-                FormatTime(e.TieBreakerTime),
-                FormatTime(e.RunTime),
-                e.Placing?.ToString() ?? "",
-                e.TrialPoints?.ToString() ?? "",
-                CsvEscape(e.Comments)));
+            var bytes = await EntryService.GetScoringWorkbookAsync(selectedTrialId, scribeSheetClassKey, ModuleState.ModuleId);
+            var fileName = $"Scoring_Trial{selectedTrialId}_{DateTime.Now:yyyyMMdd}.xlsx";
+            await JSRuntime.InvokeVoidAsync("mssaDownloadFile", fileName,
+                "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet", Convert.ToBase64String(bytes));
         }
-
-        var bytes = Encoding.UTF8.GetBytes(sb.ToString());
-        var base64 = Convert.ToBase64String(bytes);
-        var fileName = $"Scoring_Trial{selectedTrialId}_{DateTime.Now:yyyyMMdd}.csv";
-
-        await JSRuntime.InvokeVoidAsync("mssaDownloadFile", fileName, "text/csv", base64);
+        catch (Exception ex)
+        {
+            await logger.LogError(ex, "Error exporting scoring workbook for trial {TrialId}", selectedTrialId);
+            AddModuleMessage("Error exporting the scoring workbook. Please try again.", MessageType.Error);
+        }
     }
 
-    // Landscape, gridlined results sheet - one row per entry, matching the on-screen
-    // grouping/order (class print order, then run order).
+    // Landscape, gridlined scribe sheet - one section per Class (run order within),
+    // matching the on-screen grouping/order (class print order, then run order).
+    // Scoped by scribeSheetClassKey: every class each on its own page, or just the one
+    // class picked from the Scribe Sheet dropdown.
     private async Task ExportToPdf()
     {
         if (entries == null || !entries.Any())
@@ -772,48 +800,56 @@
             return;
         }
 
-        var ordered = entries
-            .OrderBy(e => classes?.FirstOrDefault(c => c.ClassName == e.ClassName && c.SubClassName == e.SubClassName)?.PrintOrder ?? 999)
-            .ThenBy(e => e.RunOrder ?? int.MaxValue);
-
         var headers = new[]
         {
-            "Class", "Run Order", "Handler", "Dog", "Tie Time",
+            "Run Order", "Handler", "Dog", "Tie Time",
             "#1", "#2", "#3", "#4", "#5", "#6", "#7", "#8", "#9",
             "Total Score", "Time", "Placing", "Points"
         };
-        var rows = ordered.Select(e =>
-        {
-            // TotalScore is computed server-side as a straight sum with nulls treated
-            // as 0, so it comes back as a real 0 - not null - before any obstacle score
-            // is entered. Only show it once at least one obstacle score actually exists;
-            // otherwise leave it blank like everything else that hasn't been scored yet.
-            bool hasAnyScore = e.ObstacleScore1.HasValue || e.ObstacleScore2.HasValue || e.ObstacleScore3.HasValue ||
-                e.ObstacleScore4.HasValue || e.ObstacleScore5.HasValue || e.ObstacleScore6.HasValue ||
-                e.ObstacleScore7.HasValue || e.ObstacleScore8.HasValue || e.ObstacleScore9.HasValue;
 
-            return new[]
+        var sections = ScribeSheetFilteredEntries(entries)
+            .GroupBy(e => new { e.ClassName, e.SubClassName })
+            .OrderBy(g => classes?.FirstOrDefault(c => c.ClassName == g.Key.ClassName && c.SubClassName == g.Key.SubClassName)?.PrintOrder ?? 999)
+            .Select(g => new
             {
-                $"{e.ClassName} {e.SubClassName}".Trim(),
-                e.RunOrder?.ToString() ?? "",
-                e.HandlerName,
-                e.DogName,
-                FormatTime(e.TieBreakerTime),
-                e.ObstacleScore1?.ToString() ?? "",
-                e.ObstacleScore2?.ToString() ?? "",
-                e.ObstacleScore3?.ToString() ?? "",
-                e.ObstacleScore4?.ToString() ?? "",
-                e.ObstacleScore5?.ToString() ?? "",
-                e.ObstacleScore6?.ToString() ?? "",
-                e.ObstacleScore7?.ToString() ?? "",
-                e.ObstacleScore8?.ToString() ?? "",
-                e.ObstacleScore9?.ToString() ?? "",
-                hasAnyScore ? e.TotalScore?.ToString("F2") ?? "" : "",
-                FormatTime(e.RunTime),
-                e.Placing?.ToString() ?? "",
-                e.TrialPoints?.ToString() ?? ""
-            };
-        }).ToArray();
+                className = $"{g.Key.ClassName} {g.Key.SubClassName}".Trim(),
+                rows = g
+                    .OrderBy(e => e.RunOrder ?? int.MaxValue)
+                    .Select(e =>
+                    {
+                        // TotalScore is computed server-side as a straight sum with nulls
+                        // treated as 0, so it comes back as a real 0 - not null - before
+                        // any obstacle score is entered. Only show it once at least one
+                        // obstacle score actually exists; otherwise leave it blank like
+                        // everything else that hasn't been scored yet.
+                        bool hasAnyScore = e.ObstacleScore1.HasValue || e.ObstacleScore2.HasValue || e.ObstacleScore3.HasValue ||
+                            e.ObstacleScore4.HasValue || e.ObstacleScore5.HasValue || e.ObstacleScore6.HasValue ||
+                            e.ObstacleScore7.HasValue || e.ObstacleScore8.HasValue || e.ObstacleScore9.HasValue;
+
+                        return new[]
+                        {
+                            e.RunOrder?.ToString() ?? "",
+                            e.HandlerName,
+                            e.DogName,
+                            FormatTime(e.TieBreakerTime),
+                            e.ObstacleScore1?.ToString() ?? "",
+                            e.ObstacleScore2?.ToString() ?? "",
+                            e.ObstacleScore3?.ToString() ?? "",
+                            e.ObstacleScore4?.ToString() ?? "",
+                            e.ObstacleScore5?.ToString() ?? "",
+                            e.ObstacleScore6?.ToString() ?? "",
+                            e.ObstacleScore7?.ToString() ?? "",
+                            e.ObstacleScore8?.ToString() ?? "",
+                            e.ObstacleScore9?.ToString() ?? "",
+                            hasAnyScore ? e.TotalScore?.ToString("F2") ?? "" : "",
+                            FormatTime(e.RunTime),
+                            e.Placing?.ToString() ?? "",
+                            e.TrialPoints?.ToString() ?? ""
+                        };
+                    })
+                    .ToArray()
+            })
+            .ToArray();
 
         var trial = trials?.FirstOrDefault(t => t.TrialId == selectedTrialId);
         var title = trial != null
@@ -822,8 +858,9 @@
 
         var fileName = $"Entries_Trial{selectedTrialId}_{DateTime.Now:yyyyMMdd}.pdf";
         var logoUrl = $"{PageState.Alias.BaseUrl}/images/mssa-logo.jpg";
+        var pageBreakPerSection = string.IsNullOrEmpty(scribeSheetClassKey);
 
-        await JSRuntime.InvokeVoidAsync("mssaExportPdf", fileName, title, headers, rows, logoUrl);
+        await JSRuntime.InvokeVoidAsync("mssaExportPdf", fileName, title, sections, headers, logoUrl, pageBreakPerSection);
     }
 
     // One-page-friendly results sheet, grouped by Class in the fixed run-order sequence
@@ -891,16 +928,6 @@
     {
         if (!ts.HasValue) return "";
         return $"{(int)ts.Value.TotalMinutes}:{ts.Value.Seconds:D2}";
-    }
-
-    private static string CsvEscape(string value)
-    {
-        if (string.IsNullOrEmpty(value)) return "";
-        if (value.Contains(',') || value.Contains('"') || value.Contains('\n'))
-        {
-            return "\"" + value.Replace("\"", "\"\"") + "\"";
-        }
-        return value;
     }
 
     private async Task ImportScoresFile(InputFileChangeEventArgs e)
@@ -1097,8 +1124,7 @@
         return rows;
     }
 
-    // Minimal CSV line parser handling quoted fields with embedded commas/quotes,
-    // matching what CsvEscape produces on export.
+    // Minimal CSV line parser handling quoted fields with embedded commas/quotes.
     private static List<string> ParseCsvLine(string line)
     {
         var fields = new List<string>();

@@ -32,5 +32,10 @@ namespace MountainStates.MSSA.Module.MSSA_Entries.Repository
         // Classes
         Task<IEnumerable<MSSA_Class>> GetClassesAsync();
         Task<MSSA_Class> GetClassAsync(int classId);
+
+        // Scribe sheet workbook (blank scoring columns for ringside hand-entry) - one
+        // worksheet tab per Class, in PrintOrder. classKey (ClassName|SubClassName) scopes
+        // it to a single class's tab; null/empty includes every class in the trial.
+        Task<byte[]> GenerateScoringWorkbookAsync(int trialId, string classKey);
     }
 }

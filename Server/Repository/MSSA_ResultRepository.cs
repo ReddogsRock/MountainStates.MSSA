@@ -19,20 +19,22 @@ namespace MountainStates.MSSA.Module.MSSA_Results.Repository
     {
         private readonly IDbContextFactory<MSSADbContext> _dbContextFactory;
 
-        // EPPlus's license must be set before any ExcelPackage is used, but this
-        // repository is transient - a new instance per request - so the constructor
-        // runs far more than once per process. Guard so the license call itself only
-        // ever runs once, regardless of how many instances get created.
-        private static bool _excelLicenseSet;
-        private static readonly object _excelLicenseLock = new();
-
         public MSSA_ResultRepository(IDbContextFactory<MSSADbContext> dbContextFactory)
         {
             _dbContextFactory = dbContextFactory;
             EnsureExcelLicenseSet();
         }
 
-        private static void EnsureExcelLicenseSet()
+        // EPPlus's license must be set before any ExcelPackage is used, but this
+        // repository is transient - a new instance per request - so the constructor
+        // runs far more than once per process. Shared (static, process-wide) across
+        // every repository that touches EPPlus - EPPlus 8's license API throws if set
+        // more than once per process, so whichever repository runs first must be the
+        // only one that actually calls it. See MSSA_EntryRepository.
+        private static bool _excelLicenseSet;
+        private static readonly object _excelLicenseLock = new();
+
+        public static void EnsureExcelLicenseSet()
         {
             if (_excelLicenseSet)
             {

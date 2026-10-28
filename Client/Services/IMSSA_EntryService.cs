@@ -20,5 +20,9 @@ namespace MountainStates.MSSA.Module.MSSA_Entries.Services
 
         Task<List<MSSA_Class>> GetClassesAsync(int moduleId);
         Task<MSSA_Class> GetClassAsync(int classId, int moduleId);
+
+        // Scribe sheet workbook - one worksheet tab per Class (or just classKey, if
+        // given). See MSSA_EntryRepository.GenerateScoringWorkbookAsync.
+        Task<byte[]> GetScoringWorkbookAsync(int trialId, string classKey, int moduleId);
     }
 }

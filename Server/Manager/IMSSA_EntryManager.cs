@@ -22,5 +22,7 @@ namespace MountainStates.MSSA.Module.MSSA_Entries.Manager
 
         Task<IEnumerable<MSSA_Class>> GetClassesAsync(int moduleId);
         Task<MSSA_Class> GetClassAsync(int classId, int moduleId);
+
+        Task<byte[]> GenerateScoringWorkbookAsync(int trialId, string classKey, int moduleId);
     }
 }

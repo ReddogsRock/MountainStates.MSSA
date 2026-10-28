@@ -3,7 +3,9 @@ using MountainStates.MSSA.Module.MSSA_Entries.Enums;
 using MountainStates.MSSA.Module.MSSA_Entries.Models;
 using MountainStates.MSSA.Module.MSSA_Events.Models;
 using MountainStates.MSSA.Module.MSSA_Handlers.Data;
+using MountainStates.MSSA.Module.MSSA_Results.Repository;
 using MountainStates.MSSA.Module.MSSA_Results.Utilities;
+using OfficeOpenXml;
 using Oqtane.Modules;
 using System;
 using System.Collections.Generic;
@@ -19,6 +21,7 @@ namespace MountainStates.MSSA.Module.MSSA_Entries.Repository
         public MSSA_EntryRepository(IDbContextFactory<MSSADbContext> dbContextFactory)
         {
             _dbContextFactory = dbContextFactory;
+            MSSA_ResultRepository.EnsureExcelLicenseSet();
         }
 
         public async Task<IEnumerable<MSSA_Entry>> GetEntriesAsync(int moduleId)
@@ -419,6 +422,140 @@ namespace MountainStates.MSSA.Module.MSSA_Entries.Repository
 
             return await db.MSSA_Classes
                 .FirstOrDefaultAsync(c => c.ClassId == classId);
+        }
+
+        private static readonly string[] ScoringWorkbookHeaders =
+        {
+            "EntryId", "RunOrder", "Handler", "Dog",
+            "#1", "#2", "#3", "#4", "#5", "#6", "#7", "#8", "#9",
+            "Penalty", "TieBreakerTime", "RunTime", "Placing", "Points", "Comments"
+        };
+
+        public async Task<byte[]> GenerateScoringWorkbookAsync(int trialId, string classKey)
+        {
+            using var db = await _dbContextFactory.CreateDbContextAsync();
+
+            var entries = await db.MSSA_Entries.Where(e => e.TrialId == trialId).ToListAsync();
+
+            var handlerIds = entries.Select(e => e.HandlerId).Distinct().ToList();
+            var handlers = await db.MSSA_Handlers
+                .Where(h => handlerIds.Contains(h.HandlerId))
+                .ToDictionaryAsync(h => h.HandlerId, h => h.FullName);
+
+            var dogIds = entries.Select(e => e.DogId).Distinct().ToList();
+            var dogs = await db.MSSA_Dogs
+                .Where(d => dogIds.Contains(d.DogId))
+                .ToDictionaryAsync(d => d.DogId, d => d.Name);
+
+            var classIds = entries.Select(e => e.ClassId).Distinct().ToList();
+            var classes = await db.MSSA_Classes
+                .Where(c => classIds.Contains(c.ClassId))
+                .ToDictionaryAsync(c => c.ClassId);
+
+            // One worksheet tab per Class, in PrintOrder - classKey narrows this down to
+            // just the one class picked from the Scribe Sheet dropdown, if any.
+            var groups = entries
+                .GroupBy(e => e.ClassId)
+                .Select(g =>
+                {
+                    classes.TryGetValue(g.Key, out var classInfo);
+                    return new
+                    {
+                        classInfo,
+                        rows = g.OrderBy(e => e.RunOrder ?? int.MaxValue).ToList()
+                    };
+                })
+                .Where(g => string.IsNullOrEmpty(classKey) ||
+                    $"{g.classInfo?.ClassName}|{g.classInfo?.SubClassName}" == classKey)
+                .OrderBy(g => g.classInfo?.PrintOrder ?? int.MaxValue)
+                .ToList();
+
+            using var package = new ExcelPackage();
+            var usedSheetNames = new HashSet<string>(StringComparer.OrdinalIgnoreCase);
+
+            foreach (var group in groups)
+            {
+                var sheetName = UniqueSheetName($"{group.classInfo?.ClassName} {group.classInfo?.SubClassName}".Trim(), usedSheetNames);
+                var ws = package.Workbook.Worksheets.Add(sheetName);
+
+                for (int col = 0; col < ScoringWorkbookHeaders.Length; col++)
+                {
+                    ws.Cells[1, col + 1].Value = ScoringWorkbookHeaders[col];
+                }
+
+                using (var headerRange = ws.Cells[1, 1, 1, ScoringWorkbookHeaders.Length])
+                {
+                    headerRange.Style.Font.Bold = true;
+                    headerRange.Style.Fill.PatternType = OfficeOpenXml.Style.ExcelFillStyle.Solid;
+                    headerRange.Style.Fill.BackgroundColor.SetColor(System.Drawing.Color.LightGray);
+                }
+
+                int row = 2;
+                foreach (var e in group.rows)
+                {
+                    ws.Cells[row, 1].Value = e.EntryId;
+                    ws.Cells[row, 2].Value = e.RunOrder;
+                    ws.Cells[row, 3].Value = handlers.TryGetValue(e.HandlerId, out var hn) ? hn : "";
+                    ws.Cells[row, 4].Value = dogs.TryGetValue(e.DogId, out var dn) ? dn : "";
+                    ws.Cells[row, 5].Value = e.ObstacleScore1;
+                    ws.Cells[row, 6].Value = e.ObstacleScore2;
+                    ws.Cells[row, 7].Value = e.ObstacleScore3;
+                    ws.Cells[row, 8].Value = e.ObstacleScore4;
+                    ws.Cells[row, 9].Value = e.ObstacleScore5;
+                    ws.Cells[row, 10].Value = e.ObstacleScore6;
+                    ws.Cells[row, 11].Value = e.ObstacleScore7;
+                    ws.Cells[row, 12].Value = e.ObstacleScore8;
+                    ws.Cells[row, 13].Value = e.ObstacleScore9;
+                    ws.Cells[row, 14].Value = e.Penalty;
+                    ws.Cells[row, 15].Value = TimeParsingHelper.Format(e.TieBreakerTime);
+                    ws.Cells[row, 16].Value = TimeParsingHelper.Format(e.RunTime);
+                    ws.Cells[row, 17].Value = e.Placing;
+                    ws.Cells[row, 18].Value = e.TrialPoints;
+                    ws.Cells[row, 19].Value = e.Comments;
+                    row++;
+                }
+
+                if (ws.Dimension != null)
+                {
+                    ws.Cells[ws.Dimension.Address].AutoFitColumns();
+                }
+            }
+
+            if (package.Workbook.Worksheets.Count == 0)
+            {
+                package.Workbook.Worksheets.Add("Scoring Sheet");
+            }
+
+            return package.GetAsByteArray();
+        }
+
+        // Excel sheet names: 31 chars max, and can't contain : \ / ? * [ ]. Falls back to
+        // "Class" for an entry whose class couldn't be resolved, and de-dupes if two
+        // classes land on the same sanitized name (e.g. both Nursery rows lose their
+        // On-foot/Horseback distinction once truncated).
+        private static string UniqueSheetName(string rawName, HashSet<string> usedNames)
+        {
+            var invalidChars = new[] { ':', '\\', '/', '?', '*', '[', ']' };
+            var sanitized = string.IsNullOrWhiteSpace(rawName) ? "Class" : rawName;
+            foreach (var c in invalidChars)
+            {
+                sanitized = sanitized.Replace(c, '-');
+            }
+            if (sanitized.Length > 31)
+            {
+                sanitized = sanitized.Substring(0, 31);
+            }
+
+            var candidate = sanitized;
+            int suffix = 2;
+            while (!usedNames.Add(candidate))
+            {
+                var suffixText = $" ({suffix})";
+                candidate = sanitized.Substring(0, Math.Min(sanitized.Length, 31 - suffixText.Length)) + suffixText;
+                suffix++;
+            }
+
+            return candidate;
         }
 
         // Appends "+" to DogName for any entry where the dog was enrolled in Futurity
