@@ -534,6 +534,7 @@ namespace MountainStates.MSSA.Module.MSSA_Results.Repository
             evt.ResultsApprovalStatus = EventResultsStatus.Approved;
             evt.ResultsApprovedDate = DateTime.UtcNow;
             evt.ResultsApprovedByUserId = userId;
+            evt.ResultsUploaded = true;
             evt.ModifiedDate = DateTime.UtcNow;
             await db.SaveChangesAsync();
 
