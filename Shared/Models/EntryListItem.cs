@@ -23,8 +23,8 @@ namespace MountainStates.MSSA.Module.MSSA_Events.Models
         public int? Placing { get; set; }
         
         // Times and Scoring
-        public TimeSpan? RunTime { get; set; }
         public TimeSpan? TieBreakerTime { get; set; }
+        public TimeSpan? RunTime { get; set; }
         public decimal? SumOfObstacles { get; set; }
         public int? TrialPoints { get; set; }
         public decimal? TotalScore { get; set; }

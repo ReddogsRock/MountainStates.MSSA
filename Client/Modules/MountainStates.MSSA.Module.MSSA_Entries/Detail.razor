@@ -77,11 +77,11 @@ else
                     <dt class="col-sm-3">Run Order:</dt>
                     <dd class="col-sm-9">@(entry.RunOrder?.ToString() ?? "Not assigned")</dd>
 
-                    <dt class="col-sm-3">Run Time:</dt>
-                    <dd class="col-sm-9">@(entry.RunTime?.ToString(@"mm\:ss") ?? "N/A")</dd>
-
                     <dt class="col-sm-3">Tie Breaker Time:</dt>
                     <dd class="col-sm-9">@(entry.TieBreakerTime?.ToString(@"mm\:ss") ?? "N/A")</dd>
+
+                    <dt class="col-sm-3">Run Time:</dt>
+                    <dd class="col-sm-9">@(entry.RunTime?.ToString(@"mm\:ss") ?? "N/A")</dd>
 
                     <dt class="col-sm-3">Handler Member:</dt>
                     <dd class="col-sm-9">

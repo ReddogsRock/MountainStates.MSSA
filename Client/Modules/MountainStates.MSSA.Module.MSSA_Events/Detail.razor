@@ -415,8 +415,8 @@ else
                                                                         <th>Placing</th>
                                                                         <th>Dog Name</th>
                                                                         <th>Handler Name</th>
-                                                                        <th>Run Time</th>
                                                                         <th>Tiebreaker</th>
+                                                                        <th>Run Time</th>
                                                                         <th>Obstacles</th>
                                                                         <th>Points</th>
                                                                     </tr>
@@ -446,8 +446,8 @@ else
                                                                             </td>
                                                                             <td>@entry.DogName</td>
                                                                             <td>@entry.HandlerName</td>
-                                                                            <td class="text-end">@FormatTime(entry.RunTime)</td>
                                                                             <td class="text-end">@FormatTime(entry.TieBreakerTime)</td>
+                                                                            <td class="text-end">@FormatTime(entry.RunTime)</td>
                                                                             <td class="text-end">@(entry.SumOfObstacles?.ToString("F1") ?? "-")</td>
                                                                             <td class="text-end">@(entry.TrialPoints?.ToString() ?? "-")</td>
                                                                         </tr>

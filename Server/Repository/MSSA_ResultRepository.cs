@@ -548,7 +548,7 @@ namespace MountainStates.MSSA.Module.MSSA_Results.Repository
         {
             "RunOrder", "ClassName", "SubClassName", "ClassId",
             "HandlerId", "HandlerName", "DogId", "DogName", "EntryId",
-            "Time", "TieTime", "TotalPoints"
+            "TieTime", "Time", "TotalPoints"
         };
 
         public async Task<byte[]> GenerateScoreSheetAsync(int trialId)
@@ -609,8 +609,8 @@ namespace MountainStates.MSSA.Module.MSSA_Results.Repository
                 ws.Cells[row, 7].Value = e.DogId;
                 ws.Cells[row, 8].Value = dogs.TryGetValue(e.DogId, out var dn) ? dn : "";
                 ws.Cells[row, 9].Value = e.EntryId;
-                ws.Cells[row, 10].Value = TimeParsingHelper.Format(e.RunTime);
-                ws.Cells[row, 11].Value = TimeParsingHelper.Format(e.TieBreakerTime);
+                ws.Cells[row, 10].Value = TimeParsingHelper.Format(e.TieBreakerTime);
+                ws.Cells[row, 11].Value = TimeParsingHelper.Format(e.RunTime);
                 if (e.EnteredTotalScore.HasValue)
                 {
                     ws.Cells[row, 12].Value = e.EnteredTotalScore.Value;

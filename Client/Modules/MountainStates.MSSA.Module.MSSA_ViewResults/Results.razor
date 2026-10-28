@@ -50,8 +50,8 @@
                             <th>Class</th>
                             <th>Handler</th>
                             <th>Dog</th>
-                            <th style="width:100px">Time</th>
                             <th style="width:100px">Tie Time</th>
+                            <th style="width:100px">Time</th>
                             <th style="width:110px">Total Points</th>
                             <th style="width:70px">Place</th>
                             <th style="width:70px">Points</th>
@@ -64,8 +64,8 @@
                                 <td>@row.ClassName @row.SubClassName</td>
                                 <td>@row.HandlerName</td>
                                 <td>@row.DogName</td>
-                                <td>@(row.RunTimeStr ?? "-")</td>
                                 <td>@(row.TieBreakerTimeStr ?? "-")</td>
+                                <td>@(row.RunTimeStr ?? "-")</td>
                                 <td>@(row.TotalScore?.ToString("F2") ?? "-")</td>
                                 <td class="text-center">@(row.Placing?.ToString() ?? "-")</td>
                                 <td class="text-center">@(pointsVisible ? (row.TrialPoints?.ToString() ?? "-") : "")</td>

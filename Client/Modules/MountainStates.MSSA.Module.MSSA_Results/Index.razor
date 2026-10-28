@@ -380,8 +380,8 @@
                             <th>Class</th>
                             <th>Handler</th>
                             <th>Dog</th>
-                            <th style="width:120px">Time</th>
                             <th style="width:120px">Tie Time</th>
+                            <th style="width:120px">Time</th>
                             <th style="width:120px">Total Points</th>
                             <th style="width:70px">Place</th>
                             <th style="width:70px">Points</th>
@@ -398,15 +398,15 @@
                                 <td>@row.DogName</td>
                                 <td>
                                     <input class="form-control form-control-sm" placeholder="m:ss"
-                                           value="@row.RunTimeStr"
-                                           @oninput="e => { row.RunTimeStr = e.Value?.ToString(); MarkDirty(row); }"
+                                           value="@row.TieBreakerTimeStr"
+                                           @oninput="e => { row.TieBreakerTimeStr = e.Value?.ToString(); MarkDirty(row); }"
                                            @onkeydown="@(e => OnRowKeyDown(e, row))"
                                            @onblur="() => SaveRow(row)" />
                                 </td>
                                 <td>
                                     <input class="form-control form-control-sm" placeholder="m:ss"
-                                           value="@row.TieBreakerTimeStr"
-                                           @oninput="e => { row.TieBreakerTimeStr = e.Value?.ToString(); MarkDirty(row); }"
+                                           value="@row.RunTimeStr"
+                                           @oninput="e => { row.RunTimeStr = e.Value?.ToString(); MarkDirty(row); }"
                                            @onkeydown="@(e => OnRowKeyDown(e, row))"
                                            @onblur="() => SaveRow(row)" />
                                 </td>
@@ -608,8 +608,8 @@
                         {
                             r.HandlerName,
                             r.DogName,
-                            r.RunTimeStr ?? "",
                             r.TieBreakerTimeStr ?? "",
+                            r.RunTimeStr ?? "",
                             r.TotalScore?.ToString("F2") ?? "",
                             r.Placing?.ToString() ?? "",
                             r.TrialPoints?.ToString() ?? ""
@@ -619,7 +619,7 @@
                 .ToArray();
 
             var fileName = $"Results_{trial?.TrialIdentifier ?? "Trial"}_{DateTime.Now:yyyyMMdd}.pdf";
-            var tableHead = new[] { "Handler", "Dog", "Time", "Tie Time", "Total Points", "Place", "Points" };
+            var tableHead = new[] { "Handler", "Dog", "Tie Time", "Time", "Total Points", "Place", "Points" };
             var logoUrl = $"{PageState.Alias.BaseUrl}/images/mssa-logo.jpg";
 
             await JSRuntime.InvokeVoidAsync("mssaExportResultsPdf", fileName, headerLines, sections, tableHead, logoUrl, true);

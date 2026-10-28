@@ -152,7 +152,7 @@
             y += 4;
 
             doc.autoTable({
-                head: [['Handler', 'Dog', 'Time', 'Tie Time', 'Total Points', 'Place', 'Points']],
+                head: [['Handler', 'Dog', 'Tie Time', 'Time', 'Total Points', 'Place', 'Points']],
                 body: section.rows,
                 startY: y,
                 theme: 'grid',
@@ -723,7 +723,7 @@
         }
 
         var sb = new StringBuilder();
-        sb.AppendLine("EntryId,RunOrder,Class,Handler,Dog,Obstacle1,Obstacle2,Obstacle3,Obstacle4,Obstacle5,Obstacle6,Obstacle7,Obstacle8,Obstacle9,Penalty,RunTime,TieBreakerTime,Placing,Points,Comments");
+        sb.AppendLine("EntryId,RunOrder,Class,Handler,Dog,Obstacle1,Obstacle2,Obstacle3,Obstacle4,Obstacle5,Obstacle6,Obstacle7,Obstacle8,Obstacle9,Penalty,TieBreakerTime,RunTime,Placing,Points,Comments");
 
         // Class block first, then RunOrder within that class - RunOrder starts back
         // at 1 for every class, so sorting by RunOrder alone would interleave classes.
@@ -749,8 +749,8 @@
                 e.ObstacleScore8?.ToString() ?? "",
                 e.ObstacleScore9?.ToString() ?? "",
                 e.Penalty?.ToString() ?? "",
-                FormatTime(e.RunTime),
                 FormatTime(e.TieBreakerTime),
+                FormatTime(e.RunTime),
                 e.Placing?.ToString() ?? "",
                 e.TrialPoints?.ToString() ?? "",
                 CsvEscape(e.Comments)));
@@ -870,8 +870,8 @@
                         {
                             e.HandlerName,
                             e.DogName,
-                            FormatTime(e.RunTime),
                             FormatTime(e.TieBreakerTime),
+                            FormatTime(e.RunTime),
                             hasAnyScore ? e.TotalScore?.ToString("F2") ?? "" : "",
                             e.Placing?.ToString() ?? "",
                             e.TrialPoints?.ToString() ?? ""
@@ -1007,8 +1007,8 @@
         CompareDecimal("Obstacle 8", current.ObstacleScore8, row.ObstacleScore8);
         CompareDecimal("Obstacle 9", current.ObstacleScore9, row.ObstacleScore9);
         CompareDecimal("Penalty", current.Penalty, row.Penalty);
-        CompareText("Run Time", FormatTime(current.RunTime), row.RunTime);
         CompareText("Tie-Breaker Time", FormatTime(current.TieBreakerTime), row.TieBreakerTime);
+        CompareText("Run Time", FormatTime(current.RunTime), row.RunTime);
         CompareInt("Placing", current.Placing, row.Placing);
         CompareInt("Points", current.TrialPoints, row.TrialPoints);
         CompareText("Comments", current.Comments, row.Comments);
