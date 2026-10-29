@@ -704,8 +704,9 @@ else
 
             successMessage = $"Added {created} {(created == 1 ? "entry" : "entries")} for {selectedDog.Name}.";
 
-            // Clear everything except the Event selection, ready for the next dog.
-            selectedHandler = null;
+            // Keep the Handler selected - the same handler often has more than one dog
+            // to enter, and re-picking them each time was the main complaint about this
+            // form. "Change" is still right there if they need a different handler.
             selectedDog = null;
             checkedCells.Clear();
 
