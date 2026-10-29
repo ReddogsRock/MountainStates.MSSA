@@ -32,6 +32,9 @@
                     <dt class="col-sm-3">Results Received:</dt>
                     <dd class="col-sm-9">@(evt.ResultsReceivedDate?.ToString("MMM dd, yyyy") ?? "Not received")</dd>
 
+                    <dt class="col-sm-3">Fees Received:</dt>
+                    <dd class="col-sm-9">@(evt.FeeReceivedDate?.ToString("MMM dd, yyyy") ?? "Not received")</dd>
+
                     <dt class="col-sm-3">Results Approved:</dt>
                     <dd class="col-sm-9">
                         @(evt.ResultsApprovedDate?.ToString("MMM dd, yyyy")
