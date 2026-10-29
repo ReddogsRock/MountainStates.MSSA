@@ -58,6 +58,7 @@ namespace MountainStates.MSSA.Module.MSSA_Entries.Repository
                                      TrialPoints = e.TrialPoints,
                                      EnteredTotalScore = e.EnteredTotalScore,
                                      HandlerIsMSSAMember = e.HandlerIsMSSAMember,
+                                     IsPaid = e.IsPaid,
                                      Comments = e.Comments,
                                      CreatedDate = e.CreatedDate,
                                      ModifiedDate = e.ModifiedDate,
@@ -121,6 +122,7 @@ namespace MountainStates.MSSA.Module.MSSA_Entries.Repository
                                      Penalty = e.Penalty,
                                      Comments = e.Comments,
                                      EnteredTotalScore = e.EnteredTotalScore,
+                                     IsPaid = e.IsPaid,
                                      TotalScore = e.EnteredTotalScore ??
                                                  (e.ObstacleScore1 ?? 0) + (e.ObstacleScore2 ?? 0) +
                                                  (e.ObstacleScore3 ?? 0) + (e.ObstacleScore4 ?? 0) +
@@ -177,6 +179,7 @@ namespace MountainStates.MSSA.Module.MSSA_Entries.Repository
                                    TrialPoints = e.TrialPoints,
                                    EnteredTotalScore = e.EnteredTotalScore,
                                    HandlerIsMSSAMember = e.HandlerIsMSSAMember,
+                                   IsPaid = e.IsPaid,
                                    Comments = e.Comments,
                                    CreatedDate = e.CreatedDate,
                                    ModifiedDate = e.ModifiedDate,

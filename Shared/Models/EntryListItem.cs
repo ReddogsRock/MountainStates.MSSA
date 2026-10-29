@@ -11,6 +11,7 @@ namespace MountainStates.MSSA.Module.MSSA_Events.Models
         public int TrialId { get; set; }
         public int DogId { get; set; }
         public int HandlerId { get; set; }
+        public bool IsPaid { get; set; }
 
         // Display Names
         public string HandlerName { get; set; }

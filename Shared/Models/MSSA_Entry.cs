@@ -43,6 +43,9 @@ namespace MountainStates.MSSA.Module.MSSA_Entries.Models
         public decimal? Penalty { get; set; }
         public int? TrialPoints { get; set; }
 
+        // Entry fee for this run, marked by a Trial Secretary while adding entries.
+        public bool IsPaid { get; set; } = false;
+
         // Single raw score for the run, entered directly by a Trial Secretary through the
         // Results module as an alternative to the 9-obstacle breakdown above. When present,
         // it takes precedence over the obstacle sum wherever a run's total score is used

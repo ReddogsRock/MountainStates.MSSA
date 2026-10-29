@@ -436,6 +436,7 @@
                                     <th>Run Order</th>
                                     <th>Handler</th>
                                     <th>Dog</th>
+                                    <th>Paid</th>
                                     <th>Total Score</th>
                                     <th>Placing</th>
                                     <th>Points</th>
@@ -449,6 +450,7 @@
                                         <td>@(entry.RunOrder?.ToString() ?? "-")</td>
                                         <td>@entry.HandlerName</td>
                                         <td>@entry.DogName</td>
+                                        <td>@(entry.IsPaid ? "Yes" : "No")</td>
                                         <td>@(entry.TotalScore?.ToString("F2") ?? "-")</td>
                                         <td>
                                             @if (entry.Placing.HasValue)
