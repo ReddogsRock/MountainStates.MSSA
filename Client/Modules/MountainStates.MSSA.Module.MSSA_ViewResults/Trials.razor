@@ -23,6 +23,24 @@
             </div>
         </div>
 
+        <div class="card mb-3">
+            <div class="card-header">
+                <h5 class="mb-0">Administrative Information</h5>
+            </div>
+            <div class="card-body">
+                <dl class="row mb-0">
+                    <dt class="col-sm-3">Results Received:</dt>
+                    <dd class="col-sm-9">@(evt.ResultsReceivedDate?.ToString("MMM dd, yyyy") ?? "Not received")</dd>
+
+                    <dt class="col-sm-3">Results Approved:</dt>
+                    <dd class="col-sm-9">
+                        @(evt.ResultsApprovedDate?.ToString("MMM dd, yyyy")
+                            ?? (evt.ResultsUploaded ? "Yes" : "Not approved"))
+                    </dd>
+                </dl>
+            </div>
+        </div>
+
         @if (trials == null)
         {
             <p><em>Loading trials...</em></p>
