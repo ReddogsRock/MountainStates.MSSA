@@ -610,6 +610,18 @@ else
                     tieBreakerTimeString = $"{(int)entry.TieBreakerTime.Value.TotalMinutes}:{entry.TieBreakerTime.Value.Seconds:D2}";
                 }
             }
+            else if (PageState.QueryString.ContainsKey("eventId") &&
+                     int.TryParse(PageState.QueryString["eventId"], out var carriedEventId) &&
+                     carriedEventId > 0)
+            {
+                // Carries the Event the user was just looking at on the Index page over
+                // to Add Entries, so clicking "Add Entry" doesn't make them re-pick it.
+                // There's no Trial selector here to restore (Add Entries works across
+                // every trial in the event via the Select Runs checkbox grid), so only
+                // eventId matters even though Index also passes trialId along.
+                selectedEventId = carriedEventId;
+                await OnAddEventChanged();
+            }
         }
         catch (Exception ex)
         {

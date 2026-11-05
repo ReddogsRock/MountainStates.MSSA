@@ -197,7 +197,8 @@
                 UserSecurity.IsAuthorized(PageState.User, MSSARoles.TrialSecretary))
         {
             <div class="col-auto">
-                <ActionLink Action="Edit" Security="SecurityAccessLevel.Edit" Text="Add Entry"
+                <ActionLink Action="Edit" Parameters="@($"eventId={selectedEventId}&trialId={selectedTrialId}")"
+                            Security="SecurityAccessLevel.Edit" Text="Add Entry"
                             ResourceKey="AddEntry" Class="btn btn-primary" />
             </div>
         }
