@@ -649,8 +649,14 @@ else
     private List<MSSA_Trial> TrialsForOffering(MSSA_EventClassOffering offering)
     {
         if (trials == null) return new List<MSSA_Trial>();
+
+        // Venue-null-tolerant: every migrated Trial has Venue = NULL (no migration
+        // script ever populated it - see MSSA_EventRepository.EnsureTrialsForOfferingsAsync),
+        // so requiring an exact Venue match hides every historical trial from this grid
+        // even though it's correctly tied to the event. A newly-created trial still gets
+        // Venue set and matches exactly as before.
         return trials
-            .Where(t => t.Stock == offering.Stock && t.Venue == offering.Venue)
+            .Where(t => t.Stock == offering.Stock && (t.Venue == offering.Venue || string.IsNullOrEmpty(t.Venue)))
             .OrderBy(t => t.TrialDate)
             .ThenBy(t => t.TrialId)
             .Take(offering.PlannedRuns)
