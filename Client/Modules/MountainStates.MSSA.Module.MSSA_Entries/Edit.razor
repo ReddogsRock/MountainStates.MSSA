@@ -712,10 +712,18 @@ else
     }
 
     // Pre-fills a new dog's Owner Name from whichever Handler is already selected -
-    // same dog/handler pairing is the common case, so this saves retyping it.
+    // same dog/handler pairing is the common case, so this saves retyping it. Also
+    // defaults First Competition Year to the current competition season (May 1 - Apr
+    // 30, named for the year it ends in - see Dogs/Edit.razor's CurrentCompetitionYear).
     private MSSA_Dog NewDogDefaults()
     {
-        return new MSSA_Dog { IsActive = true, OwnerName = selectedHandler?.FullName };
+        var currentCompetitionYear = DateTime.Now.Month >= 5 ? DateTime.Now.Year + 1 : DateTime.Now.Year;
+        return new MSSA_Dog
+        {
+            IsActive = true,
+            OwnerName = selectedHandler?.FullName,
+            FirstCompetitionYear = currentCompetitionYear
+        };
     }
 
     private async Task SubmitEntries()

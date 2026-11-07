@@ -83,7 +83,7 @@
                 <input class="form-control" @bind="newDog.Breed" />
             </div>
             <div class="col-md-4">
-                <label class="form-label">Owner Name</label>
+                <label class="form-label">Owner Name <span class="text-danger">*</span></label>
                 <input class="form-control" @bind="newDog.OwnerName" />
             </div>
         </div>
@@ -157,7 +157,9 @@
 
     private void ShowAddForm()
     {
-        newDog = NewDogFactory != null ? NewDogFactory() : new MSSA_Dog { IsActive = true };
+        newDog = NewDogFactory != null
+            ? NewDogFactory()
+            : new MSSA_Dog { IsActive = true, FirstCompetitionYear = DateTime.Now.Month >= 5 ? DateTime.Now.Year + 1 : DateTime.Now.Year };
         similarMatches = null;
         showAddForm = true;
         errorMessage = "";
@@ -174,6 +176,12 @@
         if (string.IsNullOrWhiteSpace(newDog.Name))
         {
             errorMessage = "Dog Name is required for a new dog.";
+            return;
+        }
+
+        if (string.IsNullOrWhiteSpace(newDog.OwnerName))
+        {
+            errorMessage = "Owner Name is required for a new dog.";
             return;
         }
         errorMessage = "";

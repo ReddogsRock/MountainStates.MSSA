@@ -73,7 +73,13 @@
 
                 <div class="row mb-3">
                     <div class="col-md-4">
-                        <label for="dob" class="form-label">Date of Birth</label>
+                        <label for="dob" class="form-label">
+                            Date of Birth
+                            @if (dogId == -1 && enrollInFuturity)
+                            {
+                                <span class="text-danger">*</span>
+                            }
+                        </label>
                         <input id="dob" type="date" class="form-control"
                                value="@(dog.DateOfBirth?.ToString("yyyy-MM-dd"))"
                                @onchange="@(e => dog.DateOfBirth = string.IsNullOrEmpty(e.Value?.ToString()) ? null : DateTime.Parse(e.Value.ToString()))" />
@@ -101,7 +107,13 @@
                 <h4>Ownership Information</h4>
             </div>
             <div class="card-body">
-                <label class="form-label">Owner Name</label>
+                <label class="form-label">
+                    Owner Name
+                    @if (dogId == -1)
+                    {
+                        <span class="text-danger">*</span>
+                    }
+                </label>
 
                 @if (!ownerSearchActive)
                 {
@@ -363,7 +375,8 @@
                 {
                     IsActive = true,
                     IsDeceased = false,
-                    IsSold = false
+                    IsSold = false,
+                    FirstCompetitionYear = CurrentCompetitionYear
                 };
                 futurityParticipation = new List<MSSA_DogFuturityParticipation>();
             }
@@ -425,9 +438,21 @@
                 return;
             }
 
+            if (dogId == -1 && string.IsNullOrWhiteSpace(dog.OwnerName))
+            {
+                errorMessage = "Owner is required.";
+                return;
+            }
+
             if (dogId == -1 && enrollInFuturity && futurityDocument == null)
             {
                 errorMessage = "Age documentation is required to enroll in Futurity.";
+                return;
+            }
+
+            if (dogId == -1 && enrollInFuturity && !dog.DateOfBirth.HasValue)
+            {
+                errorMessage = "Date of Birth is required to enroll in Futurity.";
                 return;
             }
 
