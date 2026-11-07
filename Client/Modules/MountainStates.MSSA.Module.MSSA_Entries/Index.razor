@@ -172,7 +172,7 @@
             y += 4;
 
             doc.autoTable({
-                head: [['Handler', 'Dog', 'Tie Time', 'Time', 'Total Points', 'Place', 'Points']],
+                head: [['Handler', 'Dog', 'Tie Time', 'Time', 'Course Points', 'Place', 'Finals Points']],
                 body: section.rows,
                 startY: y,
                 theme: 'grid',
@@ -438,9 +438,9 @@
                                     <th>Handler</th>
                                     <th>Dog</th>
                                     <th>Paid</th>
-                                    <th>Total Score</th>
+                                    <th>Course Points</th>
                                     <th>Placing</th>
-                                    <th>Points</th>
+                                    <th>Finals Points</th>
                                     <th>Actions</th>
                                 </tr>
                             </thead>
@@ -807,7 +807,7 @@
         {
             "Run Order", "Handler", "Dog", "Tie Time",
             "#1", "#2", "#3", "#4", "#5", "#6", "#7", "#8", "#9",
-            "Total Score", "Time", "Placing", "Points"
+            "Course Points", "Time", "Placing", "Finals Points"
         };
 
         var sections = ScribeSheetFilteredEntries(entries)
@@ -1040,7 +1040,7 @@
         CompareText("Tie-Breaker Time", FormatTime(current.TieBreakerTime), row.TieBreakerTime);
         CompareText("Run Time", FormatTime(current.RunTime), row.RunTime);
         CompareInt("Placing", current.Placing, row.Placing);
-        CompareInt("Points", current.TrialPoints, row.TrialPoints);
+        CompareInt("Finals Points", current.TrialPoints, row.TrialPoints);
         CompareText("Comments", current.Comments, row.Comments);
 
         return changes;

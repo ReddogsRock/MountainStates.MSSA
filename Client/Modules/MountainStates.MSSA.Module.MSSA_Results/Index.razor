@@ -382,9 +382,9 @@
                             <th>Dog</th>
                             <th style="width:120px">Tie Time</th>
                             <th style="width:120px">Time</th>
-                            <th style="width:120px">Total Points</th>
+                            <th style="width:120px">Course Points</th>
                             <th style="width:70px">Place</th>
-                            <th style="width:70px">Points</th>
+                            <th style="width:70px">Finals Points</th>
                             <th style="width:40px"></th>
                         </tr>
                     </thead>
@@ -619,7 +619,7 @@
                 .ToArray();
 
             var fileName = $"Results_{trial?.TrialIdentifier ?? "Trial"}_{DateTime.Now:yyyyMMdd}.pdf";
-            var tableHead = new[] { "Handler", "Dog", "Tie Time", "Time", "Total Points", "Place", "Points" };
+            var tableHead = new[] { "Handler", "Dog", "Tie Time", "Time", "Course Points", "Place", "Finals Points" };
             var logoUrl = $"{PageState.Alias.BaseUrl}/images/mssa-logo.jpg";
 
             await JSRuntime.InvokeVoidAsync("mssaExportResultsPdf", fileName, headerLines, sections, tableHead, logoUrl, true);
@@ -700,7 +700,7 @@
             }
 
             var fileName = $"WeekendAverage_{selectedEvent?.EventName?.Replace(" ", "") ?? "Event"}_{DateTime.Now:yyyyMMdd}.pdf";
-            var tableHead = new[] { "Handler", "Dog", "Total Points", "Total Time", "Runs" };
+            var tableHead = new[] { "Handler", "Dog", "Total Course Points", "Total Time", "Runs" };
             var logoUrl = $"{PageState.Alias.BaseUrl}/images/mssa-logo.jpg";
 
             await JSRuntime.InvokeVoidAsync("mssaExportResultsPdf", fileName, headerLines, sections.ToArray(), tableHead, logoUrl, false);
