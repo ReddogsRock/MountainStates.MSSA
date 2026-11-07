@@ -296,6 +296,13 @@
             </div>
         </div>
 
+        @if (!string.IsNullOrEmpty(errorMessage))
+        {
+            <div class="alert alert-danger" role="alert">
+                @errorMessage
+            </div>
+        }
+
         @* Action Buttons *@
         <div class="row">
             <div class="col">
