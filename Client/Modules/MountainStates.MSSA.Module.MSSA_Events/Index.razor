@@ -177,6 +177,7 @@
                         <th>Location</th>
                         <th>Trials</th>
                         <th>Status</th>
+                        <th>Sanction Fees</th>
                         <th>Actions</th>
                     </tr>
                 </thead>
@@ -207,6 +208,16 @@
                                 else
                                 {
                                     <span class="badge bg-success">Approved</span>
+                                }
+                            </td>
+                            <td>
+                                @if (evt.FeeReceivedDate.HasValue)
+                                {
+                                    <span class="badge bg-success">Paid</span>
+                                }
+                                else
+                                {
+                                    <span class="badge bg-secondary">Not Paid</span>
                                 }
                             </td>
                             <td>
