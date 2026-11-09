@@ -700,7 +700,7 @@
             }
 
             var fileName = $"WeekendAverage_{selectedEvent?.EventName?.Replace(" ", "") ?? "Event"}_{DateTime.Now:yyyyMMdd}.pdf";
-            var tableHead = new[] { "Handler", "Dog", "Total Course Points", "Total Time", "Runs" };
+            var tableHead = new[] { "Handler", "Dog", "Total Course Points", "Total Time", "Total Tie Time", "Runs" };
             var logoUrl = $"{PageState.Alias.BaseUrl}/images/mssa-logo.jpg";
 
             await JSRuntime.InvokeVoidAsync("mssaExportResultsPdf", fileName, headerLines, sections.ToArray(), tableHead, logoUrl, false);
@@ -732,17 +732,20 @@
                         cg.Key.DogName,
                         TotalPoints = cg.Sum(r => r.TotalScore ?? 0),
                         TotalTime = cg.Aggregate(TimeSpan.Zero, (sum, r) => sum + (TimeParsingHelper.ParseMinutesSeconds(r.RunTimeStr) ?? TimeSpan.Zero)),
+                        TotalTieBreakerTime = cg.Aggregate(TimeSpan.Zero, (sum, r) => sum + (TimeParsingHelper.ParseMinutesSeconds(r.TieBreakerTimeStr) ?? TimeSpan.Zero)),
                         RunCount = cg.Count()
                     })
                     .OrderByDescending(c => c.RunCount)
                     .ThenByDescending(c => c.TotalPoints)
                     .ThenBy(c => c.TotalTime)
+                    .ThenBy(c => c.TotalTieBreakerTime)
                     .Select(c => new[]
                     {
                         c.HandlerName,
                         c.DogName,
                         c.TotalPoints.ToString("F2"),
                         TimeParsingHelper.Format(c.TotalTime),
+                        TimeParsingHelper.Format(c.TotalTieBreakerTime),
                         c.RunCount.ToString()
                     })
                     .ToArray()

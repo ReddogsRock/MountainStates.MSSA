@@ -53,6 +53,7 @@
                                     <th>Dog</th>
                                     <th style="width:110px">Total Course Points</th>
                                     <th style="width:120px">Total Time</th>
+                                    <th style="width:120px">Total Tie Time</th>
                                     <th style="width:80px">Runs</th>
                                 </tr>
                             </thead>
@@ -64,6 +65,7 @@
                                         <td>@competitor.DogName</td>
                                         <td>@competitor.TotalPoints.ToString("F2")</td>
                                         <td>@TimeParsingHelper.Format(competitor.TotalTime)</td>
+                                        <td>@TimeParsingHelper.Format(competitor.TotalTieBreakerTime)</td>
                                         <td class="text-center">@competitor.RunCount</td>
                                     </tr>
                                 }
@@ -87,11 +89,12 @@
     // Ranked by run count first - someone who competed in every trial always outranks
     // someone who competed in fewer, regardless of points/time, since summed totals
     // otherwise unfairly favor fewer runs (less time added up, usually fewer points
-    // too). Within the same run count, highest combined points, lowest combined time
-    // as the tiebreaker (the same order individual-run placing uses, see
-    // MSSA_ResultRepository.CalculatePlacingAndPointsAsync). Same aggregation as the
-    // "Weekend Average" PDF export on the Results Entry page, just displayed inline
-    // here instead of exported.
+    // too). Within the same run count, highest combined points, then lowest combined
+    // time, then lowest combined tie-breaker time as the final tiebreaker (the same
+    // order individual-run placing uses, see MSSA_ResultRepository.CalculatePlacingAndPointsAsync).
+    // Same aggregation as the "Weekend Average" PDF export on the Results Entry page
+    // (see BuildWeekendCombinedSections there), just displayed inline here instead of
+    // exported.
     //
     // An event that mixes Stock types (e.g. both Cattle and Sheep trials) gets three
     // of these groups: the all-Stock "Weekend Combined", plus one per Stock actually
@@ -116,6 +119,7 @@
         public string DogName { get; set; }
         public decimal TotalPoints { get; set; }
         public TimeSpan TotalTime { get; set; }
+        public TimeSpan TotalTieBreakerTime { get; set; }
         public int RunCount { get; set; }
     }
 
@@ -187,11 +191,13 @@
                         DogName = cg.Key.DogName,
                         TotalPoints = cg.Sum(r => r.TotalScore ?? 0),
                         TotalTime = cg.Aggregate(TimeSpan.Zero, (sum, r) => sum + (TimeParsingHelper.ParseMinutesSeconds(r.RunTimeStr) ?? TimeSpan.Zero)),
+                        TotalTieBreakerTime = cg.Aggregate(TimeSpan.Zero, (sum, r) => sum + (TimeParsingHelper.ParseMinutesSeconds(r.TieBreakerTimeStr) ?? TimeSpan.Zero)),
                         RunCount = cg.Count()
                     })
                     .OrderByDescending(c => c.RunCount)
                     .ThenByDescending(c => c.TotalPoints)
                     .ThenBy(c => c.TotalTime)
+                    .ThenBy(c => c.TotalTieBreakerTime)
                     .ToList()
             })
             .ToList();
