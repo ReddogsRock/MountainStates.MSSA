@@ -512,9 +512,24 @@ namespace MountainStates.MSSA.Module.MSSA_Results.Repository
                 };
             }
 
-            evt.ResultsApprovalStatus = EventResultsStatus.PendingApproval;
             evt.ResultsSubmittedDate = DateTime.UtcNow;
             evt.ResultsSubmittedByUserId = userId;
+
+            // Approval is sign-off that the sanction fee was paid, not a data-quality
+            // check - if the fee was already paid before results were even submitted,
+            // there's nothing left to wait on, so skip PendingApproval entirely instead
+            // of making an Admin click Approve on something already settled.
+            if (evt.FeeReceivedDate.HasValue)
+            {
+                evt.ResultsApprovalStatus = EventResultsStatus.Approved;
+                evt.ResultsApprovedDate = DateTime.UtcNow;
+                evt.ResultsUploaded = true;
+            }
+            else
+            {
+                evt.ResultsApprovalStatus = EventResultsStatus.PendingApproval;
+            }
+
             evt.ModifiedDate = DateTime.UtcNow;
             await db.SaveChangesAsync();
 

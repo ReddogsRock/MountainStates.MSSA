@@ -78,7 +78,34 @@ namespace MountainStates.MSSA.Module.MSSA_Events.Repository
             evt.ModifiedDate = DateTime.UtcNow;
 
             await db.SaveChangesAsync();
+
+            await AutoApproveResultsIfFeePaidAsync(db, evt);
+
             return evt;
+        }
+
+        // Admin approval of submitted results isn't a data-quality check - it's
+        // sign-off that the sanction fee was paid (see MSSA_Event.ResultsApprovalStatus).
+        // Once FeeReceivedDate is set, there's nothing left for a human to decide, so
+        // this auto-approves rather than waiting on someone to click Approve. Called
+        // after any save that could have just set FeeReceivedDate. The manual Approve
+        // button stays as a fallback (a waived fee, a correction, etc.) - this just
+        // covers the common case automatically. No human clicked Approve here, so
+        // ResultsApprovedByUserId is deliberately left null rather than attributed to
+        // whoever happened to trigger the fee update.
+        private static async Task AutoApproveResultsIfFeePaidAsync(MSSADbContext db, MSSA_Event evt)
+        {
+            if (evt.ResultsApprovalStatus != EventResultsStatus.PendingApproval || !evt.FeeReceivedDate.HasValue)
+            {
+                return;
+            }
+
+            evt.ResultsApprovalStatus = EventResultsStatus.Approved;
+            evt.ResultsApprovedDate = DateTime.UtcNow;
+            evt.ResultsUploaded = true;
+            evt.ModifiedDate = DateTime.UtcNow;
+
+            await db.SaveChangesAsync();
         }
 
         public async Task<MSSA_Event> GetEventAsync(int eventId)
@@ -249,6 +276,11 @@ namespace MountainStates.MSSA.Module.MSSA_Events.Repository
             }
 
             evt.Offerings = await LoadOfferingsAsync(db, evt.EventId);
+
+            // Covers an Admin marking the fee received by hand on the Edit form
+            // (FeeReceivedDate round-trips through this same save) - same auto-approval
+            // as the Stripe-paid path above.
+            await AutoApproveResultsIfFeePaidAsync(db, evt);
 
             return evt;
         }
