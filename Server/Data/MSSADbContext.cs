@@ -28,6 +28,7 @@ namespace MountainStates.MSSA.Module.MSSA_Handlers.Data
         public DbSet<MSSA_DogFuturityParticipation> MSSA_DogFuturityParticipation { get; set; }
         public DbSet<MSSA_DogOwnershipHistory> MSSA_DogOwnershipHistory { get; set; }
         public DbSet<MSSA_User> MSSA_Users { get; set; }
+        public DbSet<MSSA_MailingListSubscriber> MSSA_MailingListSubscribers { get; set; }
         public DbSet<MSSA_FinalsData> MSSA_FinalsData { get; set; }
         public DbSet<MSSA_FinalsResult> vw_AllFinalsResults { get; set; }
 
@@ -51,6 +52,7 @@ namespace MountainStates.MSSA.Module.MSSA_Handlers.Data
             modelBuilder.Entity<MSSA_DogFuturityParticipation>().ToTable("MSSA_DogFuturityParticipation");
             modelBuilder.Entity<MSSA_DogOwnershipHistory>().ToTable("MSSA_DogOwnershipHistory");
             modelBuilder.Entity<MSSA_User>().ToTable("MSSA_Users");
+            modelBuilder.Entity<MSSA_MailingListSubscriber>().ToTable("MSSA_MailingListSubscribers");
 
             // Configure any specific relationships or constraints if needed
 

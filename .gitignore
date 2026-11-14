@@ -14,7 +14,13 @@ Content/Tenants/
 App_Data/
 Logs/
 Server/Content/Log/
+Server/Content/MSSA_EventFlyers/
 *.db
 *.mdf
 *.ldf
 appsettings.Development.json
+
+# Personal data exports - never belong in source control
+mailingList.csv
+duplicate_entries_review.csv
+*.csv

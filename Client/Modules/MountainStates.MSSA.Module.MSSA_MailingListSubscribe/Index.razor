@@ -1,0 +1,90 @@
+@namespace MountainStates.MSSA.Module.MSSA_MailingListSubscribe
+@inherits ModuleBase
+@using MountainStates.MSSA.Module.MSSA_Handlers.Services
+@using MountainStates.MSSA.Module.MSSA_Handlers.Models
+@inject IMSSA_MailingListService MailingListService
+
+<div class="mssa-subscribe-card card">
+    <div class="card-body">
+        @if (submitted)
+        {
+            <p class="mb-0"><strong>Thanks for signing up!</strong> You're on the list for MSSA event announcements.</p>
+        }
+        else
+        {
+            <h5 class="card-title">Get MSSA Event Announcements</h5>
+            <p class="text-muted">Sign up to hear about upcoming sanctioned trials.</p>
+
+            <div class="row g-2">
+                <div class="col-md-5">
+                    <input class="form-control" placeholder="First Name" @bind="model.FirstName" />
+                </div>
+                <div class="col-md-5">
+                    <input class="form-control" placeholder="Last Name" @bind="model.LastName" />
+                </div>
+            </div>
+            <div class="mt-2">
+                <input type="email" class="form-control" placeholder="Email address" @bind="model.Email" />
+            </div>
+
+            @* Honeypot - hidden from real visitors via CSS, not just "display:none" on
+               the label, so a bot's generic form-fill heuristics still see an input to
+               fill. *@
+            <div class="mssa-subscribe-honeypot" aria-hidden="true">
+                <label>Website</label>
+                <input type="text" @bind="model.Website" tabindex="-1" autocomplete="off" />
+            </div>
+
+            @if (!string.IsNullOrEmpty(errorMessage))
+            {
+                <div class="alert alert-danger mt-2 mb-0">@errorMessage</div>
+            }
+
+            <button type="button" class="btn btn-primary mt-2" disabled="@submitting" @onclick="Submit">
+                @(submitting ? "Signing up..." : "Subscribe")
+            </button>
+        }
+    </div>
+</div>
+
+<style>
+    .mssa-subscribe-honeypot {
+        position: absolute;
+        left: -9999px;
+        top: -9999px;
+    }
+</style>
+
+@code {
+    private SubscribeMailingListDto model = new();
+    private bool submitting = false;
+    private bool submitted = false;
+    private string errorMessage = "";
+
+    private async Task Submit()
+    {
+        try
+        {
+            if (string.IsNullOrWhiteSpace(model.Email) || !model.Email.Contains('@'))
+            {
+                errorMessage = "A valid email is required.";
+                return;
+            }
+
+            submitting = true;
+            errorMessage = "";
+
+            await MailingListService.SubscribeAsync(model, ModuleState.ModuleId);
+            submitted = true;
+        }
+        catch (Exception ex)
+        {
+            await logger.LogError(ex, "Error subscribing to mailing list");
+            errorMessage = "Something went wrong - please try again.";
+        }
+        finally
+        {
+            submitting = false;
+        }
+    }
+}

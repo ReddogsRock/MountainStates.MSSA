@@ -1,0 +1,275 @@
+@namespace MountainStates.MSSA.Module.MSSA_MailingList
+@inherits ModuleBase
+@using MountainStates.MSSA.Module.MSSA_Handlers.Services
+@using MountainStates.MSSA.Module.MSSA_Handlers.Models
+@inject IMSSA_MailingListService MailingListService
+
+<div class="container-fluid">
+    <div class="row mb-3">
+        <div class="col">
+            <h2>Mailing List</h2>
+            <p class="text-muted">Subscribers who receive event announcements. Search to find someone, or add a new subscriber by hand.</p>
+        </div>
+    </div>
+
+    @* Search *@
+    <div class="card mb-3">
+        <div class="card-body">
+            <div class="row g-2">
+                <div class="col-md-8">
+                    <label class="form-label">Search by email or name</label>
+                    <input class="form-control" @bind="searchTerm" @bind:event="oninput"
+                           @onkeyup="@(async e => { if (e.Key == "Enter") await LoadSubscribers(); })" />
+                </div>
+                <div class="col-md-2 d-flex align-items-end">
+                    <button type="button" class="btn btn-primary w-100" @onclick="LoadSubscribers">Search</button>
+                </div>
+                <div class="col-md-2 d-flex align-items-end">
+                    <button type="button" class="btn btn-success w-100" @onclick="ShowAdd">Add Subscriber</button>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    @* Results *@
+    @if (subscribers == null)
+    {
+        <p><em>Loading...</em></p>
+    }
+    else if (!subscribers.Any())
+    {
+        <p class="text-muted"><em>@(string.IsNullOrWhiteSpace(searchTerm) ? "Type a name or email above to search." : "No subscribers match that search.")</em></p>
+    }
+    else
+    {
+        <div class="table-responsive">
+            <table class="table table-striped table-hover">
+                <thead>
+                    <tr>
+                        <th>Email</th>
+                        <th>First Name</th>
+                        <th>Last Name</th>
+                        <th>Handler</th>
+                        <th>Status</th>
+                        <th></th>
+                    </tr>
+                </thead>
+                <tbody>
+                    @foreach (var s in subscribers)
+                    {
+                        <tr>
+                            <td>@s.Email</td>
+                            <td>@s.FirstName</td>
+                            <td>@s.LastName</td>
+                            <td>@(s.IsHandler ? "Yes" : "")</td>
+                            <td>
+                                @if (s.IsActive)
+                                {
+                                    <span class="badge bg-success">Subscribed</span>
+                                }
+                                else
+                                {
+                                    <span class="badge bg-secondary">Unsubscribed</span>
+                                }
+                            </td>
+                            <td>
+                                <button type="button" class="btn btn-sm btn-outline-primary me-1" @onclick="() => ShowEdit(s)">Edit</button>
+                                <button type="button" class="btn btn-sm btn-outline-danger" @onclick="() => ShowDeleteConfirm(s)">Delete</button>
+                            </td>
+                        </tr>
+                    }
+                </tbody>
+            </table>
+        </div>
+        @if (subscribers.Count == 100)
+        {
+            <p class="text-muted"><em>Showing the first 100 matches - narrow your search to see more specific results.</em></p>
+        }
+    }
+
+    @* Delete Confirmation Modal *@
+    @if (deleteCandidate != null)
+    {
+        <div class="modal fade show d-block" tabindex="-1" style="background-color: rgba(0,0,0,0.5);">
+            <div class="modal-dialog">
+                <div class="modal-content">
+                    <div class="modal-header">
+                        <h5 class="modal-title">Delete Subscriber</h5>
+                        <button type="button" class="btn-close" @onclick="CancelDelete"></button>
+                    </div>
+                    <div class="modal-body">
+                        <p>Remove <strong>@deleteCandidate.Email</strong> from the mailing list? This can't be undone - if you just want to stop emailing them but keep the record, uncheck "Subscribed" via Edit instead.</p>
+                    </div>
+                    <div class="modal-footer">
+                        <button type="button" class="btn btn-danger" @onclick="ConfirmDelete">Delete</button>
+                        <button type="button" class="btn btn-secondary" @onclick="CancelDelete">Cancel</button>
+                    </div>
+                </div>
+            </div>
+        </div>
+    }
+
+    @* Add/Edit Modal *@
+    @if (showEditModal)
+    {
+        <div class="modal fade show d-block" tabindex="-1" style="background-color: rgba(0,0,0,0.5);">
+            <div class="modal-dialog">
+                <div class="modal-content">
+                    <div class="modal-header">
+                        <h5 class="modal-title">@(editSubscriber.SubscriberId == 0 ? "Add Subscriber" : "Edit Subscriber")</h5>
+                        <button type="button" class="btn-close" @onclick="CloseEdit"></button>
+                    </div>
+                    <div class="modal-body">
+                        <div class="mb-3">
+                            <label class="form-label">Email</label>
+                            <input type="email" class="form-control" @bind="editSubscriber.Email" />
+                        </div>
+                        <div class="row g-2 mb-3">
+                            <div class="col-md-6">
+                                <label class="form-label">First Name</label>
+                                <input class="form-control" @bind="editSubscriber.FirstName" />
+                            </div>
+                            <div class="col-md-6">
+                                <label class="form-label">Last Name</label>
+                                <input class="form-control" @bind="editSubscriber.LastName" />
+                            </div>
+                        </div>
+                        <div class="form-check mb-2">
+                            <input type="checkbox" class="form-check-input" id="isHandler" @bind="editSubscriber.IsHandler" />
+                            <label class="form-check-label" for="isHandler">Handler</label>
+                        </div>
+                        <div class="form-check">
+                            <input type="checkbox" class="form-check-input" id="isActive" @bind="editSubscriber.IsActive" />
+                            <label class="form-check-label" for="isActive">Subscribed</label>
+                        </div>
+                        @if (!string.IsNullOrEmpty(errorMessage))
+                        {
+                            <div class="alert alert-danger mt-3 mb-0">@errorMessage</div>
+                        }
+                    </div>
+                    <div class="modal-footer">
+                        <button type="button" class="btn btn-success" @onclick="SaveSubscriber">Save</button>
+                        <button type="button" class="btn btn-secondary" @onclick="CloseEdit">Cancel</button>
+                    </div>
+                </div>
+            </div>
+        </div>
+    }
+</div>
+
+@code {
+    private string searchTerm = "";
+    private List<MSSA_MailingListSubscriber> subscribers;
+    private string errorMessage = "";
+
+    private bool showEditModal = false;
+    private MSSA_MailingListSubscriber editSubscriber;
+    private MSSA_MailingListSubscriber deleteCandidate;
+
+    protected override async Task OnInitializedAsync()
+    {
+        await LoadSubscribers();
+    }
+
+    private async Task LoadSubscribers()
+    {
+        try
+        {
+            subscribers = null; // shows "Loading..." while in flight
+            subscribers = await MailingListService.SearchSubscribersAsync(searchTerm, ModuleState.ModuleId);
+        }
+        catch (Exception ex)
+        {
+            await logger.LogError(ex, "Error loading mailing list subscribers");
+            AddModuleMessage("Error loading subscribers", MessageType.Error);
+        }
+    }
+
+    private void ShowAdd()
+    {
+        editSubscriber = new MSSA_MailingListSubscriber { IsActive = true };
+        errorMessage = "";
+        showEditModal = true;
+    }
+
+    private void ShowEdit(MSSA_MailingListSubscriber s)
+    {
+        // Edit a copy - cancel shouldn't mutate the row still shown in the table.
+        editSubscriber = new MSSA_MailingListSubscriber
+        {
+            SubscriberId = s.SubscriberId,
+            Email = s.Email,
+            FirstName = s.FirstName,
+            LastName = s.LastName,
+            IsHandler = s.IsHandler,
+            IsActive = s.IsActive
+        };
+        errorMessage = "";
+        showEditModal = true;
+    }
+
+    private async Task SaveSubscriber()
+    {
+        try
+        {
+            if (string.IsNullOrWhiteSpace(editSubscriber.Email) || !editSubscriber.Email.Contains('@'))
+            {
+                errorMessage = "A valid email is required.";
+                return;
+            }
+
+            errorMessage = "";
+
+            if (editSubscriber.SubscriberId == 0)
+            {
+                await MailingListService.AddSubscriberAsync(editSubscriber, ModuleState.ModuleId);
+                AddModuleMessage("Subscriber added", MessageType.Success);
+            }
+            else
+            {
+                await MailingListService.UpdateSubscriberAsync(editSubscriber, ModuleState.ModuleId);
+                AddModuleMessage("Subscriber updated", MessageType.Success);
+            }
+
+            CloseEdit();
+            await LoadSubscribers();
+        }
+        catch (Exception ex)
+        {
+            await logger.LogError(ex, "Error saving mailing list subscriber");
+            errorMessage = "Error saving. Please try again - the email may already be in use by another subscriber.";
+        }
+    }
+
+    private void ShowDeleteConfirm(MSSA_MailingListSubscriber s)
+    {
+        deleteCandidate = s;
+    }
+
+    private void CancelDelete()
+    {
+        deleteCandidate = null;
+    }
+
+    private async Task ConfirmDelete()
+    {
+        try
+        {
+            await MailingListService.DeleteSubscriberAsync(deleteCandidate.SubscriberId, ModuleState.ModuleId);
+            deleteCandidate = null;
+            await LoadSubscribers();
+            AddModuleMessage("Subscriber deleted", MessageType.Success);
+        }
+        catch (Exception ex)
+        {
+            await logger.LogError(ex, "Error deleting mailing list subscriber");
+            AddModuleMessage("Error deleting subscriber", MessageType.Error);
+        }
+    }
+
+    private void CloseEdit()
+    {
+        showEditModal = false;
+        editSubscriber = null;
+    }
+}
