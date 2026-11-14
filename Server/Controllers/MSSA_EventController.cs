@@ -32,8 +32,9 @@ namespace MountainStates.MSSA.Module.MSSA_Events.Controllers
         private readonly IMSSA_ResultManager _resultManager;
         private readonly IUserRoleRepository _userRoleRepository;
         private readonly IMSSA_AdminNotificationService _adminNotificationService;
+        private readonly IMailgunService _mailgunService;
 
-        public MSSA_EventController(IMSSA_EventManager manager, IWebHostEnvironment hostEnvironment, IMSSA_ResultManager resultManager, IUserRoleRepository userRoleRepository, IMSSA_AdminNotificationService adminNotificationService, ILogManager logger, IHttpContextAccessor httpContextAccessor)
+        public MSSA_EventController(IMSSA_EventManager manager, IWebHostEnvironment hostEnvironment, IMSSA_ResultManager resultManager, IUserRoleRepository userRoleRepository, IMSSA_AdminNotificationService adminNotificationService, IMailgunService mailgunService, ILogManager logger, IHttpContextAccessor httpContextAccessor)
             : base(logger, httpContextAccessor)
         {
             _manager = manager;
@@ -41,7 +42,13 @@ namespace MountainStates.MSSA.Module.MSSA_Events.Controllers
             _resultManager = resultManager;
             _userRoleRepository = userRoleRepository;
             _adminNotificationService = adminNotificationService;
+            _mailgunService = mailgunService;
         }
+
+        // Scheme + host of the current request - used to build an absolute link (e.g.
+        // to a flyer) inside an announcement email, since a relative URL means nothing
+        // once it leaves the site and lands in someone's inbox.
+        private string RequestBaseUrl => $"{HttpContext.Request.Scheme}://{HttpContext.Request.Host}";
 
         // GET: api/MSSA_Event?moduleid=x
         [HttpGet]
@@ -434,6 +441,12 @@ namespace MountainStates.MSSA.Module.MSSA_Events.Controllers
                         _adminNotificationService.NotifyAdmins(HttpContext.GetAlias().SiteId, $"Event Pending Approval: {evt.EventName}",
                             $"{evt.EventName} ({evt.EventIdentifier}) was submitted by a Trial Secretary and needs Admin approval before it's visible.");
                     }
+                    else
+                    {
+                        // Admin created it directly, so it's Approved and public immediately -
+                        // same announcement trigger as the explicit Approve action below.
+                        await _mailgunService.SendEventAnnouncementAsync(evt, RequestBaseUrl, moduleId);
+                    }
 
                     return evt;
                 }
@@ -529,6 +542,9 @@ namespace MountainStates.MSSA.Module.MSSA_Events.Controllers
                 }
 
                 _logger.Log(LogLevel.Information, this, LogFunction.Update, "Event {EventId} approved", id);
+
+                await _mailgunService.SendEventAnnouncementAsync(evt, RequestBaseUrl, moduleId);
+
                 return evt;
             }
             catch (System.Exception ex)

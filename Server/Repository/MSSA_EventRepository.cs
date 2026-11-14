@@ -356,6 +356,11 @@ namespace MountainStates.MSSA.Module.MSSA_Events.Repository
 
             await db.SaveChangesAsync();
 
+            // Same reload AddEventAsync does - callers (the announcement email, in
+            // particular) expect Offerings populated with ClassName/SubClassName, not
+            // the empty default list this entity started with.
+            evt.Offerings = await LoadOfferingsAsync(db, evt.EventId);
+
             return evt;
         }
 

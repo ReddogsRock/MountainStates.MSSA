@@ -34,6 +34,15 @@ namespace MountainStates.MSSA.Server
 
             builder.Services.AddOqtane(configuration, builder.Environment);
 
+            // Named client for MailgunService - Mailgun's API has no official .NET SDK,
+            // so this is a plain HttpClient wrapper (same idea as Stripe.net, just no
+            // package to do it for us). Registered after AddOqtane deliberately - it
+            // also sets up a guarded default HttpClient registration, and running it
+            // first was stepping on Oqtane's own guarded HttpClient (the one with
+            // BaseAddress set for ServiceBase's calls back to the API), breaking every
+            // module's data loading.
+            builder.Services.AddHttpClient("Mailgun");
+
             var app = builder.Build();
 
             var corsService = app.Services.GetRequiredService<ICorsService>();
