@@ -27,6 +27,13 @@ namespace MountainStates.MSSA.Module.MSSA_Handlers.Models
         // back to MSSA_Handlers needed at send time.
         public bool IsHandler { get; set; } = false;
 
+        // Refreshed annually by the "Sync Expiring Members" action (see
+        // MSSA_MailingListRepository.SyncExpiringMembershipSegmentAsync) - true if this
+        // person's latest real membership expires at the end of the current calendar
+        // year. Cleared automatically for anyone who's since renewed, so re-syncing
+        // ahead of a follow-up notice naturally drops people who no longer need one.
+        public bool IsExpiringMembership { get; set; } = false;
+
         // False once unsubscribed. Rows are kept (not deleted) so a re-import or
         // resubscribe doesn't silently re-add someone who opted out.
         public bool IsActive { get; set; } = true;

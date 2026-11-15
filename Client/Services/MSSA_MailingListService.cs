@@ -15,11 +15,11 @@ namespace MountainStates.MSSA.Module.MSSA_Handlers.Services
 
         private string ApiUrl => CreateApiUrl("MSSA_MailingList");
 
-        public async Task<List<MSSA_MailingListSubscriber>> SearchSubscribersAsync(string searchTerm, int moduleId)
+        public async Task<List<MSSA_MailingListSubscriber>> SearchSubscribersAsync(string searchTerm, bool expiringOnly, int moduleId)
         {
             var encoded = WebUtility.UrlEncode(searchTerm ?? "");
             return await GetJsonAsync<List<MSSA_MailingListSubscriber>>(
-                CreateAuthorizationPolicyUrl($"{ApiUrl}/search?searchTerm={encoded}&moduleid={moduleId}", EntityNames.Module, moduleId));
+                CreateAuthorizationPolicyUrl($"{ApiUrl}/search?searchTerm={encoded}&expiringOnly={expiringOnly}&moduleid={moduleId}", EntityNames.Module, moduleId));
         }
 
         public async Task<MSSA_MailingListSubscriber> AddSubscriberAsync(MSSA_MailingListSubscriber subscriber, int moduleId)
@@ -45,6 +45,12 @@ namespace MountainStates.MSSA.Module.MSSA_Handlers.Services
             // since the server action is [AllowAnonymous] and isn't gated by a module
             // permission policy at all.
             await PostJsonAsync<SubscribeMailingListDto, bool>($"{ApiUrl}/subscribe?moduleid={moduleId}", dto);
+        }
+
+        public async Task<int> SyncExpiringMembershipSegmentAsync(int moduleId)
+        {
+            return await PostJsonAsync<object, int>(
+                CreateAuthorizationPolicyUrl($"{ApiUrl}/sync-expiring?moduleid={moduleId}", EntityNames.Module, moduleId), null);
         }
     }
 }

@@ -26,11 +26,11 @@ namespace MountainStates.MSSA.Module.MSSA_Handlers.Controllers
         // GET: api/MSSA_MailingList/search?searchterm=x&moduleid=x
         [HttpGet("search")]
         [Authorize(Policy = PolicyNames.ViewModule)]
-        public async Task<List<MSSA_MailingListSubscriber>> Search(string searchTerm, int moduleId)
+        public async Task<List<MSSA_MailingListSubscriber>> Search(string searchTerm, bool expiringOnly, int moduleId)
         {
             try
             {
-                return await _manager.SearchSubscribersAsync(searchTerm, moduleId);
+                return await _manager.SearchSubscribersAsync(searchTerm, expiringOnly, moduleId);
             }
             catch (System.Exception ex)
             {
@@ -126,6 +126,68 @@ namespace MountainStates.MSSA.Module.MSSA_Handlers.Controllers
                 _logger.Log(LogLevel.Error, this, LogFunction.Create, ex, "Error processing mailing list signup");
                 throw;
             }
+        }
+
+        // POST: api/MSSA_MailingList/sync-expiring?moduleid=x
+        // Admin-triggered annual refresh - not automatic. Re-run ahead of each renewal
+        // notice (including a follow-up a couple weeks later) so anyone who's since
+        // renewed drops out of the segment on its own.
+        [HttpPost("sync-expiring")]
+        [Authorize(Policy = PolicyNames.EditModule)]
+        public async Task<int> SyncExpiring(int moduleId)
+        {
+            try
+            {
+                var count = await _manager.SyncExpiringMembershipSegmentAsync(moduleId);
+                _logger.Log(LogLevel.Information, this, LogFunction.Update, "Expiring-membership mailing list segment synced: {Count} flagged", count);
+                return count;
+            }
+            catch (System.Exception ex)
+            {
+                _logger.Log(LogLevel.Error, this, LogFunction.Update, ex, "Error syncing expiring-membership segment");
+                throw;
+            }
+        }
+
+        // GET: api/MSSA_MailingList/export-expiring?moduleid=x
+        [HttpGet("export-expiring")]
+        [Authorize(Policy = PolicyNames.EditModule)]
+        public async Task<IActionResult> ExportExpiring(int moduleId)
+        {
+            try
+            {
+                var subscribers = await _manager.GetExpiringMembershipSubscribersAsync(moduleId);
+
+                var sb = new System.Text.StringBuilder();
+                sb.AppendLine("FirstName,LastName,Email");
+                foreach (var s in subscribers)
+                {
+                    sb.AppendLine($"{CsvField(s.FirstName)},{CsvField(s.LastName)},{CsvField(s.Email)}");
+                }
+
+                var bytes = System.Text.Encoding.UTF8.GetBytes(sb.ToString());
+                return File(bytes, "text/csv", "expiring-members.csv");
+            }
+            catch (System.Exception ex)
+            {
+                _logger.Log(LogLevel.Error, this, LogFunction.Read, ex, "Error exporting expiring-membership segment");
+                throw;
+            }
+        }
+
+        // Quotes a field only when it actually needs it (contains a comma, quote, or
+        // newline) - keeps the common case readable while still round-tripping safely.
+        private static string CsvField(string value)
+        {
+            if (string.IsNullOrEmpty(value))
+            {
+                return "";
+            }
+            if (value.Contains(',') || value.Contains('"') || value.Contains('\n'))
+            {
+                return "\"" + value.Replace("\"", "\"\"") + "\"";
+            }
+            return value;
         }
 
         // DELETE: api/MSSA_MailingList/5?moduleid=x

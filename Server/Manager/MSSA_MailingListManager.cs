@@ -15,9 +15,9 @@ namespace MountainStates.MSSA.Module.MSSA_Handlers.Manager
             _repository = repository;
         }
 
-        public async Task<List<MSSA_MailingListSubscriber>> SearchSubscribersAsync(string searchTerm, int moduleId)
+        public async Task<List<MSSA_MailingListSubscriber>> SearchSubscribersAsync(string searchTerm, bool expiringOnly, int moduleId)
         {
-            return await _repository.SearchSubscribersAsync(searchTerm);
+            return await _repository.SearchSubscribersAsync(searchTerm, expiringOnly);
         }
 
         public async Task<MSSA_MailingListSubscriber> AddSubscriberAsync(MSSA_MailingListSubscriber subscriber, int moduleId)
@@ -38,6 +38,16 @@ namespace MountainStates.MSSA.Module.MSSA_Handlers.Manager
         public async Task SubscribeAsync(SubscribeMailingListDto dto, int moduleId)
         {
             await _repository.SubscribeAsync(dto.Email, dto.FirstName, dto.LastName);
+        }
+
+        public async Task<int> SyncExpiringMembershipSegmentAsync(int moduleId)
+        {
+            return await _repository.SyncExpiringMembershipSegmentAsync();
+        }
+
+        public async Task<List<MSSA_MailingListSubscriber>> GetExpiringMembershipSubscribersAsync(int moduleId)
+        {
+            return await _repository.GetExpiringMembershipSubscribersAsync();
         }
     }
 }

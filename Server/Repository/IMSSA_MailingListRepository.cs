@@ -12,7 +12,7 @@ namespace MountainStates.MSSA.Module.MSSA_Handlers.Repository
         // Admin screen search - matches Email/FirstName/LastName (contains), active and
         // unsubscribed alike, capped at 100 results so a blank/short search doesn't try
         // to render the whole list at once.
-        Task<List<MSSA_MailingListSubscriber>> SearchSubscribersAsync(string searchTerm);
+        Task<List<MSSA_MailingListSubscriber>> SearchSubscribersAsync(string searchTerm, bool expiringOnly);
 
         Task<MSSA_MailingListSubscriber> AddSubscriberAsync(MSSA_MailingListSubscriber subscriber);
         Task<MSSA_MailingListSubscriber> UpdateSubscriberAsync(MSSA_MailingListSubscriber subscriber);
@@ -23,5 +23,14 @@ namespace MountainStates.MSSA.Module.MSSA_Handlers.Repository
         // reactivated, since this is reachable by anyone without logging in and a
         // visitor re-submitting shouldn't see an error either way.
         Task SubscribeAsync(string email, string firstName, string lastName);
+
+        // Admin-triggered annual refresh - flags subscribers whose latest real
+        // membership expires at the end of the current calendar year, inserting them
+        // into the subscriber table if they're not already there, and clearing the
+        // flag from anyone who's since renewed. Returns the count flagged.
+        Task<int> SyncExpiringMembershipSegmentAsync();
+
+        // CSV export target for the segment above - active subscribers only.
+        Task<List<MSSA_MailingListSubscriber>> GetExpiringMembershipSubscribersAsync();
     }
 }

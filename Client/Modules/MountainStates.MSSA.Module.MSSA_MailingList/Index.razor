@@ -28,6 +28,31 @@
                     <button type="button" class="btn btn-success w-100" @onclick="ShowAdd">Add Subscriber</button>
                 </div>
             </div>
+            <div class="form-check mt-2">
+                <input type="checkbox" class="form-check-input" id="expiringOnly" @bind="expiringOnly" @bind:after="LoadSubscribers" />
+                <label class="form-check-label" for="expiringOnly">Show only the expiring-membership list</label>
+            </div>
+        </div>
+    </div>
+
+    @* Expiring Memberships *@
+    <div class="card mb-3">
+        <div class="card-body">
+            <h5 class="card-title">Expiring Memberships</h5>
+            <p class="text-muted small mb-2">
+                Flags subscribers whose membership expires at the end of this year, based on current data.
+                Re-run before a follow-up notice - anyone who's since renewed drops out automatically.
+            </p>
+            <div class="d-flex gap-2 align-items-center">
+                <button type="button" class="btn btn-primary" @onclick="SyncExpiring" disabled="@syncing">
+                    @(syncing ? "Syncing..." : "Sync Expiring Members")
+                </button>
+                <a class="btn btn-outline-secondary" href="@ExpiringExportUrl" target="_blank">Download CSV</a>
+                @if (lastSyncCount.HasValue)
+                {
+                    <span class="text-muted">@lastSyncCount people flagged as expiring this year.</span>
+                }
+            </div>
         </div>
     </div>
 
@@ -38,7 +63,7 @@
     }
     else if (!subscribers.Any())
     {
-        <p class="text-muted"><em>@(string.IsNullOrWhiteSpace(searchTerm) ? "Type a name or email above to search." : "No subscribers match that search.")</em></p>
+        <p class="text-muted"><em>@(string.IsNullOrWhiteSpace(searchTerm) && !expiringOnly ? "Type a name or email above to search, or check the expiring-membership filter." : "No subscribers match that search.")</em></p>
     }
     else
     {
@@ -50,6 +75,7 @@
                         <th>First Name</th>
                         <th>Last Name</th>
                         <th>Handler</th>
+                        <th>Expiring</th>
                         <th>Status</th>
                         <th></th>
                     </tr>
@@ -62,6 +88,7 @@
                             <td>@s.FirstName</td>
                             <td>@s.LastName</td>
                             <td>@(s.IsHandler ? "Yes" : "")</td>
+                            <td>@(s.IsExpiringMembership ? "Yes" : "")</td>
                             <td>
                                 @if (s.IsActive)
                                 {
@@ -81,9 +108,9 @@
                 </tbody>
             </table>
         </div>
-        @if (subscribers.Count == 100)
+        @if (subscribers.Count == (expiringOnly ? 1000 : 100))
         {
-            <p class="text-muted"><em>Showing the first 100 matches - narrow your search to see more specific results.</em></p>
+            <p class="text-muted"><em>Showing the first @subscribers.Count matches - narrow your search to see more specific results.</em></p>
         }
     }
 
@@ -159,12 +186,19 @@
 
 @code {
     private string searchTerm = "";
+    private bool expiringOnly = false;
     private List<MSSA_MailingListSubscriber> subscribers;
     private string errorMessage = "";
 
     private bool showEditModal = false;
     private MSSA_MailingListSubscriber editSubscriber;
     private MSSA_MailingListSubscriber deleteCandidate;
+
+    private bool syncing = false;
+    private int? lastSyncCount;
+
+    private string ExpiringExportUrl =>
+        $"{PageState.Alias.BaseUrl}/api/MSSA_MailingList/export-expiring?moduleid={ModuleState.ModuleId}";
 
     protected override async Task OnInitializedAsync()
     {
@@ -176,12 +210,32 @@
         try
         {
             subscribers = null; // shows "Loading..." while in flight
-            subscribers = await MailingListService.SearchSubscribersAsync(searchTerm, ModuleState.ModuleId);
+            subscribers = await MailingListService.SearchSubscribersAsync(searchTerm, expiringOnly, ModuleState.ModuleId);
         }
         catch (Exception ex)
         {
             await logger.LogError(ex, "Error loading mailing list subscribers");
             AddModuleMessage("Error loading subscribers", MessageType.Error);
+        }
+    }
+
+    private async Task SyncExpiring()
+    {
+        try
+        {
+            syncing = true;
+            lastSyncCount = await MailingListService.SyncExpiringMembershipSegmentAsync(ModuleState.ModuleId);
+            await LoadSubscribers();
+            AddModuleMessage($"{lastSyncCount} subscribers flagged as expiring this year", MessageType.Success);
+        }
+        catch (Exception ex)
+        {
+            await logger.LogError(ex, "Error syncing expiring-membership segment");
+            AddModuleMessage("Error syncing expiring members", MessageType.Error);
+        }
+        finally
+        {
+            syncing = false;
         }
     }
 
