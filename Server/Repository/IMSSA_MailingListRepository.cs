@@ -30,7 +30,8 @@ namespace MountainStates.MSSA.Module.MSSA_Handlers.Repository
         // flag from anyone who's since renewed. Returns the count flagged.
         Task<int> SyncExpiringMembershipSegmentAsync();
 
-        // CSV export target for the segment above - active subscribers only.
-        Task<List<MSSA_MailingListSubscriber>> GetExpiringMembershipSubscribersAsync();
+        // CSV export target for the segment above - active subscribers only, with
+        // HandlerId attached (looked up by email) for building a renewal link.
+        Task<List<MSSA_ExpiringMembershipExportRow>> GetExpiringMembershipExportRowsAsync();
     }
 }

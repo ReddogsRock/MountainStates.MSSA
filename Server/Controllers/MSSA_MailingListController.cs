@@ -156,13 +156,18 @@ namespace MountainStates.MSSA.Module.MSSA_Handlers.Controllers
         {
             try
             {
-                var subscribers = await _manager.GetExpiringMembershipSubscribersAsync(moduleId);
+                var rows = await _manager.GetExpiringMembershipExportRowsAsync(moduleId);
 
+                // Renewal happens on the person's own Handler Detail page - only the
+                // HandlerId varies per recipient.
                 var sb = new System.Text.StringBuilder();
-                sb.AppendLine("FirstName,LastName,Email");
-                foreach (var s in subscribers)
+                sb.AppendLine("FirstName,LastName,Email,RenewalLink");
+                foreach (var r in rows)
                 {
-                    sb.AppendLine($"{CsvField(s.FirstName)},{CsvField(s.LastName)},{CsvField(s.Email)}");
+                    var renewalLink = r.HandlerId.HasValue
+                        ? $"https://mssadogs.com/memberservices/handlers/*/44/Detail?id={r.HandlerId.Value}"
+                        : "";
+                    sb.AppendLine($"{CsvField(r.FirstName)},{CsvField(r.LastName)},{CsvField(r.Email)},{CsvField(renewalLink)}");
                 }
 
                 var bytes = System.Text.Encoding.UTF8.GetBytes(sb.ToString());

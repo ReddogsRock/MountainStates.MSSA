@@ -12,6 +12,6 @@ namespace MountainStates.MSSA.Module.MSSA_Handlers.Manager
         Task DeleteSubscriberAsync(int subscriberId, int moduleId);
         Task SubscribeAsync(SubscribeMailingListDto dto, int moduleId);
         Task<int> SyncExpiringMembershipSegmentAsync(int moduleId);
-        Task<List<MSSA_MailingListSubscriber>> GetExpiringMembershipSubscribersAsync(int moduleId);
+        Task<List<MSSA_ExpiringMembershipExportRow>> GetExpiringMembershipExportRowsAsync(int moduleId);
     }
 }

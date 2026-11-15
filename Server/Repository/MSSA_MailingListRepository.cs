@@ -213,14 +213,36 @@ namespace MountainStates.MSSA.Module.MSSA_Handlers.Repository
 
         // CSV export target - active subscribers only, so an opt-out is respected even
         // for this special-purpose segment.
-        public async Task<List<MSSA_MailingListSubscriber>> GetExpiringMembershipSubscribersAsync()
+        // CSV export target - active subscribers only (respects an opt-out even for
+        // this special-purpose segment), joined back to Handlers by email to pull
+        // HandlerId for building a personalized renewal link.
+        public async Task<List<MSSA_ExpiringMembershipExportRow>> GetExpiringMembershipExportRowsAsync()
         {
             using var db = await _dbContextFactory.CreateDbContextAsync();
 
-            return await db.MSSA_MailingListSubscribers
+            var subscribers = await db.MSSA_MailingListSubscribers
                 .Where(s => s.IsExpiringMembership && s.IsActive)
                 .OrderBy(s => s.LastName)
                 .ToListAsync();
+
+            // Grouped rather than a straight ToDictionary - several households share
+            // one email across multiple Handler rows, which would otherwise throw on
+            // the first duplicate key. Any one of them is a fine link target since they
+            // share the inbox anyway.
+            var handlerIdsByEmail = (await db.MSSA_Handlers
+                .Where(h => h.Email != null && h.Email != "")
+                .Select(h => new { h.Email, h.HandlerId })
+                .ToListAsync())
+                .GroupBy(h => h.Email.Trim().ToLowerInvariant())
+                .ToDictionary(g => g.Key, g => g.First().HandlerId);
+
+            return subscribers.Select(s => new MSSA_ExpiringMembershipExportRow
+            {
+                FirstName = s.FirstName,
+                LastName = s.LastName,
+                Email = s.Email,
+                HandlerId = handlerIdsByEmail.TryGetValue(s.Email.Trim().ToLowerInvariant(), out var id) ? id : (int?)null
+            }).ToList();
         }
 
         public async Task DeleteSubscriberAsync(int subscriberId)

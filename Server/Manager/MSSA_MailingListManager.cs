@@ -45,9 +45,9 @@ namespace MountainStates.MSSA.Module.MSSA_Handlers.Manager
             return await _repository.SyncExpiringMembershipSegmentAsync();
         }
 
-        public async Task<List<MSSA_MailingListSubscriber>> GetExpiringMembershipSubscribersAsync(int moduleId)
+        public async Task<List<MSSA_ExpiringMembershipExportRow>> GetExpiringMembershipExportRowsAsync(int moduleId)
         {
-            return await _repository.GetExpiringMembershipSubscribersAsync();
+            return await _repository.GetExpiringMembershipExportRowsAsync();
         }
     }
 }
