@@ -59,23 +59,25 @@ namespace MountainStates.MSSA.Module.MSSA_Results.Repository
 
             var query = db.MSSA_Events.Where(e => e.IsActive && e.ResultsApprovalStatus != EventResultsStatus.Approved);
 
-            if (ownerUserId.HasValue)
+            // These two qualifications are additive, not exclusive - a user can hold both
+            // the Trial Secretary and Scorekeeper roles at once (e.g. Aimee Nelson on event
+            // #690), and must see an event if EITHER applies to them, not just whichever
+            // the caller happened to pass first.
+            if (ownerUserId.HasValue || scorekeeperUserId.HasValue)
             {
-                // Qualifies if they created it, or were added as a team member
-                // (MSSA_EventTeamMembers) by whoever did.
-                var teamEventIds = db.MSSA_EventTeamMembers
-                    .Where(tm => tm.UserId == ownerUserId.Value)
-                    .Select(tm => tm.EventId);
-                query = query.Where(e => e.CreatedByUserId == ownerUserId.Value || teamEventIds.Contains(e.EventId));
-            }
-            else if (scorekeeperUserId.HasValue)
-            {
-                // A Scorekeeper doesn't own the Event - they're assigned per Trial, so an
-                // event qualifies if any of its trials are assigned to them.
-                var eventIdsWithScorekeeper = db.MSSA_Trials
-                    .Where(t => t.ScorekeeperUserId == scorekeeperUserId.Value)
-                    .Select(t => t.EventId);
-                query = query.Where(e => eventIdsWithScorekeeper.Contains(e.EventId));
+                query = query.Where(e =>
+                    (ownerUserId.HasValue && (
+                        // Qualifies if they created it, or were added as a team member
+                        // (MSSA_EventTeamMembers) by whoever did.
+                        e.CreatedByUserId == ownerUserId.Value ||
+                        db.MSSA_EventTeamMembers.Any(tm => tm.UserId == ownerUserId.Value && tm.EventId == e.EventId)
+                    ))
+                    ||
+                    (scorekeeperUserId.HasValue && (
+                        // A Scorekeeper doesn't own the Event - they're assigned per Trial, so
+                        // an event qualifies if any of its trials are assigned to them.
+                        db.MSSA_Trials.Any(t => t.ScorekeeperUserId == scorekeeperUserId.Value && t.EventId == e.EventId)
+                    )));
             }
 
             var events = await query.OrderByDescending(e => e.StartDate).ToListAsync();

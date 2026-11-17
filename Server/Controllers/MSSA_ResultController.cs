@@ -29,9 +29,10 @@ namespace MountainStates.MSSA.Module.MSSA_Results.Controllers
         }
 
         // GET api/MSSA_Result/events?moduleid=x
-        // Admin sees every event still needing attention. A Trial Secretary only events
-        // they created. A Scorekeeper only events with a trial assigned to them - they
-        // don't own the event, so ownership isn't the right filter for them.
+        // Admin sees every event still needing attention. Everyone else sees events they
+        // own/are a team member on (Trial Secretary) UNION events with a trial assigned to
+        // them (Scorekeeper) - a user can hold both roles at once, so these must be checked
+        // together rather than picking one exclusively based on role membership.
         [HttpGet("events")]
         [Authorize(Policy = PolicyNames.ViewModule)]
         public async Task<List<EventScoringSummary>> GetScoringEvents(int moduleId)
@@ -43,12 +44,7 @@ namespace MountainStates.MSSA.Module.MSSA_Results.Controllers
                     return await _manager.GetScoringEventsAsync(null, null, moduleId);
                 }
 
-                if (User.IsInRole(MSSARoles.Scorekeeper))
-                {
-                    return await _manager.GetScoringEventsAsync(null, User.UserId(), moduleId);
-                }
-
-                return await _manager.GetScoringEventsAsync(User.UserId(), null, moduleId);
+                return await _manager.GetScoringEventsAsync(User.UserId(), User.UserId(), moduleId);
             }
             catch (System.Exception ex)
             {
