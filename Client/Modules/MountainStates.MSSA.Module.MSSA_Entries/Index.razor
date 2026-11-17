@@ -304,7 +304,8 @@
                 <div class="card-body">
                     <p class="text-muted">
                         Classes run in order: Open, Nursery, Intermediate, Novice, Junior. Dogs are shuffled
-                        randomly within each class. Use the arrows to adjust the order within a class before finalizing.
+                        randomly within each class. Use the arrows, or type a run # directly, to adjust the
+                        order within a class before finalizing.
                     </p>
                     <table class="table table-sm">
                         <thead>
@@ -325,7 +326,11 @@
                                 var canMoveDown = index < proposedRunOrder.Count - 1 && proposedRunOrder[index + 1].ClassName == item.ClassName;
 
                                 <tr>
-                                    <td>@item.RunOrder</td>
+                                    <td>
+                                        <input type="number" min="1" class="form-control form-control-sm"
+                                               style="width:70px" value="@item.RunOrder"
+                                               @onchange="e => ApplyRunOrderInput(index, e.Value)" />
+                                    </td>
                                     <td>@item.ClassName @item.SubClassName</td>
                                     <td>@item.HandlerName</td>
                                     <td>@item.DogName</td>
@@ -727,6 +732,51 @@
         }
 
         (proposedRunOrder[index], proposedRunOrder[targetIndex]) = (proposedRunOrder[targetIndex], proposedRunOrder[index]);
+
+        RenumberProposalRowsPerClass();
+    }
+
+    private void ApplyRunOrderInput(int index, object value)
+    {
+        if (!int.TryParse(value?.ToString(), out var newPosition))
+        {
+            return;
+        }
+
+        SetProposalRunOrder(index, newPosition);
+    }
+
+    // Moves the row at `index` to the given 1-based position within its own class block -
+    // same same-class constraint the arrows enforce, but lets a Trial Secretary jump
+    // straight to a position instead of clicking repeatedly. Out-of-range input is
+    // clamped rather than rejected, since 0 and "past the end of the class" are the
+    // typos most likely to happen while typing.
+    private void SetProposalRunOrder(int index, int newPosition)
+    {
+        var item = proposedRunOrder[index];
+
+        var blockStart = index;
+        while (blockStart > 0 && proposedRunOrder[blockStart - 1].ClassName == item.ClassName)
+        {
+            blockStart--;
+        }
+        var blockEnd = index;
+        while (blockEnd < proposedRunOrder.Count - 1 && proposedRunOrder[blockEnd + 1].ClassName == item.ClassName)
+        {
+            blockEnd++;
+        }
+
+        var blockSize = blockEnd - blockStart + 1;
+        var clampedPosition = Math.Max(1, Math.Min(newPosition, blockSize));
+        var targetIndex = blockStart + clampedPosition - 1;
+
+        if (targetIndex == index)
+        {
+            return;
+        }
+
+        proposedRunOrder.RemoveAt(index);
+        proposedRunOrder.Insert(targetIndex, item);
 
         RenumberProposalRowsPerClass();
     }
