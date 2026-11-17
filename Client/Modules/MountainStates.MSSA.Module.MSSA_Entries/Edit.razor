@@ -886,6 +886,14 @@ else
             await EntryService.UpdateEntryAsync(entry, ModuleState.ModuleId);
             await logger.LogInformation("Entry updated successfully");
             AddModuleMessage("Entry saved successfully", MessageType.Success);
+
+            // Return straight to the event/trial being worked on - same target as the
+            // Cancel button - instead of leaving them on this form to close the window
+            // and re-pick the event and trial from scratch. The literal string "Index"
+            // isn't a valid action name here - it resolves to the site's root /Index
+            // page, not this module's own Index view - so this has to use the current
+            // page's own path instead, same as the pattern in Events/Edit.razor.
+            NavigationManager.NavigateTo(NavigateUrl(PageState.Page.Path, $"trialId={entry.TrialId}"));
         }
         catch (Exception ex)
         {
@@ -902,7 +910,10 @@ else
             {
                 await EntryService.DeleteEntryAsync(entryId, ModuleState.ModuleId);
                 await logger.LogInformation("Entry deleted");
-                NavigationManager.NavigateTo(NavigateUrl());
+
+                // Same as Save/Cancel - return to the event/trial being worked on
+                // instead of the blank "select an event and trial" state.
+                NavigationManager.NavigateTo(NavigateUrl(PageState.Page.Path, $"trialId={entry.TrialId}"));
             }
         }
         catch (Exception ex)
