@@ -467,6 +467,68 @@ namespace MountainStates.MSSA.Module.MSSA_Handlers.Repository
             }
         }
 
+        public async Task<List<int>> EnsureSubscribersAsync(List<(string Email, string DisplayName)> people)
+        {
+            using var db = await _dbContextFactory.CreateDbContextAsync();
+
+            var normalizedPeople = people
+                .Where(p => !string.IsNullOrWhiteSpace(p.Email))
+                .GroupBy(p => p.Email.Trim().ToLowerInvariant())
+                .Select(g => g.First())
+                .ToList();
+
+            var existingByEmail = (await db.MSSA_MailingListSubscribers.ToListAsync())
+                .ToDictionary(s => s.Email.Trim().ToLowerInvariant());
+
+            var now = DateTime.UtcNow;
+
+            foreach (var person in normalizedPeople)
+            {
+                var key = person.Email.Trim().ToLowerInvariant();
+                if (existingByEmail.ContainsKey(key))
+                {
+                    continue; // matched - never touch an existing row's IsActive here
+                }
+
+                var (firstName, lastName) = SplitDisplayName(person.DisplayName);
+                var newSubscriber = new MSSA_MailingListSubscriber
+                {
+                    Email = person.Email.Trim(),
+                    FirstName = firstName,
+                    LastName = lastName,
+                    IsHandler = false,
+                    IsActive = true,
+                    CreatedDate = now,
+                    ModifiedDate = now
+                };
+                db.MSSA_MailingListSubscribers.Add(newSubscriber);
+                existingByEmail[key] = newSubscriber;
+            }
+
+            await db.SaveChangesAsync();
+
+            // Newly-added rows only get a real SubscriberId once SaveChangesAsync
+            // completes - re-resolve from existingByEmail now that it has, rather than
+            // tracking ids separately through the loop above.
+            return normalizedPeople
+                .Select(p => existingByEmail[p.Email.Trim().ToLowerInvariant()].SubscriberId)
+                .ToList();
+        }
+
+        // First word of the display name becomes FirstName, the rest becomes LastName -
+        // good enough for a mailing-list greeting; this isn't fed into anything that
+        // needs a strict legal-name split.
+        private static (string FirstName, string LastName) SplitDisplayName(string displayName)
+        {
+            if (string.IsNullOrWhiteSpace(displayName))
+            {
+                return (null, null);
+            }
+
+            var parts = displayName.Trim().Split(' ', 2);
+            return parts.Length == 2 ? (parts[0], parts[1]) : (parts[0], null);
+        }
+
         public async Task DeleteSubscriberAsync(int subscriberId)
         {
             using var db = await _dbContextFactory.CreateDbContextAsync();

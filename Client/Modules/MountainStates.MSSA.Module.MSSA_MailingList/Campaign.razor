@@ -194,13 +194,26 @@
                             else
                             {
                                 <table class="table table-sm">
-                                    <thead><tr><th>Name</th><th>Members</th><th></th></tr></thead>
+                                    <thead><tr><th>Name</th><th>Members</th><th>Sync from role</th><th></th></tr></thead>
                                     <tbody>
                                         @foreach (var list in namedLists)
                                         {
                                             <tr>
                                                 <td>@list.Name</td>
                                                 <td>@list.MemberCount</td>
+                                                <td>
+                                                    <select class="form-select form-select-sm d-inline-block w-auto"
+                                                            @onchange="@(e => syncRoleByListId[list.NamedListId] = e.Value?.ToString())">
+                                                        <option value="">-- Pick a role --</option>
+                                                        <option value="@MSSARoles.TrialSecretary" selected="@(GetSyncRole(list.NamedListId) == MSSARoles.TrialSecretary)">Trial Secretary</option>
+                                                        <option value="@MSSARoles.Scorekeeper" selected="@(GetSyncRole(list.NamedListId) == MSSARoles.Scorekeeper)">Scorekeeper</option>
+                                                    </select>
+                                                    <button type="button" class="btn btn-sm btn-outline-primary ms-1"
+                                                            disabled="@(string.IsNullOrEmpty(GetSyncRole(list.NamedListId)) || syncingListId == list.NamedListId)"
+                                                            @onclick="() => SyncFromRole(list)">
+                                                        @(syncingListId == list.NamedListId ? "Syncing..." : "Sync")
+                                                    </button>
+                                                </td>
                                                 <td class="text-end">
                                                     <button type="button" class="btn btn-sm btn-outline-primary me-1" @onclick="() => OpenManageMembers(list)">Manage Members</button>
                                                     <button type="button" class="btn btn-sm btn-outline-danger" @onclick="() => DeleteNamedList(list)">Delete</button>
@@ -209,6 +222,11 @@
                                         }
                                     </tbody>
                                 </table>
+                                <p class="text-muted small">
+                                    Replaces the list's full membership with everyone who currently holds that role -
+                                    people no longer in the role are dropped, new ones are added. Anyone who's
+                                    unsubscribed stays unsubscribed even if they hold the role.
+                                </p>
                             }
                         }
                         else
@@ -307,6 +325,8 @@
     private bool showManageLists = false;
     private string newListName = "";
     private int? managingListId;
+    private Dictionary<int, string> syncRoleByListId = new();
+    private int? syncingListId;
     private string managingListName = "";
     private string memberSearchTerm = "";
     private List<MSSA_MailingListSubscriber> memberSearchResults;
@@ -505,6 +525,43 @@
         {
             await logger.LogError(ex, "Error deleting named list {NamedListId}", list.NamedListId);
             AddModuleMessage("Error deleting list", MessageType.Error);
+        }
+    }
+
+    private string GetSyncRole(int namedListId)
+    {
+        return syncRoleByListId.TryGetValue(namedListId, out var role) ? role : "";
+    }
+
+    private async Task SyncFromRole(MSSA_MailingListNamedList list)
+    {
+        var role = GetSyncRole(list.NamedListId);
+        if (string.IsNullOrEmpty(role))
+        {
+            return;
+        }
+
+        try
+        {
+            syncingListId = list.NamedListId;
+            var count = await MailingListService.SyncNamedListFromRoleAsync(list.NamedListId, role, PageState.Site.SiteId, ModuleState.ModuleId);
+            namedLists = await MailingListService.GetNamedListsAsync(ModuleState.ModuleId);
+
+            if (audience == MailingListAudience.NamedList && selectedNamedListId == list.NamedListId)
+            {
+                await RefreshRecipientCount();
+            }
+
+            AddModuleMessage($"\"{list.Name}\" synced - {count} people now in the list", MessageType.Success);
+        }
+        catch (Exception ex)
+        {
+            await logger.LogError(ex, "Error syncing named list {NamedListId} from role {Role}", list.NamedListId, role);
+            AddModuleMessage("Error syncing from role", MessageType.Error);
+        }
+        finally
+        {
+            syncingListId = null;
         }
     }
 

@@ -28,5 +28,9 @@ namespace MountainStates.MSSA.Module.MSSA_Handlers.Manager
         Task<MSSA_MailingListEmailTemplate> AddEmailTemplateAsync(MSSA_MailingListEmailTemplate template, int moduleId);
         Task<MSSA_MailingListEmailTemplate> UpdateEmailTemplateAsync(MSSA_MailingListEmailTemplate template, int moduleId);
         Task DeleteEmailTemplateAsync(int templateId, int moduleId);
+
+        // Ensures a subscriber exists for each role-holder, then replaces the named
+        // list's membership with exactly that set. Returns the count synced.
+        Task<int> SyncNamedListFromRoleAsync(int namedListId, List<(string Email, string DisplayName)> people, int moduleId);
     }
 }

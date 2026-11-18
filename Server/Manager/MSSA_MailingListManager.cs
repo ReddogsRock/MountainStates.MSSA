@@ -109,5 +109,12 @@ namespace MountainStates.MSSA.Module.MSSA_Handlers.Manager
         {
             await _repository.DeleteEmailTemplateAsync(templateId);
         }
+
+        public async Task<int> SyncNamedListFromRoleAsync(int namedListId, List<(string Email, string DisplayName)> people, int moduleId)
+        {
+            var subscriberIds = await _repository.EnsureSubscribersAsync(people);
+            await _repository.SetNamedListMembersAsync(namedListId, subscriberIds);
+            return subscriberIds.Count;
+        }
     }
 }

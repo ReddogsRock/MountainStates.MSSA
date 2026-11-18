@@ -3,9 +3,11 @@ using System.Threading.Tasks;
 using Microsoft.AspNetCore.Authorization;
 using Microsoft.AspNetCore.Http;
 using Microsoft.AspNetCore.Mvc;
+using System.Linq;
 using Oqtane.Controllers;
 using Oqtane.Enums;
 using Oqtane.Infrastructure;
+using Oqtane.Repository;
 using Oqtane.Shared;
 using MountainStates.MSSA.Module.MSSA_Events.Manager;
 using MountainStates.MSSA.Module.MSSA_Handlers.Manager;
@@ -18,12 +20,14 @@ namespace MountainStates.MSSA.Module.MSSA_Handlers.Controllers
     {
         private readonly IMSSA_MailingListManager _manager;
         private readonly IMailgunService _mailgunService;
+        private readonly IUserRoleRepository _userRoleRepository;
 
-        public MSSA_MailingListController(IMSSA_MailingListManager manager, IMailgunService mailgunService, ILogManager logger, IHttpContextAccessor httpContextAccessor)
+        public MSSA_MailingListController(IMSSA_MailingListManager manager, IMailgunService mailgunService, IUserRoleRepository userRoleRepository, ILogManager logger, IHttpContextAccessor httpContextAccessor)
             : base(logger, httpContextAccessor)
         {
             _manager = manager;
             _mailgunService = mailgunService;
+            _userRoleRepository = userRoleRepository;
         }
 
         // GET: api/MSSA_MailingList/search?searchterm=x&moduleid=x
@@ -333,6 +337,42 @@ namespace MountainStates.MSSA.Module.MSSA_Handlers.Controllers
             catch (System.Exception ex)
             {
                 _logger.Log(LogLevel.Error, this, LogFunction.Update, ex, "Error setting membership for named list {NamedListId}", id);
+                throw;
+            }
+        }
+
+        // POST: api/MSSA_MailingList/named-lists/5/sync-from-role?moduleid=x
+        // Repopulates a named list to exactly match everyone currently holding the
+        // given Oqtane role (e.g. "Trial Secretary") - re-running this later picks up
+        // role changes (added/removed) since the last sync. Existing subscriber rows
+        // are matched by email and never have IsActive flipped, so a role-holder who's
+        // unsubscribed stays unsubscribed.
+        [HttpPost("named-lists/{id}/sync-from-role")]
+        [Authorize(Policy = PolicyNames.EditModule)]
+        public async Task<int> SyncNamedListFromRole(int id, [FromBody] SyncNamedListFromRoleDto dto, int moduleId)
+        {
+            try
+            {
+                if (!ModelState.IsValid)
+                {
+                    HttpContext.Response.StatusCode = (int)System.Net.HttpStatusCode.BadRequest;
+                    return 0;
+                }
+
+                var people = _userRoleRepository.GetUserRoles(dto.SiteId)
+                    .Where(ur => ur.Role.Name == dto.RoleName && !string.IsNullOrWhiteSpace(ur.User.Email))
+                    .GroupBy(ur => ur.UserId)
+                    .Select(g => g.First())
+                    .Select(ur => (Email: ur.User.Email, DisplayName: ur.User.DisplayName))
+                    .ToList();
+
+                var count = await _manager.SyncNamedListFromRoleAsync(id, people, moduleId);
+                _logger.Log(LogLevel.Information, this, LogFunction.Update, "Mailing list named list {NamedListId} synced from role {RoleName}: {Count} people", id, dto.RoleName, count);
+                return count;
+            }
+            catch (System.Exception ex)
+            {
+                _logger.Log(LogLevel.Error, this, LogFunction.Update, ex, "Error syncing named list {NamedListId} from role {RoleName}", id, dto.RoleName);
                 throw;
             }
         }

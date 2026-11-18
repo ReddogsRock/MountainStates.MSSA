@@ -62,5 +62,12 @@ namespace MountainStates.MSSA.Module.MSSA_Handlers.Repository
         Task<MSSA_MailingListEmailTemplate> AddEmailTemplateAsync(MSSA_MailingListEmailTemplate template);
         Task<MSSA_MailingListEmailTemplate> UpdateEmailTemplateAsync(MSSA_MailingListEmailTemplate template);
         Task DeleteEmailTemplateAsync(int templateId);
+
+        // For each (Email, DisplayName) pair, finds the matching subscriber by email or
+        // creates one (IsActive, DisplayName split into First/Last) - never flips
+        // IsActive on an existing row, since holding a role doesn't override someone's
+        // own unsubscribe. Returns the resulting SubscriberIds, for feeding straight
+        // into SetNamedListMembersAsync - see "Sync from Role" in MSSA_MailingListController.
+        Task<List<int>> EnsureSubscribersAsync(List<(string Email, string DisplayName)> people);
     }
 }

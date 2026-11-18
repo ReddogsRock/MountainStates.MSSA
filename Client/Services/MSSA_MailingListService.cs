@@ -90,6 +90,13 @@ namespace MountainStates.MSSA.Module.MSSA_Handlers.Services
                 CreateAuthorizationPolicyUrl($"{ApiUrl}/named-lists/{namedListId}/members?moduleid={moduleId}", EntityNames.Module, moduleId), subscriberIds);
         }
 
+        public async Task<int> SyncNamedListFromRoleAsync(int namedListId, string roleName, int siteId, int moduleId)
+        {
+            return await PostJsonAsync<SyncNamedListFromRoleDto, int>(
+                CreateAuthorizationPolicyUrl($"{ApiUrl}/named-lists/{namedListId}/sync-from-role?moduleid={moduleId}", EntityNames.Module, moduleId),
+                new SyncNamedListFromRoleDto { RoleName = roleName, SiteId = siteId });
+        }
+
         public async Task<List<MSSA_MailingListEmailTemplate>> GetEmailTemplatesAsync(int moduleId)
         {
             return await GetJsonAsync<List<MSSA_MailingListEmailTemplate>>(

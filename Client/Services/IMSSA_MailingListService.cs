@@ -28,6 +28,10 @@ namespace MountainStates.MSSA.Module.MSSA_Handlers.Services
         Task DeleteNamedListAsync(int namedListId, int moduleId);
         Task SetNamedListMembersAsync(int namedListId, List<int> subscriberIds, int moduleId);
 
+        // Repopulates a named list to exactly match everyone currently holding the
+        // given Oqtane role (e.g. MSSARoles.TrialSecretary). Returns the count synced.
+        Task<int> SyncNamedListFromRoleAsync(int namedListId, string roleName, int siteId, int moduleId);
+
         // Saved email content ("Annual Renewal", etc.) reusable across sends.
         Task<List<MSSA_MailingListEmailTemplate>> GetEmailTemplatesAsync(int moduleId);
         Task<MSSA_MailingListEmailTemplate> AddEmailTemplateAsync(MSSA_MailingListEmailTemplate template, int moduleId);
