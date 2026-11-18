@@ -52,10 +52,23 @@ $htmlBody = @"
 
 $allRows = @(Import-Csv -Path $CsvPath)
 
-$rows = @($allRows | Where-Object { $_.Email -and $_.RenewalLink })
-$skipped = $allRows.Count - $rows.Count
+$hasBothFields = @($allRows | Where-Object { $_.Email -and $_.RenewalLink })
+$missingFieldCount = $allRows.Count - $hasBothFields.Count
 
-Write-Host "Loaded $($allRows.Count) rows - $($rows.Count) have both an email and a renewal link, $skipped skipped (missing one or the other)."
+# Mailgun validates every address in "to" before accepting the request - one
+# malformed email (e.g. missing the @domain part) fails the WHOLE batch, not just
+# that recipient. Catching it here means one bad row gets reported and skipped
+# instead of silently blocking everyone else in the batch.
+$emailPattern = '^[^@\s]+@[^@\s]+\.[^@\s]+$'
+$malformed = @($hasBothFields | Where-Object { $_.Email -notmatch $emailPattern })
+$rows = @($hasBothFields | Where-Object { $_.Email -match $emailPattern })
+
+Write-Host "Loaded $($allRows.Count) rows - $missingFieldCount skipped (missing email or renewal link)."
+if ($malformed.Count -gt 0) {
+    Write-Host "$($malformed.Count) skipped for a malformed email address - fix these on file and re-run separately if you want them included:"
+    $malformed | ForEach-Object { Write-Host "  $($_.FirstName) $($_.LastName): '$($_.Email)'" }
+}
+Write-Host "$($rows.Count) will be emailed."
 
 if (-not $ReallySend) {
     Write-Host ""
