@@ -29,6 +29,9 @@ namespace MountainStates.MSSA.Module.MSSA_Handlers.Data
         public DbSet<MSSA_DogOwnershipHistory> MSSA_DogOwnershipHistory { get; set; }
         public DbSet<MSSA_User> MSSA_Users { get; set; }
         public DbSet<MSSA_MailingListSubscriber> MSSA_MailingListSubscribers { get; set; }
+        public DbSet<MSSA_MailingListNamedList> MSSA_MailingListNamedLists { get; set; }
+        public DbSet<MSSA_MailingListNamedListMember> MSSA_MailingListNamedListMembers { get; set; }
+        public DbSet<MSSA_MailingListEmailTemplate> MSSA_MailingListEmailTemplates { get; set; }
         public DbSet<MSSA_FinalsData> MSSA_FinalsData { get; set; }
         public DbSet<MSSA_FinalsResult> vw_AllFinalsResults { get; set; }
 
@@ -53,6 +56,9 @@ namespace MountainStates.MSSA.Module.MSSA_Handlers.Data
             modelBuilder.Entity<MSSA_DogOwnershipHistory>().ToTable("MSSA_DogOwnershipHistory");
             modelBuilder.Entity<MSSA_User>().ToTable("MSSA_Users");
             modelBuilder.Entity<MSSA_MailingListSubscriber>().ToTable("MSSA_MailingListSubscribers");
+            modelBuilder.Entity<MSSA_MailingListNamedList>().ToTable("MSSA_MailingListNamedLists");
+            modelBuilder.Entity<MSSA_MailingListNamedListMember>().ToTable("MSSA_MailingListNamedListMembers");
+            modelBuilder.Entity<MSSA_MailingListEmailTemplate>().ToTable("MSSA_MailingListEmailTemplates");
 
             // Configure any specific relationships or constraints if needed
 
@@ -154,6 +160,22 @@ namespace MountainStates.MSSA.Module.MSSA_Handlers.Data
                 .WithMany()
                 .HasForeignKey(e => e.ClassId)
                 .OnDelete(DeleteBehavior.Restrict);
+
+            modelBuilder.Entity<MSSA_MailingListNamedListMember>()
+                .HasOne<MSSA_MailingListNamedList>()
+                .WithMany()
+                .HasForeignKey(m => m.NamedListId)
+                .OnDelete(DeleteBehavior.Restrict);
+
+            modelBuilder.Entity<MSSA_MailingListNamedListMember>()
+                .HasOne<MSSA_MailingListSubscriber>()
+                .WithMany()
+                .HasForeignKey(m => m.SubscriberId)
+                .OnDelete(DeleteBehavior.Restrict);
+
+            modelBuilder.Entity<MSSA_MailingListNamedListMember>()
+                .HasIndex(m => new { m.NamedListId, m.SubscriberId })
+                .IsUnique();
 
         }
     }

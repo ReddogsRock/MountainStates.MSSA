@@ -4,6 +4,7 @@ using System.Linq;
 using System.Threading.Tasks;
 using Microsoft.EntityFrameworkCore;
 using MountainStates.MSSA.Module.MSSA_Handlers.Data;
+using MountainStates.MSSA.Module.MSSA_Handlers.Enums;
 using MountainStates.MSSA.Module.MSSA_Handlers.Models;
 using Oqtane.Modules;
 
@@ -211,8 +212,6 @@ namespace MountainStates.MSSA.Module.MSSA_Handlers.Repository
             return flaggedCount;
         }
 
-        // CSV export target - active subscribers only, so an opt-out is respected even
-        // for this special-purpose segment.
         // CSV export target - active subscribers only (respects an opt-out even for
         // this special-purpose segment), joined back to Handlers by email to pull
         // HandlerId for building a personalized renewal link.
@@ -225,16 +224,7 @@ namespace MountainStates.MSSA.Module.MSSA_Handlers.Repository
                 .OrderBy(s => s.LastName)
                 .ToListAsync();
 
-            // Grouped rather than a straight ToDictionary - several households share
-            // one email across multiple Handler rows, which would otherwise throw on
-            // the first duplicate key. Any one of them is a fine link target since they
-            // share the inbox anyway.
-            var handlerIdsByEmail = (await db.MSSA_Handlers
-                .Where(h => h.Email != null && h.Email != "")
-                .Select(h => new { h.Email, h.HandlerId })
-                .ToListAsync())
-                .GroupBy(h => h.Email.Trim().ToLowerInvariant())
-                .ToDictionary(g => g.Key, g => g.First().HandlerId);
+            var handlerIdsByEmail = await GetHandlerIdsByEmailAsync();
 
             return subscribers.Select(s => new MSSA_ExpiringMembershipExportRow
             {
@@ -243,6 +233,238 @@ namespace MountainStates.MSSA.Module.MSSA_Handlers.Repository
                 Email = s.Email,
                 HandlerId = handlerIdsByEmail.TryGetValue(s.Email.Trim().ToLowerInvariant(), out var id) ? id : (int?)null
             }).ToList();
+        }
+
+        // Email -> HandlerId, lowercased/trimmed key. Grouped rather than a straight
+        // ToDictionary - several households share one email across multiple Handler
+        // rows, which would otherwise throw on the first duplicate key. Any one of
+        // them is a fine link target since they share the inbox anyway. Shared by the
+        // CSV export above and the {RenewalLink} merge in MailgunService.SendCampaignAsync.
+        public async Task<Dictionary<string, int>> GetHandlerIdsByEmailAsync()
+        {
+            using var db = await _dbContextFactory.CreateDbContextAsync();
+
+            return (await db.MSSA_Handlers
+                .Where(h => h.Email != null && h.Email != "")
+                .Select(h => new { h.Email, h.HandlerId })
+                .ToListAsync())
+                .GroupBy(h => h.Email.Trim().ToLowerInvariant())
+                .ToDictionary(g => g.Key, g => g.First().HandlerId);
+        }
+
+        public async Task<List<MSSA_MailingListNamedList>> GetNamedListsAsync()
+        {
+            using var db = await _dbContextFactory.CreateDbContextAsync();
+
+            var lists = await db.MSSA_MailingListNamedLists
+                .OrderBy(l => l.Name)
+                .ToListAsync();
+
+            var counts = await db.MSSA_MailingListNamedListMembers
+                .GroupBy(m => m.NamedListId)
+                .Select(g => new { NamedListId = g.Key, Count = g.Count() })
+                .ToDictionaryAsync(g => g.NamedListId, g => g.Count);
+
+            foreach (var list in lists)
+            {
+                list.MemberCount = counts.TryGetValue(list.NamedListId, out var count) ? count : 0;
+            }
+
+            return lists;
+        }
+
+        public async Task<List<MSSA_MailingListSubscriber>> GetNamedListMembersAsync(int namedListId)
+        {
+            using var db = await _dbContextFactory.CreateDbContextAsync();
+
+            var subscriberIds = await db.MSSA_MailingListNamedListMembers
+                .Where(m => m.NamedListId == namedListId)
+                .Select(m => m.SubscriberId)
+                .ToListAsync();
+
+            return await db.MSSA_MailingListSubscribers
+                .Where(s => subscriberIds.Contains(s.SubscriberId))
+                .OrderBy(s => s.Email)
+                .ToListAsync();
+        }
+
+        public async Task<MSSA_MailingListNamedList> AddNamedListAsync(string name)
+        {
+            using var db = await _dbContextFactory.CreateDbContextAsync();
+
+            var list = new MSSA_MailingListNamedList
+            {
+                Name = name.Trim(),
+                CreatedDate = DateTime.UtcNow,
+                ModifiedDate = DateTime.UtcNow
+            };
+
+            db.MSSA_MailingListNamedLists.Add(list);
+            await db.SaveChangesAsync();
+
+            return list;
+        }
+
+        public async Task<MSSA_MailingListNamedList> RenameNamedListAsync(int namedListId, string name)
+        {
+            using var db = await _dbContextFactory.CreateDbContextAsync();
+
+            var existing = await db.MSSA_MailingListNamedLists.FindAsync(namedListId);
+            if (existing == null)
+            {
+                return null;
+            }
+
+            existing.Name = name.Trim();
+            existing.ModifiedDate = DateTime.UtcNow;
+            await db.SaveChangesAsync();
+
+            return existing;
+        }
+
+        public async Task DeleteNamedListAsync(int namedListId)
+        {
+            using var db = await _dbContextFactory.CreateDbContextAsync();
+
+            var members = await db.MSSA_MailingListNamedListMembers
+                .Where(m => m.NamedListId == namedListId)
+                .ToListAsync();
+            db.MSSA_MailingListNamedListMembers.RemoveRange(members);
+
+            var existing = await db.MSSA_MailingListNamedLists.FindAsync(namedListId);
+            if (existing != null)
+            {
+                db.MSSA_MailingListNamedLists.Remove(existing);
+            }
+
+            await db.SaveChangesAsync();
+        }
+
+        public async Task SetNamedListMembersAsync(int namedListId, List<int> subscriberIds)
+        {
+            using var db = await _dbContextFactory.CreateDbContextAsync();
+
+            var existing = await db.MSSA_MailingListNamedListMembers
+                .Where(m => m.NamedListId == namedListId)
+                .ToListAsync();
+            db.MSSA_MailingListNamedListMembers.RemoveRange(existing);
+
+            var now = DateTime.UtcNow;
+            foreach (var subscriberId in subscriberIds.Distinct())
+            {
+                db.MSSA_MailingListNamedListMembers.Add(new MSSA_MailingListNamedListMember
+                {
+                    NamedListId = namedListId,
+                    SubscriberId = subscriberId,
+                    CreatedDate = now
+                });
+            }
+
+            var list = await db.MSSA_MailingListNamedLists.FindAsync(namedListId);
+            if (list != null)
+            {
+                list.ModifiedDate = now;
+            }
+
+            await db.SaveChangesAsync();
+        }
+
+        public async Task<List<MSSA_MailingListSubscriber>> GetCampaignRecipientsAsync(string audience, int? namedListId)
+        {
+            using var db = await _dbContextFactory.CreateDbContextAsync();
+
+            if (audience == MailingListAudience.Expiring)
+            {
+                return await db.MSSA_MailingListSubscribers
+                    .Where(s => s.IsActive && s.IsExpiringMembership)
+                    .ToListAsync();
+            }
+
+            if (audience == MailingListAudience.NamedList)
+            {
+                // No list id to scope to - fail safe to nobody rather than accidentally
+                // falling through to "everyone".
+                if (!namedListId.HasValue)
+                {
+                    return new List<MSSA_MailingListSubscriber>();
+                }
+
+                var subscriberIds = await db.MSSA_MailingListNamedListMembers
+                    .Where(m => m.NamedListId == namedListId.Value)
+                    .Select(m => m.SubscriberId)
+                    .ToListAsync();
+
+                return await db.MSSA_MailingListSubscribers
+                    .Where(s => s.IsActive && subscriberIds.Contains(s.SubscriberId))
+                    .ToListAsync();
+            }
+
+            // MailingListAudience.All
+            return await db.MSSA_MailingListSubscribers
+                .Where(s => s.IsActive)
+                .ToListAsync();
+        }
+
+        public async Task<List<MSSA_MailingListEmailTemplate>> GetEmailTemplatesAsync()
+        {
+            using var db = await _dbContextFactory.CreateDbContextAsync();
+
+            return await db.MSSA_MailingListEmailTemplates
+                .OrderBy(t => t.Name)
+                .ToListAsync();
+        }
+
+        public async Task<MSSA_MailingListEmailTemplate> GetEmailTemplateAsync(int templateId)
+        {
+            using var db = await _dbContextFactory.CreateDbContextAsync();
+
+            return await db.MSSA_MailingListEmailTemplates.FindAsync(templateId);
+        }
+
+        public async Task<MSSA_MailingListEmailTemplate> AddEmailTemplateAsync(MSSA_MailingListEmailTemplate template)
+        {
+            using var db = await _dbContextFactory.CreateDbContextAsync();
+
+            template.TemplateId = 0;
+            template.CreatedDate = DateTime.UtcNow;
+            template.ModifiedDate = DateTime.UtcNow;
+
+            db.MSSA_MailingListEmailTemplates.Add(template);
+            await db.SaveChangesAsync();
+
+            return template;
+        }
+
+        public async Task<MSSA_MailingListEmailTemplate> UpdateEmailTemplateAsync(MSSA_MailingListEmailTemplate template)
+        {
+            using var db = await _dbContextFactory.CreateDbContextAsync();
+
+            var existing = await db.MSSA_MailingListEmailTemplates.FindAsync(template.TemplateId);
+            if (existing == null)
+            {
+                return null;
+            }
+
+            existing.Name = template.Name;
+            existing.Subject = template.Subject;
+            existing.BodyHtml = template.BodyHtml;
+            existing.ModifiedDate = DateTime.UtcNow;
+
+            await db.SaveChangesAsync();
+
+            return existing;
+        }
+
+        public async Task DeleteEmailTemplateAsync(int templateId)
+        {
+            using var db = await _dbContextFactory.CreateDbContextAsync();
+
+            var existing = await db.MSSA_MailingListEmailTemplates.FindAsync(templateId);
+            if (existing != null)
+            {
+                db.MSSA_MailingListEmailTemplates.Remove(existing);
+                await db.SaveChangesAsync();
+            }
         }
 
         public async Task DeleteSubscriberAsync(int subscriberId)

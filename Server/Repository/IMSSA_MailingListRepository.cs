@@ -33,5 +33,34 @@ namespace MountainStates.MSSA.Module.MSSA_Handlers.Repository
         // CSV export target for the segment above - active subscribers only, with
         // HandlerId attached (looked up by email) for building a renewal link.
         Task<List<MSSA_ExpiringMembershipExportRow>> GetExpiringMembershipExportRowsAsync();
+
+        // Email -> HandlerId, lowercased/trimmed key. Shared by the CSV export above
+        // and the {RenewalLink} merge in MailgunService.SendCampaignAsync so both
+        // build the same link the same way.
+        Task<Dictionary<string, int>> GetHandlerIdsByEmailAsync();
+
+        // Reusable, admin-named "Send a Campaign" audiences (e.g. "Board Members").
+        Task<List<MSSA_MailingListNamedList>> GetNamedListsAsync();
+        Task<List<MSSA_MailingListSubscriber>> GetNamedListMembersAsync(int namedListId);
+        Task<MSSA_MailingListNamedList> AddNamedListAsync(string name);
+        Task<MSSA_MailingListNamedList> RenameNamedListAsync(int namedListId, string name);
+        Task DeleteNamedListAsync(int namedListId);
+
+        // Replaces a named list's full membership in one go - simplest model for a
+        // "pick who's in this list" UI, not an incremental add/remove.
+        Task SetNamedListMembersAsync(int namedListId, List<int> subscriberIds);
+
+        // Resolves a "Send a Campaign" audience (MailingListAudience.All/Expiring/NamedList)
+        // to the subscribers it actually goes to - always IsActive-filtered, regardless
+        // of audience, so unsubscribes are respected everywhere.
+        Task<List<MSSA_MailingListSubscriber>> GetCampaignRecipientsAsync(string audience, int? namedListId);
+
+        // Saved email content ("Annual Renewal", etc.) so a campaign doesn't need to be
+        // recomposed from scratch every time it's sent.
+        Task<List<MSSA_MailingListEmailTemplate>> GetEmailTemplatesAsync();
+        Task<MSSA_MailingListEmailTemplate> GetEmailTemplateAsync(int templateId);
+        Task<MSSA_MailingListEmailTemplate> AddEmailTemplateAsync(MSSA_MailingListEmailTemplate template);
+        Task<MSSA_MailingListEmailTemplate> UpdateEmailTemplateAsync(MSSA_MailingListEmailTemplate template);
+        Task DeleteEmailTemplateAsync(int templateId);
     }
 }

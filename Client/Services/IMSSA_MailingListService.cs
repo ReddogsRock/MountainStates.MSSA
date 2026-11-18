@@ -19,5 +19,22 @@ namespace MountainStates.MSSA.Module.MSSA_Handlers.Services
         // The CSV export itself is a direct browser download link, not a service call -
         // see ExpiringMembersExportUrl in Index.razor.
         Task<int> SyncExpiringMembershipSegmentAsync(int moduleId);
+
+        // Reusable, admin-named "Send a Campaign" audiences.
+        Task<List<MSSA_MailingListNamedList>> GetNamedListsAsync(int moduleId);
+        Task<List<MSSA_MailingListSubscriber>> GetNamedListMembersAsync(int namedListId, int moduleId);
+        Task<MSSA_MailingListNamedList> AddNamedListAsync(string name, int moduleId);
+        Task<MSSA_MailingListNamedList> RenameNamedListAsync(int namedListId, string name, int moduleId);
+        Task DeleteNamedListAsync(int namedListId, int moduleId);
+        Task SetNamedListMembersAsync(int namedListId, List<int> subscriberIds, int moduleId);
+
+        // Saved email content ("Annual Renewal", etc.) reusable across sends.
+        Task<List<MSSA_MailingListEmailTemplate>> GetEmailTemplatesAsync(int moduleId);
+        Task<MSSA_MailingListEmailTemplate> AddEmailTemplateAsync(MSSA_MailingListEmailTemplate template, int moduleId);
+        Task<MSSA_MailingListEmailTemplate> UpdateEmailTemplateAsync(MSSA_MailingListEmailTemplate template, int moduleId);
+        Task DeleteEmailTemplateAsync(int templateId, int moduleId);
+
+        Task<int> GetCampaignRecipientCountAsync(CampaignAudienceDto dto, int moduleId);
+        Task<int> SendCampaignAsync(SendCampaignDto dto, int moduleId);
     }
 }

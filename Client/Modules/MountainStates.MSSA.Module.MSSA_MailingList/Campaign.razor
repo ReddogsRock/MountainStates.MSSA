@@ -1,0 +1,644 @@
+@namespace MountainStates.MSSA.Module.MSSA_MailingList
+@inherits ModuleBase
+@using MountainStates.MSSA.Module.MSSA_Handlers.Services
+@using MountainStates.MSSA.Module.MSSA_Handlers.Models
+@using MountainStates.MSSA.Module.MSSA_Handlers.Enums
+@using Oqtane.Modules.Controls
+@inject IMSSA_MailingListService MailingListService
+
+<div class="container-fluid">
+    <div class="row mb-3">
+        <div class="col">
+            <h2>Send a Campaign</h2>
+            <p class="text-muted">
+                Every send gets the same logo header and site-link/unsubscribe footer automatically -
+                you're only writing what goes in between.
+            </p>
+        </div>
+        <div class="col-auto">
+            <ActionLink Action="Index" Text="Back to Mailing List" Class="btn btn-secondary" />
+        </div>
+    </div>
+
+    @if (!string.IsNullOrEmpty(errorMessage))
+    {
+        <div class="alert alert-danger">@errorMessage</div>
+    }
+    @if (!string.IsNullOrEmpty(successMessage))
+    {
+        <div class="alert alert-success">@successMessage</div>
+    }
+
+    @* Audience *@
+    <div class="card mb-3">
+        <div class="card-header"><h5 class="mb-0">Who gets this</h5></div>
+        <div class="card-body">
+            <div class="form-check">
+                <input type="radio" class="form-check-input" id="audAll" name="audience" value="@MailingListAudience.All"
+                       checked="@(audience == MailingListAudience.All)" @onchange="@(() => ChangeAudience(MailingListAudience.All))" />
+                <label class="form-check-label" for="audAll">All subscribers</label>
+            </div>
+            <div class="form-check">
+                <input type="radio" class="form-check-input" id="audExpiring" name="audience" value="@MailingListAudience.Expiring"
+                       checked="@(audience == MailingListAudience.Expiring)" @onchange="@(() => ChangeAudience(MailingListAudience.Expiring))" />
+                <label class="form-check-label" for="audExpiring">Expiring memberships</label>
+            </div>
+            <div class="form-check mb-2">
+                <input type="radio" class="form-check-input" id="audNamedList" name="audience" value="@MailingListAudience.NamedList"
+                       checked="@(audience == MailingListAudience.NamedList)" @onchange="@(() => ChangeAudience(MailingListAudience.NamedList))" />
+                <label class="form-check-label" for="audNamedList">A saved list:</label>
+                <select class="form-select form-select-sm d-inline-block w-auto ms-2" style="min-width:200px"
+                        disabled="@(audience != MailingListAudience.NamedList)"
+                        value="@selectedNamedListId" @onchange="OnNamedListSelected">
+                    <option value="">-- Select a list --</option>
+                    @if (namedLists != null)
+                    {
+                        @foreach (var list in namedLists)
+                        {
+                            <option value="@list.NamedListId">@list.Name (@list.MemberCount)</option>
+                        }
+                    }
+                </select>
+                <button type="button" class="btn btn-outline-secondary btn-sm ms-2" @onclick="OpenManageLists">Manage Lists</button>
+            </div>
+
+            @if (recipientCount.HasValue)
+            {
+                <p class="mb-0"><strong>This will go to @recipientCount people.</strong></p>
+            }
+        </div>
+    </div>
+
+    @* Template *@
+    <div class="card mb-3">
+        <div class="card-header"><h5 class="mb-0">Start from a saved template</h5></div>
+        <div class="card-body d-flex gap-2 align-items-center flex-wrap">
+            <select class="form-select form-select-sm w-auto" style="min-width:220px" @bind="selectedTemplateId">
+                <option value="0">-- None --</option>
+                @if (templates != null)
+                {
+                    @foreach (var t in templates)
+                    {
+                        <option value="@t.TemplateId">@t.Name</option>
+                    }
+                }
+            </select>
+            <button type="button" class="btn btn-outline-primary btn-sm" @onclick="LoadSelectedTemplate" disabled="@(selectedTemplateId == 0)">Load</button>
+            <button type="button" class="btn btn-outline-secondary btn-sm" @onclick="OpenSaveTemplate">Save as Template</button>
+            @if (loadedTemplateId.HasValue)
+            {
+                <button type="button" class="btn btn-outline-secondary btn-sm" @onclick="UpdateLoadedTemplate">Update "@loadedTemplateName"</button>
+            }
+        </div>
+    </div>
+
+    @* Compose *@
+    <div class="card mb-3">
+        <div class="card-header"><h5 class="mb-0">Compose</h5></div>
+        <div class="card-body">
+            <div class="mb-3">
+                <label class="form-label">Subject</label>
+                <input class="form-control" @bind="subject" />
+            </div>
+            <div class="mb-2">
+                <label class="form-label">Body</label>
+                <RichTextEditor @key="editorInstanceKey" @ref="bodyEditor" Content="@bodyContent" Placeholder="Write the email..." />
+            </div>
+            <p class="text-muted small">
+                Placeholders you can use in the subject or body: <code>{FirstName}</code> (always fills in),
+                and <code>{RenewalLink}</code> (a link to that person's renewal page, if they're a Handler).
+                <br />
+                Typing <code>{RenewalLink}</code> as plain text sends the actual web address as plain text -
+                to make it a clickable link or button instead, select some text (e.g. "Renew Now"), click the
+                link icon in the toolbar above, and paste <code>{RenewalLink}</code> in as the URL.
+            </p>
+            <button type="button" class="btn btn-primary" @onclick="OpenSendConfirm" disabled="@sending">Send Campaign</button>
+        </div>
+    </div>
+
+    @* Send Confirmation Modal *@
+    @if (showSendConfirm)
+    {
+        <div class="modal fade show d-block" tabindex="-1" style="background-color: rgba(0,0,0,0.5);">
+            <div class="modal-dialog">
+                <div class="modal-content">
+                    <div class="modal-header">
+                        <h5 class="modal-title">Send this campaign?</h5>
+                        <button type="button" class="btn-close" @onclick="() => showSendConfirm = false"></button>
+                    </div>
+                    <div class="modal-body">
+                        <p><strong>Subject:</strong> @subject</p>
+                        <p><strong>Recipients:</strong> @recipientCount people</p>
+                        <p class="text-muted mb-0">This can't be undone once sent.</p>
+                    </div>
+                    <div class="modal-footer">
+                        <button type="button" class="btn btn-primary" @onclick="SendCampaign" disabled="@sending">
+                            @(sending ? "Sending..." : "Send")
+                        </button>
+                        <button type="button" class="btn btn-secondary" @onclick="() => showSendConfirm = false">Cancel</button>
+                    </div>
+                </div>
+            </div>
+        </div>
+    }
+
+    @* Save as Template Modal *@
+    @if (showSaveTemplate)
+    {
+        <div class="modal fade show d-block" tabindex="-1" style="background-color: rgba(0,0,0,0.5);">
+            <div class="modal-dialog">
+                <div class="modal-content">
+                    <div class="modal-header">
+                        <h5 class="modal-title">Save as Template</h5>
+                        <button type="button" class="btn-close" @onclick="() => showSaveTemplate = false"></button>
+                    </div>
+                    <div class="modal-body">
+                        <label class="form-label">Template Name</label>
+                        <input class="form-control" @bind="newTemplateName" />
+                        @if (!string.IsNullOrEmpty(saveTemplateError))
+                        {
+                            <div class="alert alert-danger mt-2 mb-0">@saveTemplateError</div>
+                        }
+                    </div>
+                    <div class="modal-footer">
+                        <button type="button" class="btn btn-success" @onclick="SaveAsTemplate">Save</button>
+                        <button type="button" class="btn btn-secondary" @onclick="() => showSaveTemplate = false">Cancel</button>
+                    </div>
+                </div>
+            </div>
+        </div>
+    }
+
+    @* Manage Lists Modal *@
+    @if (showManageLists)
+    {
+        <div class="modal fade show d-block" tabindex="-1" style="background-color: rgba(0,0,0,0.5);">
+            <div class="modal-dialog modal-lg">
+                <div class="modal-content">
+                    <div class="modal-header">
+                        <h5 class="modal-title">@(managingListId.HasValue ? $"Manage Members - {managingListName}" : "Manage Lists")</h5>
+                        <button type="button" class="btn-close" @onclick="CloseManageLists"></button>
+                    </div>
+                    <div class="modal-body">
+                        @if (!managingListId.HasValue)
+                        {
+                            @* List of named lists *@
+                            <div class="d-flex gap-2 mb-3">
+                                <input class="form-control" placeholder="New list name" @bind="newListName" />
+                                <button type="button" class="btn btn-success text-nowrap" @onclick="CreateNamedList">Create</button>
+                            </div>
+                            @if (namedLists == null || !namedLists.Any())
+                            {
+                                <p class="text-muted"><em>No saved lists yet.</em></p>
+                            }
+                            else
+                            {
+                                <table class="table table-sm">
+                                    <thead><tr><th>Name</th><th>Members</th><th></th></tr></thead>
+                                    <tbody>
+                                        @foreach (var list in namedLists)
+                                        {
+                                            <tr>
+                                                <td>@list.Name</td>
+                                                <td>@list.MemberCount</td>
+                                                <td class="text-end">
+                                                    <button type="button" class="btn btn-sm btn-outline-primary me-1" @onclick="() => OpenManageMembers(list)">Manage Members</button>
+                                                    <button type="button" class="btn btn-sm btn-outline-danger" @onclick="() => DeleteNamedList(list)">Delete</button>
+                                                </td>
+                                            </tr>
+                                        }
+                                    </tbody>
+                                </table>
+                            }
+                        }
+                        else
+                        {
+                            @* Manage members for one list *@
+                            <div class="row">
+                                <div class="col-md-6">
+                                    <label class="form-label">Search subscribers to add</label>
+                                    <div class="input-group mb-2">
+                                        <input class="form-control" @bind="memberSearchTerm" @bind:event="oninput"
+                                               @onkeyup="@(async e => { if (e.Key == "Enter") await SearchForMembers(); })" />
+                                        <button type="button" class="btn btn-outline-secondary" @onclick="SearchForMembers">Search</button>
+                                    </div>
+                                    <div style="max-height:300px; overflow-y:auto;">
+                                        @if (memberSearchResults != null)
+                                        {
+                                            @foreach (var s in memberSearchResults)
+                                            {
+                                                <div class="form-check">
+                                                    <input type="checkbox" class="form-check-input" id="@($"add_{s.SubscriberId}")"
+                                                           checked="@currentMemberIds.Contains(s.SubscriberId)"
+                                                           @onchange="@(e => ToggleMember(s.SubscriberId, (bool)e.Value))" />
+                                                    <label class="form-check-label" for="@($"add_{s.SubscriberId}")">@s.Email (@s.FirstName @s.LastName)</label>
+                                                </div>
+                                            }
+                                        }
+                                    </div>
+                                </div>
+                                <div class="col-md-6">
+                                    <label class="form-label">Currently in this list (@currentMemberIds.Count)</label>
+                                    <div style="max-height:340px; overflow-y:auto;">
+                                        @foreach (var s in currentMembers.Where(m => currentMemberIds.Contains(m.SubscriberId)))
+                                        {
+                                            <div class="d-flex justify-content-between align-items-center border-bottom py-1">
+                                                <span>@s.Email</span>
+                                                <button type="button" class="btn btn-sm btn-outline-danger" @onclick="() => ToggleMember(s.SubscriberId, false)">Remove</button>
+                                            </div>
+                                        }
+                                    </div>
+                                </div>
+                            </div>
+                        }
+                    </div>
+                    <div class="modal-footer">
+                        @if (managingListId.HasValue)
+                        {
+                            <button type="button" class="btn btn-success" @onclick="SaveMembers">Save</button>
+                            <button type="button" class="btn btn-secondary" @onclick="() => managingListId = null">Back</button>
+                        }
+                        else
+                        {
+                            <button type="button" class="btn btn-secondary" @onclick="CloseManageLists">Close</button>
+                        }
+                    </div>
+                </div>
+            </div>
+        </div>
+    }
+</div>
+
+@code {
+    private string audience = MailingListAudience.All;
+    private int selectedNamedListId = 0;
+    private int? recipientCount;
+
+    private List<MSSA_MailingListNamedList> namedLists;
+    private List<MSSA_MailingListEmailTemplate> templates;
+    private int selectedTemplateId = 0;
+
+    // Which template is currently loaded into the composer below, if any - distinct
+    // from selectedTemplateId (just the dropdown's pick) so "Update" still targets the
+    // right template even if the dropdown selection changes afterward.
+    private int? loadedTemplateId;
+    private string loadedTemplateName = "";
+
+    private string subject = "";
+    private string bodyContent = "<p>Hi {FirstName},</p>";
+    private RichTextEditor bodyEditor;
+
+    // Oqtane's RichTextEditor/Quill wrapper only reliably picks up its initial Content
+    // on first mount - changing Content on an already-mounted instance (e.g. loading a
+    // template) doesn't reload the visible editor. Bumping this forces Blazor to tear
+    // down and remount the component, so "first mount with new Content" (the path that
+    // already works correctly) runs again instead.
+    private int editorInstanceKey = 0;
+
+    private bool sending = false;
+    private bool showSendConfirm = false;
+    private string errorMessage = "";
+    private string successMessage = "";
+
+    private bool showSaveTemplate = false;
+    private string newTemplateName = "";
+    private string saveTemplateError = "";
+
+    private bool showManageLists = false;
+    private string newListName = "";
+    private int? managingListId;
+    private string managingListName = "";
+    private string memberSearchTerm = "";
+    private List<MSSA_MailingListSubscriber> memberSearchResults;
+    private List<MSSA_MailingListSubscriber> currentMembers = new();
+    private HashSet<int> currentMemberIds = new();
+
+    protected override async Task OnInitializedAsync()
+    {
+        try
+        {
+            namedLists = await MailingListService.GetNamedListsAsync(ModuleState.ModuleId);
+            templates = await MailingListService.GetEmailTemplatesAsync(ModuleState.ModuleId);
+            await RefreshRecipientCount();
+        }
+        catch (Exception ex)
+        {
+            await logger.LogError(ex, "Error loading Send a Campaign page");
+            errorMessage = "Error loading page data.";
+        }
+    }
+
+    private async Task ChangeAudience(string newAudience)
+    {
+        audience = newAudience;
+        if (audience != MailingListAudience.NamedList)
+        {
+            selectedNamedListId = 0;
+        }
+        await RefreshRecipientCount();
+    }
+
+    private async Task OnNamedListSelected(ChangeEventArgs e)
+    {
+        selectedNamedListId = int.TryParse(e.Value?.ToString(), out var id) ? id : 0;
+        await RefreshRecipientCount();
+    }
+
+    private async Task RefreshRecipientCount()
+    {
+        try
+        {
+            if (audience == MailingListAudience.NamedList && selectedNamedListId == 0)
+            {
+                recipientCount = 0;
+                return;
+            }
+
+            var dto = new CampaignAudienceDto
+            {
+                Audience = audience,
+                NamedListId = audience == MailingListAudience.NamedList ? selectedNamedListId : (int?)null
+            };
+            recipientCount = await MailingListService.GetCampaignRecipientCountAsync(dto, ModuleState.ModuleId);
+        }
+        catch (Exception ex)
+        {
+            await logger.LogError(ex, "Error getting campaign recipient count");
+        }
+    }
+
+    // ============ Template ============
+
+    private void LoadSelectedTemplate()
+    {
+        var template = templates?.FirstOrDefault(t => t.TemplateId == selectedTemplateId);
+        if (template == null)
+        {
+            return;
+        }
+
+        subject = template.Subject;
+        bodyContent = template.BodyHtml;
+        editorInstanceKey++; // forces the editor to remount with the new content
+
+        loadedTemplateId = template.TemplateId;
+        loadedTemplateName = template.Name;
+    }
+
+    private async Task UpdateLoadedTemplate()
+    {
+        try
+        {
+            if (!loadedTemplateId.HasValue)
+            {
+                return;
+            }
+
+            var html = await bodyEditor.GetHtml();
+            await MailingListService.UpdateEmailTemplateAsync(new MSSA_MailingListEmailTemplate
+            {
+                TemplateId = loadedTemplateId.Value,
+                Name = loadedTemplateName,
+                Subject = subject,
+                BodyHtml = html
+            }, ModuleState.ModuleId);
+
+            templates = await MailingListService.GetEmailTemplatesAsync(ModuleState.ModuleId);
+            AddModuleMessage($"\"{loadedTemplateName}\" updated", MessageType.Success);
+        }
+        catch (Exception ex)
+        {
+            await logger.LogError(ex, "Error updating email template {TemplateId}", loadedTemplateId);
+            AddModuleMessage("Error updating template", MessageType.Error);
+        }
+    }
+
+    private void OpenSaveTemplate()
+    {
+        newTemplateName = "";
+        saveTemplateError = "";
+        showSaveTemplate = true;
+    }
+
+    private async Task SaveAsTemplate()
+    {
+        try
+        {
+            if (string.IsNullOrWhiteSpace(newTemplateName))
+            {
+                saveTemplateError = "A name is required.";
+                return;
+            }
+
+            var html = await bodyEditor.GetHtml();
+            await MailingListService.AddEmailTemplateAsync(new MSSA_MailingListEmailTemplate
+            {
+                Name = newTemplateName.Trim(),
+                Subject = subject,
+                BodyHtml = html
+            }, ModuleState.ModuleId);
+
+            templates = await MailingListService.GetEmailTemplatesAsync(ModuleState.ModuleId);
+            showSaveTemplate = false;
+            AddModuleMessage("Template saved", MessageType.Success);
+        }
+        catch (Exception ex)
+        {
+            await logger.LogError(ex, "Error saving email template");
+            saveTemplateError = "Error saving. Please try again.";
+        }
+    }
+
+    // ============ Manage Lists ============
+
+    private void OpenManageLists()
+    {
+        managingListId = null;
+        showManageLists = true;
+    }
+
+    private void CloseManageLists()
+    {
+        showManageLists = false;
+        managingListId = null;
+    }
+
+    private async Task CreateNamedList()
+    {
+        try
+        {
+            if (string.IsNullOrWhiteSpace(newListName))
+            {
+                return;
+            }
+
+            await MailingListService.AddNamedListAsync(newListName.Trim(), ModuleState.ModuleId);
+            newListName = "";
+            namedLists = await MailingListService.GetNamedListsAsync(ModuleState.ModuleId);
+        }
+        catch (Exception ex)
+        {
+            await logger.LogError(ex, "Error creating named list");
+            AddModuleMessage("Error creating list", MessageType.Error);
+        }
+    }
+
+    private async Task DeleteNamedList(MSSA_MailingListNamedList list)
+    {
+        try
+        {
+            if (!await JSRuntime.InvokeAsync<bool>("confirm", $"Delete the list \"{list.Name}\"? This can't be undone."))
+            {
+                return;
+            }
+
+            await MailingListService.DeleteNamedListAsync(list.NamedListId, ModuleState.ModuleId);
+            namedLists = await MailingListService.GetNamedListsAsync(ModuleState.ModuleId);
+
+            if (audience == MailingListAudience.NamedList && selectedNamedListId == list.NamedListId)
+            {
+                selectedNamedListId = 0;
+                await RefreshRecipientCount();
+            }
+        }
+        catch (Exception ex)
+        {
+            await logger.LogError(ex, "Error deleting named list {NamedListId}", list.NamedListId);
+            AddModuleMessage("Error deleting list", MessageType.Error);
+        }
+    }
+
+    private async Task OpenManageMembers(MSSA_MailingListNamedList list)
+    {
+        try
+        {
+            managingListId = list.NamedListId;
+            managingListName = list.Name;
+            memberSearchTerm = "";
+            memberSearchResults = null;
+
+            currentMembers = await MailingListService.GetNamedListMembersAsync(list.NamedListId, ModuleState.ModuleId);
+            currentMemberIds = currentMembers.Select(m => m.SubscriberId).ToHashSet();
+        }
+        catch (Exception ex)
+        {
+            await logger.LogError(ex, "Error loading members for named list {NamedListId}", list.NamedListId);
+            AddModuleMessage("Error loading members", MessageType.Error);
+        }
+    }
+
+    private async Task SearchForMembers()
+    {
+        try
+        {
+            memberSearchResults = await MailingListService.SearchSubscribersAsync(memberSearchTerm, false, ModuleState.ModuleId);
+        }
+        catch (Exception ex)
+        {
+            await logger.LogError(ex, "Error searching subscribers for named list membership");
+        }
+    }
+
+    // Toggling a search result that's newly checked adds it to currentMembers (so the
+    // "currently in this list" panel can show it before Save is clicked) without
+    // re-fetching from the server.
+    private void ToggleMember(int subscriberId, bool isChecked)
+    {
+        if (isChecked)
+        {
+            currentMemberIds.Add(subscriberId);
+            if (!currentMembers.Any(m => m.SubscriberId == subscriberId))
+            {
+                var fromSearch = memberSearchResults?.FirstOrDefault(s => s.SubscriberId == subscriberId);
+                if (fromSearch != null)
+                {
+                    currentMembers.Add(fromSearch);
+                }
+            }
+        }
+        else
+        {
+            currentMemberIds.Remove(subscriberId);
+        }
+    }
+
+    private async Task SaveMembers()
+    {
+        try
+        {
+            if (!managingListId.HasValue)
+            {
+                return;
+            }
+
+            await MailingListService.SetNamedListMembersAsync(managingListId.Value, currentMemberIds.ToList(), ModuleState.ModuleId);
+            namedLists = await MailingListService.GetNamedListsAsync(ModuleState.ModuleId);
+
+            if (audience == MailingListAudience.NamedList && selectedNamedListId == managingListId.Value)
+            {
+                await RefreshRecipientCount();
+            }
+
+            managingListId = null;
+            AddModuleMessage("List membership saved", MessageType.Success);
+        }
+        catch (Exception ex)
+        {
+            await logger.LogError(ex, "Error saving named list membership");
+            AddModuleMessage("Error saving list membership", MessageType.Error);
+        }
+    }
+
+    // ============ Send ============
+
+    private void OpenSendConfirm()
+    {
+        errorMessage = "";
+        successMessage = "";
+
+        if (string.IsNullOrWhiteSpace(subject))
+        {
+            errorMessage = "A subject is required.";
+            return;
+        }
+
+        if (audience == MailingListAudience.NamedList && selectedNamedListId == 0)
+        {
+            errorMessage = "Pick a saved list, or choose a different audience.";
+            return;
+        }
+
+        showSendConfirm = true;
+    }
+
+    private async Task SendCampaign()
+    {
+        try
+        {
+            sending = true;
+
+            var html = await bodyEditor.GetHtml();
+            var dto = new SendCampaignDto
+            {
+                Subject = subject,
+                BodyHtml = html,
+                Audience = audience,
+                NamedListId = audience == MailingListAudience.NamedList ? selectedNamedListId : (int?)null
+            };
+
+            var sentCount = await MailingListService.SendCampaignAsync(dto, ModuleState.ModuleId);
+
+            showSendConfirm = false;
+            successMessage = $"Campaign sent to {sentCount} people.";
+        }
+        catch (Exception ex)
+        {
+            await logger.LogError(ex, "Error sending campaign");
+            errorMessage = "Error sending the campaign. Please try again.";
+        }
+        finally
+        {
+            sending = false;
+        }
+    }
+}

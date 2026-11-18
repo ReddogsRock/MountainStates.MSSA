@@ -2,6 +2,7 @@
 @inherits ModuleBase
 @using MountainStates.MSSA.Module.MSSA_Handlers.Services
 @using MountainStates.MSSA.Module.MSSA_Handlers.Models
+@using Oqtane.Modules.Controls
 @inject IMSSA_MailingListService MailingListService
 
 <div class="container-fluid">
@@ -9,6 +10,9 @@
         <div class="col">
             <h2>Mailing List</h2>
             <p class="text-muted">Subscribers who receive event announcements. Search to find someone, or add a new subscriber by hand.</p>
+        </div>
+        <div class="col-auto">
+            <ActionLink Action="Campaign" Text="Send a Campaign" Class="btn btn-primary" />
         </div>
     </div>
 
