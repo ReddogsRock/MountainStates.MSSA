@@ -250,6 +250,9 @@
                         <button class="btn btn-secondary btn-sm me-2" @onclick="GenerateProposal" disabled="@(entries == null || !entries.Any())">
                             <span class="oi oi-random"></span> Generate Run Order
                         </button>
+                        <button class="btn btn-secondary btn-sm me-2" @onclick="() => editingRunOrder = !editingRunOrder" disabled="@(entries == null || !entries.Any())">
+                            <span class="oi oi-pencil"></span> @(editingRunOrder ? "Done Editing Run Order" : "Edit Run Order")
+                        </button>
                     }
                     <label for="scribeSheetClassKey" class="form-label me-1 mb-0">Scribe Sheet:</label>
                     <select id="scribeSheetClassKey" class="form-select form-select-sm d-inline-block me-2"
@@ -453,7 +456,18 @@
                                 @foreach (var entry in group.OrderBy(e => e.RunOrder ?? int.MaxValue))
                                 {
                                     <tr>
-                                        <td>@(entry.RunOrder?.ToString() ?? "-")</td>
+                                        <td style="width:90px">
+                                            @if (editingRunOrder)
+                                            {
+                                                <input type="number" min="1" class="form-control form-control-sm"
+                                                       style="width:70px" value="@entry.RunOrder"
+                                                       @onchange="e => SaveEntryRunOrder(entry, e.Value)" />
+                                            }
+                                            else
+                                            {
+                                                @(entry.RunOrder?.ToString() ?? "-")
+                                            }
+                                        </td>
                                         <td>@entry.HandlerName</td>
                                         <td>@entry.DogName</td>
                                         <td>@(entry.IsPaid ? "Yes" : "No")</td>
@@ -555,6 +569,12 @@
     private bool showRunOrderPreview = false;
     private List<RunOrderEntry> proposedRunOrder;
 
+    // Lets a Trial Secretary nudge one or two dogs' run order after the order's
+    // already been finalized, without re-rolling (which reshuffles everyone) or
+    // re-running the whole Generate/Finalize flow. Only the edited entry's RunOrder
+    // is sent to the server - every other entry's number is left exactly as it was.
+    private bool editingRunOrder = false;
+
     private bool showImportPreview = false;
     private List<ImportDiffRow> importPreview;
     private int unmatchedRowCount = 0;
@@ -641,6 +661,34 @@
 
         return UserSecurity.IsAuthorized(PageState.User, MSSARoles.Scorekeeper)
             && entry.TrialScorekeeperUserId == PageState.User.UserId;
+    }
+
+    // Saves just this one entry's RunOrder - deliberately a single-item list, not the
+    // whole trial's assignments, so no other entry's number is touched or renumbered.
+    private async Task SaveEntryRunOrder(EntryListItem entry, object value)
+    {
+        if (!int.TryParse(value?.ToString(), out var newRunOrder) || newRunOrder < 1)
+        {
+            AddModuleMessage("Run order must be a positive number", MessageType.Error);
+            return;
+        }
+
+        var previousRunOrder = entry.RunOrder;
+        entry.RunOrder = newRunOrder;
+
+        try
+        {
+            await EntryService.SaveRunOrderAsync(new List<RunOrderEntry>
+            {
+                new RunOrderEntry { EntryId = entry.EntryId, TrialId = entry.TrialId, RunOrder = newRunOrder }
+            }, ModuleState.ModuleId);
+        }
+        catch (Exception ex)
+        {
+            entry.RunOrder = previousRunOrder;
+            await logger.LogError(ex, "Error saving run order for entry {EntryId}", entry.EntryId);
+            AddModuleMessage("Error saving run order. Please try again.", MessageType.Error);
+        }
     }
 
     private async Task LoadTrialEntries()
