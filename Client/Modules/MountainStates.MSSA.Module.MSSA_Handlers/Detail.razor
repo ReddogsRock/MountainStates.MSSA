@@ -260,6 +260,10 @@ else
                                 <div class="col-md-5">
                                     <label class="form-label">Start Year</label>
                                     <input type="number" class="form-control" @bind="membershipStartYear" />
+                                    @if (!string.IsNullOrEmpty(MembershipStartYearWarning))
+                                    {
+                                        <div class="text-danger small mt-1">@MembershipStartYearWarning</div>
+                                    }
                                 </div>
                             </div>
 
@@ -701,13 +705,48 @@ else
     private void ShowPurchaseMembership()
     {
         selectedMembershipType = "AI";
-        membershipStartYear = DateTime.Today.Year;
+        membershipStartYear = SuggestedMembershipStartYear();
         familySearchTerm = "";
         familySearchResults = null;
         selectedFamilyMembers = new List<MSSA_Handler>();
         membershipErrorMessage = "";
         creatingMembershipCheckout = false;
         showMembershipModal = true;
+    }
+
+    // Defaults to the current year for someone with no coverage yet (so a brand-new
+    // member can still join for the current year late in the year), or to the year
+    // after their latest coverage ends if they already have the current year covered -
+    // this is what a renewal campaign is actually offering, and fixes the "left the
+    // year on the old value" mistake without blocking legitimate new-member signups.
+    private int SuggestedMembershipStartYear()
+    {
+        var currentYear = DateTime.Today.Year;
+        var latestCoveredYear = handler.Memberships
+            .Where(m => m.EndYear.HasValue) // excludes Lifetime - nothing to suggest past it
+            .Select(m => m.EndYear.Value)
+            .DefaultIfEmpty(0)
+            .Max();
+
+        return latestCoveredYear >= currentYear ? latestCoveredYear + 1 : currentYear;
+    }
+
+    // Non-blocking - flags the common mistake (picked a year already covered) without
+    // preventing a legitimate second/overlapping membership someone might actually want.
+    private string MembershipStartYearWarning
+    {
+        get
+        {
+            var overlapping = handler.Memberships.FirstOrDefault(m =>
+                m.EndYear.HasValue
+                    ? membershipStartYear >= m.StartYear && membershipStartYear <= m.EndYear.Value
+                    : membershipStartYear >= m.StartYear); // Lifetime covers every year from StartYear on
+
+            return overlapping != null
+                ? $"Already have a {overlapping.MembershipTypeName} membership covering {membershipStartYear} " +
+                  $"({overlapping.StartYear}–{(overlapping.EndYear?.ToString() ?? "Lifetime")}). Did you mean {membershipStartYear + 1}?"
+                : "";
+        }
     }
 
     private void CloseMembershipModal()
